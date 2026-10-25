@@ -750,8 +750,10 @@ function openSettings(startTab) {
     <div class="stab-panels">
 
     <div class="stab-panel" data-panel="general">
-    <div class="section-label">App icon &amp; window <button class="help-q" data-help="start" title="Explain this">?</button></div>
-    <p class="muted small">Create a PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
+    <div class="section-label">PaperShelf as an app <button class="help-q" data-help="start" title="Explain this">?</button></div>
+    <div id="ia-section"><p class="muted small">…</p></div>
+    <div class="section-label">Simple icon</div>
+    <p class="muted small">Or create a plain PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
     <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
     <div class="section-label">Paper list</div>
@@ -840,6 +842,7 @@ function openSettings(startTab) {
     catch (err) { $('#set-shortcut-res', m.el).innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`; }
     finally { setBusy(b, false); }
   };
+  if (typeof AppInstall !== 'undefined') AppInstall.settingsHtml().then(h => { const el = $('#ia-section', m.el); if (el) { el.innerHTML = h; AppInstall.settingsBind(m); } });
   $('#set-checks', m.el).onchange = async e => {
     try { const d = await api('/api/settings', {method: 'PUT', body: {list_checkboxes: e.target.checked}}); state.settings = d.settings; renderList(); }
     catch (err) { toast(err.message, 'error'); }
@@ -1463,6 +1466,7 @@ function handleHash() {
   const h = new URLSearchParams(location.hash.slice(1));
   if (h.get('msg')) toast(h.get('msg'), 'ok', 7000);
   if (h.get('error')) toast(h.get('error'), 'error', 12000);
+  if (h.has('install-app') && typeof AppInstall !== 'undefined') setTimeout(() => AppInstall.installPage(), 300);
   const pid = parseInt(h.get('paper'), 10);
   if (pid) openDetail(pid);
   const person = parseInt(h.get('person'), 10);

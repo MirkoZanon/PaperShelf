@@ -2,6 +2,17 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.8 – 2026-10-25
+
+- **PaperShelf as a real app**: Settings → General → *Install PaperShelf as an app* (Chrome, Edge,
+  Brave). It gets its own icon in the Dock / taskbar with the dot while it is open; clicking it brings
+  back the open window instead of opening a new one; right-click → *Quit* closes it. PaperShelf then
+  always opens in this app. If it isn't running when you open the app, a *Start PaperShelf* button
+  starts it.
+- **Start in the background when you log in** (optional, Settings → General): the app is always ready
+  and shared labels and sync stay up to date.
+- The old PaperShelf icon (launcher) gets the new green look by itself.
+
 ## 1.14.7 – 2026-10-25
 
 - **Notes from the PDF reader can be public**: when you write a note on a highlight, choose *Also add

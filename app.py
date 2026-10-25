@@ -2162,6 +2162,62 @@ def make_shortcut():
     return jsonify(res)
 
 
+SW_JS = r"""// PaperShelf service worker: only shows a "PaperShelf isn't running" page when the installed app
+// is opened while PaperShelf is stopped. Nothing is cached: the app always loads fresh from this computer.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+const OFFLINE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PaperShelf</title><style>
+:root{--bg:#f5f4f0;--text:#1d2026;--muted:#6a6e76;--accent:#2e7d55}
+@media (prefers-color-scheme:dark){:root{--bg:#16171a;--text:#e6e7e9;--muted:#9c9fa6;--accent:#5cc48b}}
+body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);
+font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;text-align:center}
+.box{max-width:420px;padding:24px}h1{font-size:20px;margin:0 0 8px}p{color:var(--muted);margin:6px 0 18px}
+a.btn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:9px}
+.small{font-size:12.5px}</style></head><body><div class="box"><div style="font-size:42px">📚</div>
+<h1>PaperShelf isn't running</h1><p>Your library is fine – PaperShelf just needs to be started on this computer.</p>
+<a class="btn" href="papershelf://start">▶ Start PaperShelf</a>
+<p class="small" id="st">This page opens PaperShelf as soon as it is running.</p></div>
+<script>setInterval(()=>fetch('/api/version',{cache:'no-store'}).then(r=>{if(r.ok)location.reload()}).catch(()=>{}),2000)</script>
+</body></html>`;
+self.addEventListener('fetch', e => {
+  if (e.request.mode !== 'navigate') return;
+  e.respondWith(fetch(e.request).catch(() => new Response(OFFLINE, {headers: {'Content-Type': 'text/html; charset=utf-8'}})));
+});
+"""
+
+
+@app.get("/sw.js")
+def service_worker():
+    return Response(SW_JS, mimetype="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/app-status")
+def app_status():
+    port = request.host.rsplit(":", 1)[-1] if ":" in (request.host or "") else PORT
+    return jsonify(installed=launcher.installed_app(), autostart=launcher.autostart_enabled(),
+                   browser=launcher.app_browser() and Path(str(launcher.app_browser())).stem, port=int(port))
+
+
+@app.post("/api/install-app")
+def install_app():
+    """Open PaperShelf in a normal browser tab, where the browser offers to install it as an app."""
+    port = request.host.rsplit(":", 1)[-1] if ":" in (request.host or "") else PORT
+    used = launcher.open_in_browser_tab(f"http://127.0.0.1:{int(port)}/#install-app")
+    return jsonify(ok=True, browser=used)
+
+
+@app.post("/api/autostart")
+def autostart():
+    b = request.get_json(silent=True) or {}
+    port = request.host.rsplit(":", 1)[-1] if ":" in (request.host or "") else PORT
+    try:
+        on = launcher.set_autostart(bool(b.get("on")), int(port), LOG_PATH)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return error(f"Could not change it: {exc}", 500)
+    return jsonify(autostart=on)
+
+
 @app.post("/api/quit")
 def quit_app():
     """Stop PaperShelf (useful when it runs in the background, started from its icon)."""
@@ -2173,7 +2229,8 @@ def quit_app():
 
 @app.get("/manifest.webmanifest")
 def web_manifest():
-    data = {"name": "PaperShelf", "short_name": "PaperShelf", "start_url": "/", "scope": "/", "display": "standalone",
+    data = {"name": "PaperShelf", "short_name": "PaperShelf", "id": "/", "start_url": "/", "scope": "/", "display": "standalone",
+            "launch_handler": {"client_mode": ["focus-existing", "auto"]},
             "background_color": "#f5f4f0", "theme_color": "#2e7d55",
             "description": "Your private library of scientific papers",
             "icons": [{"src": f"/static/icons/icon-{n}.png", "sizes": f"{n}x{n}", "type": "image/png"} for n in (192, 512)]}
@@ -3129,6 +3186,12 @@ def main():
     if not args.no_browser:
         own = _own_window_setting()
         threading.Timer(1.2, lambda: launcher.open_ui(url, own)).start()
+    def _refresh_icons():
+        try:
+            launcher.refresh_launchers(args.port, LOG_PATH, APP_VERSION)
+        except Exception as exc:  # noqa: BLE001 - never stop the app for an icon
+            logging.getLogger("papershelf").warning("refreshing the launcher icon failed: %s", exc)
+    threading.Thread(target=_refresh_icons, daemon=True).start()
     threading.Thread(target=auto_sync_loop, daemon=True).start()
     threading.Thread(target=share_loop, daemon=True).start()
     threading.Thread(target=sjr_watch_loop, daemon=True).start()

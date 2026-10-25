@@ -21,7 +21,8 @@ const Help = (() => {
       ${step(5, `Click <b>⤓ Export references</b> to get your reference list in APA, Nature, Cell… or to move papers to Zotero.`)}
       <h4>Starting and stopping</h4>
       <p><b>The first time</b>, start PaperShelf with <code>start.command</code> (Mac) or <code>start.bat</code> (Windows) in the app folder: it sets itself up (about a minute).</p>
-      <p><b>Then make an icon</b>: ⚙︎ Settings → <i>App icon &amp; window</i> → <b>🖥 Create PaperShelf icon</b>.</p>
+      <p><b>Then install it as an app</b> (recommended): ⚙︎ Settings → General → <b>⬇ Install PaperShelf as an app</b>. Chrome, Edge or Brave make PaperShelf a real app with its own icon: in the Dock or taskbar it shows a dot while open, clicking it brings back the open window instead of opening a new one, and right-click → <i>Quit</i> closes it. Keep it in the Dock (right-click → Options → Keep in Dock) or pin it to the taskbar, and remove the old icon. If PaperShelf isn't running when you open the app, it shows a <b>Start PaperShelf</b> button; with <i>Start PaperShelf in the background when I log in</i> it is always ready.</p>
+      <p><b>Or make a simple icon</b>: ⚙︎ Settings → General → <b>🖥 Create PaperShelf icon</b> (it starts PaperShelf but isn't a real app window).</p>
       <ul><li><b>Mac</b>: PaperShelf appears in your Applications folder and on the Desktop. Drag it onto the <b>Dock</b> to keep it there; Spotlight (⌘ Space) finds it too.</li>
         <li><b>Windows</b>: on the Desktop and in the Start menu; right-click it → <i>Pin to taskbar</i>.</li></ul>
       <p>Started from the icon, PaperShelf runs quietly in the background and opens in its <b>own window</b> named PaperShelf (if Chrome, Edge or Brave is installed – otherwise in your browser). Clicking the icon again just brings the window back. To stop it: ⚙︎ Settings → <b>⏻ Quit</b>. Started with <code>start.command</code>, it stops when you close its Terminal window.</p>
