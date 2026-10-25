@@ -94,7 +94,8 @@ const Help = (() => {
       <ul><li><b>📖 Read &amp; highlight</b> opens the PDF inside PaperShelf (works offline).</li>
         <li>Select text → click a colour to highlight it; <i>🖍 + note</i> adds a comment.</li>
         <li>Click a highlight to change colour, add a note or delete it. The list on the right jumps to each highlight.</li>
-        <li><b>Add to my notes</b> copies all highlights into the paper's notes; <b>Copy all</b> copies them to the clipboard.</li>
+        <li><b>Add to paper notes</b> copies all highlights into a note of the paper; <b>Copy all</b> copies them to the clipboard.</li>
+        <li>When you write a note on a highlight, <i>Also add it to the paper's notes</i> copies it (with the highlighted sentence and page) into the paper's notes: <b>🔒 private</b>, or <b>🌐 public</b> in a shared label the paper belongs to, so its members see it.</li>
         <li><b>💾 Save into PDF</b> writes the highlights into the file itself, so they appear in Preview, Acrobat or Zotero (repeat it after new highlights – nothing is duplicated).</li></ul>`},
 
     {id: 'export', icon: '⤓', title: 'Citations, export & Zotero', html: () => `

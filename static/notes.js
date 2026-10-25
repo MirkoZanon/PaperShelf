@@ -256,6 +256,20 @@ const Notes = (() => {
     });
   }
 
+  // where a note on this paper can go: private, or public in each shared label you are a member of
+  async function targetsFor(id) {
+    const d = await api(`/api/papers/${id}/notes`);
+    return [{v: '', label: '🔒 Private – only me'}].concat(d.public.filter(g => g.can_write).map(g => ({v: g.share_id, label: `🌐 Public in “${g.share_name}”`, name: g.share_name})));
+  }
+  async function add(id, body, shareId = '') {
+    if (shareId && !(await ensureName())) return null;
+    const d = await api(`/api/papers/${id}/notes`, {method: 'POST', body: {body, share_id: shareId}});
+    const p = paperById(id);
+    if (p) { p.note_counts = d.counts; p.note_list = d.private; p.notes = d.private.map(n => plain(n.body)).join('\n\n'); }
+    renderList(); if (state.openId === id) renderDetail();
+    if (cur?.id === id) { cur.data = d; render(); }
+    return d;
+  }
   async function addPrivate(id, body) {
     const d = await api(`/api/papers/${id}/notes`, {method: 'POST', body: {body}});
     const p = paperById(id);
@@ -299,5 +313,5 @@ const Notes = (() => {
     };
   }
 
-  return {md, badge, detailField, open, addPrivate, ensureName, exportDialog, isOpen: () => !!cur};
+  return {md, badge, detailField, open, add, targets: targetsFor, addPrivate, ensureName, exportDialog, isOpen: () => !!cur};
 })();

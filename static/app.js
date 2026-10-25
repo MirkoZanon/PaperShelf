@@ -1153,14 +1153,28 @@ async function fetchCitations(ids, {quiet = false} = {}) {
   return ok;
 }
 
-async function highlightsToNotes(id) {
+async function highlightsToNotes(id, shareId = null) {
   try {
-    const d = await api(`/api/papers/${id}/annotations`); const p = paperById(id);
+    const d = await api(`/api/papers/${id}/annotations`);
     if (!d.annotations.length) { toast('No highlights yet.'); return; }
+    if (shareId === null) {  // paper in a shared label: ask where the note goes
+      const T = await Notes.targets(id);
+      shareId = T.length > 1 ? await chooseNoteTarget(T, 'Copy the highlights into a note') : '';
+      if (shareId === null) return;
+    }
     const block = '### Highlights\n' + d.annotations.map(a => `- **p. ${a.page}**: ==${a.text.trim().replace(/\s+/g, ' ')}==${a.note ? ` → ${a.note}` : ''}`).join('\n');
-    await Notes.addPrivate(id, block);
-    toast('Highlights copied into a private note.', 'ok', 6000);
+    const r = await Notes.add(id, block, shareId);
+    if (r) toast(shareId ? 'Highlights added as a public note – the members of the shared label will see it.' : 'Highlights copied into a private note.', 'ok', 6000);
   } catch (err) { toast(err.message, 'error'); }
+}
+function chooseNoteTarget(T, title) {
+  return new Promise(resolve => {
+    const m = modal(`<h3>${esc(title)}</h3><p class="muted small">This paper is in a shared label: the note can stay private or be seen by the label's members.</p>
+      <div class="note-targets">${T.map(t => `<button class="share-opt" data-t="${esc(t.v)}"><b>${esc(t.label)}</b><small>${t.v ? 'All members see it, with your name' : 'Only in your library'}</small></button>`).join('')}</div>
+      <div class="modal-actions"><button class="btn" data-close>Cancel</button></div>`);
+    let res = null; m.onclose = () => resolve(res);
+    m.el.addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b) { res = b.dataset.t; m.close(); } });
+  });
 }
 
 /* ------------------------------------------------------------------ modes */

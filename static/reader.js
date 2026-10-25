@@ -5,6 +5,7 @@
 const Reader = (() => {
   const COLORS = {yellow: '#ffd400', green: '#5fb236', blue: '#2ea8e5', red: '#ff6666', purple: '#a28ae5'};
   let pdfjs = null, doc = null, paper = null, scale = 1.2, anns = [], pages = {}, color = 'yellow';
+  let noteTargets = [], noteTo = '-';  // where a highlight's note is also copied (paper notes)
   let isOpen = false, observer = null, token = 0, sizes = [];
 
   async function lib() {
@@ -41,11 +42,13 @@ const Reader = (() => {
           <div class="r-side-head">Highlights <span class="muted" id="r-count"></span></div>
           <div class="muted small r-hint">Select text in the PDF, then click a color to highlight it. Click a highlight to add a note.</div>
           <div id="r-list"></div>
-          <div class="r-side-foot"><button class="btn small" id="r-copy">Copy all</button><button class="btn small" id="r-tonotes">Add to my notes</button></div>
+          <div class="r-side-foot"><button class="btn small" id="r-copy">Copy all</button><button class="btn small" id="r-tonotes" title="Copy all highlights (with their notes) into a note of this paper – private, or public if the paper is in a shared label">Add to paper notes</button></div>
         </aside>
       </div>
       <div class="r-pop" id="r-pop"></div>`;
     r.classList.add('open'); document.body.classList.add('reader-open');
+    noteTargets = [{v: '', label: '🔒 Private – only me'}];
+    Notes.targets(paper.id).then(T => { noteTargets = T; }).catch(() => {});
     bind();
     try {
       const L = await lib();
@@ -230,14 +233,25 @@ const Reader = (() => {
       <span class="grow"></span><button class="btn small" data-copyann title="Copy text">⧉</button><button class="btn small danger" data-del title="Delete highlight">🗑</button></div>
       <div class="r-quote">“${esc(truncate(a.text, 240))}”</div>
       <textarea class="input" id="r-note" rows="3" placeholder="Add a note…">${esc(a.note)}</textarea>
+      <label class="r-noteto small"><span class="muted">Also add it to the paper's notes:</span>
+        <select class="input" id="r-note-to"><option value="-">No – only on this highlight</option>${noteTargets.map(t => `<option value="${esc(t.v)}">${esc(t.label)}</option>`).join('')}</select></label>
       <div class="r-pop-row" style="justify-content:flex-end"><button class="btn small primary" data-savenote>Save note</button></div>`);
+    const sel = $('#r-note-to'); if (sel) { sel.value = noteTargets.some(t => t.v === noteTo) ? noteTo : '-'; sel.onchange = () => { noteTo = sel.value; }; sel.onclick = e => e.stopPropagation(); }
     setTimeout(() => $('#r-note')?.focus(), 30);
     pop.onclick = async e => {
       const b = e.target.closest('button'); if (!b) return;
       if (b.dataset.recolor) { await update(a, {color: b.dataset.recolor}); editPopup(anns.find(x => x.id === a.id)); }
       if (b.dataset.copyann !== undefined) { navigator.clipboard?.writeText(a.text); toast('Copied.'); }
       if (b.dataset.del !== undefined) { await remove(a); hidePop(); }
-      if (b.dataset.savenote !== undefined) { await update(a, {note: $('#r-note').value}); hidePop(); }
+      if (b.dataset.savenote !== undefined) {
+        const note = $('#r-note').value, to = $('#r-note-to')?.value ?? '-';
+        await update(a, {note}); hidePop();
+        if (to !== '-' && note.trim()) {
+          const body = `> ==${a.text.trim().replace(/\s+/g, ' ')}== (p. ${a.page})\n\n${note.trim()}`;
+          try { const r = await Notes.add(paper.id, body, to); if (r) toast(to ? 'Note added to the paper as a public note – the members of the shared label will see it.' : 'Note added to the paper\'s private notes.', 'ok', 6000); }
+          catch (err) { toast(err.message, 'error'); }
+        }
+      }
     };
   }
   async function update(a, changes) {

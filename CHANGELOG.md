@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.7 – 2026-10-25
+
+- **Notes from the PDF reader can be public**: when you write a note on a highlight, choose *Also add
+  it to the paper's notes* → private, or public in a shared label the paper belongs to (with the
+  highlighted sentence and the page). *Add to paper notes* (all highlights at once) asks the same when
+  the paper is in a shared label.
+
 ## 1.14.6 – 2026-10-25
 
 - **Cleaner paper list**: keywords are hidden by default – tick **Details** above the list to show
