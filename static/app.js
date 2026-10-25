@@ -734,7 +734,7 @@ function openSettings() {
     <p class="muted small">Citation data, suggestions, title search and researcher profiles come from OpenAlex. Without a key there is a small free daily allowance; a free key gives ten times more.</p>
     <div class="section-label">Journal rankings (SCImago) <button class="help-q" data-help="journal-metrics" title="Explain this">?</button></div>
     <p class="muted small">Used for the IF columns and quartiles in the Researchers tab. Normally downloaded automatically; if scimagojr.com refuses, open <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">scimagojr.com</a>, choose a year, click “Download data”, and import the files here – several at once is fine (the year is read from the file name, e.g. <i>scimagojr 2024.csv</i>).</p>
-    <div style="display:flex;gap:6px;align-items:center"><button class="btn small" id="sjr-file-btn">Import tables…</button><input type="file" id="sjr-file" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-loaded"></span></div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="btn small" id="sjr-file-btn">Import tables…</button><button class="btn small" id="sjr-dir-btn" title="SCImago tables downloaded by your browser are moved here and used automatically">Open tables folder</button><input type="file" id="sjr-file" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-loaded"></span></div>
     </div>
 
     <div class="stab-panel" data-panel="updates">
@@ -774,6 +774,7 @@ function openSettings() {
     } catch (err) { res.innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`; }
   };
   $('#sjr-file-btn', m.el).onclick = () => $('#sjr-file', m.el).click();
+  $('#sjr-dir-btn', m.el).onclick = () => api('/api/sjr/open-folder', {method: 'POST'}).catch(err => toast(err.message, 'error'));
   $('#sjr-file', m.el).onchange = async e => { await importSjrFiles([...e.target.files]); e.target.value = ''; showSjrLoaded(); };
   const showSjrLoaded = () => api('/api/sjr/status').then(st => { const el = $('#sjr-loaded', m.el); if (el) el.textContent = st.loaded.length ? `Loaded: ${compactYears(st.loaded)}` : 'No tables loaded yet.'; }).catch(() => {});
   showSjrLoaded();

@@ -29,6 +29,9 @@ def default_options():
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+NO_IF_CATS = {"preprint", "data", "other", "thesis"}  # not journal publications: no impact factor
+
+
 def if_values(m: dict | None):
     """(at publication, current) impact-factor values: official ones you entered, else SCImago's
     2-year citations per document (same formula, Scopus data)."""
@@ -218,7 +221,7 @@ def render_html(prof, items, metrics, style, opts) -> str:
             if opts["highlight"] and key:
                 extra.append(f"<span class='role r-{e(role)}'>{e(ROLE_LABELS[role])}</span>")
             if opts["include_if"]:
-                t = if_text(metrics.get(w["key"]))
+                t = if_text(None if w.get("category") in NO_IF_CATS else metrics.get(w["key"]))
                 if t:
                     extra.append(f"<span class='if'>{e(t)}</span>")
             value = f" value='{nums[w['key']]}'" if nums else ""
@@ -292,7 +295,7 @@ def render_txt(prof, items, metrics, style, opts) -> str:
             if opts["highlight"] and w.get("role") in KEY_ROLES:
                 tags.append(ROLE_LABELS[w["role"]])
             if opts["include_if"]:
-                t = if_text(metrics.get(w["key"]))
+                t = if_text(None if w.get("category") in NO_IF_CATS else metrics.get(w["key"]))
                 if t:
                     tags.append(t)
             num = f"{nums[w['key']]}. " if nums else ""
@@ -352,7 +355,7 @@ def render_rtf(prof, items, metrics, style, opts) -> str:
             if opts["highlight"] and key:
                 tags.append(ROLE_LABELS[w["role"]])
             if opts["include_if"]:
-                t = if_text(metrics.get(w["key"]))
+                t = if_text(None if w.get("category") in NO_IF_CATS else metrics.get(w["key"]))
                 if t:
                     tags.append(t)
             tail = (r" {\f1\fs18\cf2 [" + R(" | ".join(tags)) + "]}") if tags else ""
@@ -380,7 +383,7 @@ def render_csv(prof, items, metrics, opts) -> str:
                  "IF at publication", "IF year", "IF current", "IF current year", "IF source",
                  "Citations (OpenAlex)", "Citations (Google Scholar)", "Sources", "Note"])
     for w in sorted(items, key=lambda w: (-(w.get("year") or 0), w["title"].lower())):
-        pub, now = if_values(metrics.get(w["key"]))
+        pub, now = if_values(None if w.get("category") in NO_IF_CATS else metrics.get(w["key"]))
         src = "" if not (pub or now) else ("official JIF (entered by user)" if (pub or now)["official"] else "SCImago cites/doc 2y")
         wr.writerow([nums.get(w["key"], ""), CAT_LABEL.get(w["category"], w["category"]).split(" (")[0], w.get("year") or "",
                      w["title"], "; ".join(w.get("authors") or []), ROLE_LABELS.get(w.get("role") or "", ""), w.get("venue") or "",

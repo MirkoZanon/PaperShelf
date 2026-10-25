@@ -1468,69 +1468,111 @@ def sjr_load():
         return error("Invalid year")
     db = get_db()
     try:
-        n = journals.download_year(db, year)
+        n = journals.download_year(db, year, save_to=SJR_DIR)
+        f = SJR_DIR / f"scimagojr {year}.csv"
+        if f.exists():  # remember it, so the folder watcher doesn't import it a second time
+            try:
+                known = json.loads(get_settings(db).get("sjr_files") or "{}")
+            except ValueError:
+                known = {}
+            st = f.stat()
+            known[f.name] = f"{int(st.st_mtime)}:{st.st_size}"
+            set_setting(db, "sjr_files", json.dumps(known))
+            db.commit()
     except metadata.MetadataError as exc:
         return lookup_error(exc)
     return jsonify(year=year, journals=n)
 
 
 SJR_FILE_RE = re.compile(r"^scimagojr[ _-]*(\d{4})(?:[ _-].*?)?(?: ?\(\d+\))?\.(?:csv|txt|xls)$", re.I)
-SJR_WAIT = {"until": 0.0, "since": 0.0, "seen": set()}
+SJR_DIR = HOME / "journal-metrics"  # PaperShelf's own folder for the SCImago tables
+SJR_WAIT = {"until": 0.0}
 
 
 @app.post("/api/sjr/await")
 def sjr_await():
-    """The user is downloading SCImago tables in the browser: import them from Downloads for 30 minutes."""
-    SJR_WAIT["until"] = time.time() + 30 * 60
-    SJR_WAIT["since"] = SJR_WAIT["since"] if SJR_WAIT["until"] and SJR_WAIT["since"] else time.time() - 120
-    return jsonify(ok=True, folder=str(WATCHER.folder(get_settings())))
+    """The user is downloading SCImago tables in the browser: watch the Downloads folder closely for a while."""
+    SJR_WAIT["until"] = time.time() + 60 * 60
+    SJR_DIR.mkdir(parents=True, exist_ok=True)
+    return jsonify(ok=True, folder=str(WATCHER.folder(get_settings())), tables_dir=str(SJR_DIR))
 
 
-def sjr_watch_tick(db) -> list:
-    """Import new "scimagojr YYYY.csv" files that appeared in the Downloads folder."""
-    if time.time() > SJR_WAIT["until"]:
-        return []
+@app.post("/api/sjr/open-folder")
+def sjr_open_folder():
+    SJR_DIR.mkdir(parents=True, exist_ok=True)
+    open_path(str(SJR_DIR))
+    return jsonify(ok=True, folder=str(SJR_DIR))
+
+
+def sjr_collect(db, sweep_downloads: bool = True) -> list:
+    """SCImago tables downloaded by the browser are MOVED from Downloads into PaperShelf's own
+    "journal-metrics" folder; every table there is imported once (also files you put there yourself)."""
     s = get_settings(db)
-    folder = WATCHER.folder(s)
-    done = []
-    try:
-        files = [f for f in folder.iterdir() if f.is_file() and SJR_FILE_RE.match(f.name)]
-    except OSError:
-        return []
-    for f in files:
+    SJR_DIR.mkdir(parents=True, exist_ok=True)
+    if sweep_downloads:
         try:
-            st = f.stat()
+            files = [f for f in WATCHER.folder(s).iterdir() if f.is_file() and SJR_FILE_RE.match(f.name)]
         except OSError:
+            files = []
+        for f in files:
+            try:
+                if time.time() - f.stat().st_mtime < 1.5:
+                    continue  # still being written
+                m = SJR_FILE_RE.match(f.name)
+                name = re.sub(r" ?\(\d+\)(?=\.\w+$)", "", f.name)  # "scimagojr 2019 (1).csv" -> "scimagojr 2019.csv"
+                dest = SJR_DIR / name
+                if dest.exists():
+                    dest.unlink()
+                shutil.move(str(f), str(dest))
+                logging.getLogger("papershelf").info("SCImago %s moved to %s", m.group(1), dest)
+            except OSError as exc:
+                logging.getLogger("papershelf").warning("SCImago file %s not moved: %s", f.name, exc)
+    try:
+        known = json.loads(s.get("sjr_files") or "{}")
+    except ValueError:
+        known = {}
+    done = []
+    for f in sorted(SJR_DIR.iterdir()):
+        m = SJR_FILE_RE.match(f.name)
+        if not (m and f.is_file()):
             continue
-        sig = (f.name, st.st_mtime, st.st_size)
-        if st.st_mtime < SJR_WAIT["since"] or sig in SJR_WAIT["seen"] or time.time() - st.st_mtime < 1.5:
-            continue  # old file, already imported, or still being written
-        SJR_WAIT["seen"].add(sig)
-        year = int(SJR_FILE_RE.match(f.name).group(1))
+        st = f.stat()
+        sig = f"{int(st.st_mtime)}:{st.st_size}"
+        if known.get(f.name) == sig:
+            continue
+        known[f.name] = sig
         try:
-            journals.import_table(db, year, f.read_bytes())
-            done.append(year)
-            if s.get("remove_downloads") == "1":
-                try:
-                    move_to_trash(str(f))
-                except OSError:
-                    pass
+            journals.import_table(db, int(m.group(1)), f.read_bytes())
+            done.append(int(m.group(1)))
         except (ValueError, OSError) as exc:
             logging.getLogger("papershelf").warning("SCImago file %s not imported: %s", f.name, exc)
+    if done or known != json.loads(s.get("sjr_files") or "{}"):
+        set_setting(db, "sjr_files", json.dumps(known))
+        db.commit()
     return done
 
 
+def sjr_watch_tick(db) -> list:  # kept for the tests of version 1.11
+    return sjr_collect(db, sweep_downloads=True)
+
+
 def sjr_watch_loop():
+    """Pick up SCImago tables: every few seconds while you are downloading them, otherwise every 30 s
+    (Downloads is looked at only if journal metrics are turned on or you asked for the tables)."""
+    last = 0.0
     while not STOP.is_set():
-        if time.time() < SJR_WAIT["until"]:
+        busy = time.time() < SJR_WAIT["until"]
+        if busy or time.time() - last > 30:
+            last = time.time()
             db = connect()
             try:
-                sjr_watch_tick(db)
+                sweep = busy or get_settings(db).get("sjr_auto") == "1"
+                sjr_collect(db, sweep_downloads=sweep)
             except Exception as exc:  # noqa: BLE001 - background task
                 logging.getLogger("papershelf").warning("SCImago watch failed: %s", exc)
             finally:
                 db.close()
-        STOP.wait(2)
+        STOP.wait(2.5)
 
 
 @app.post("/api/sjr/import")

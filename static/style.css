@@ -619,3 +619,5 @@ kbd { background: var(--chip); border: 1px solid var(--border); border-bottom-wi
 .sjr-y { display: inline-block; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; text-decoration: none; color: var(--accent); background: var(--panel); }
 .sjr-y:hover { border-color: var(--accent); background: var(--accent-soft); }
 .sjr-y.ok { color: var(--ok); border-color: transparent; background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.if-cell.na { display: inline-block; min-width: 10px; }
+.if-cell .if-ni { font-size: 10.5px; color: var(--faint); white-space: nowrap; }

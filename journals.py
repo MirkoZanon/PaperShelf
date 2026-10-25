@@ -67,7 +67,8 @@ def latest_year() -> int:
 def failed_years(db) -> dict:
     """Years whose download failed recently: {year: error}. They are not retried for a few days."""
     cutoff = time.time() - RETRY_DAYS * 86400
-    return {r[0]: r[2] for r in db.execute("SELECT year, at, error FROM sjr_failed WHERE at > ?", (cutoff,))}
+    loaded = set(loaded_years(db))
+    return {r[0]: r[2] for r in db.execute("SELECT year, at, error FROM sjr_failed WHERE at > ?", (cutoff,)) if r[0] not in loaded}
 
 
 def _fail(db, year, msg):
@@ -142,7 +143,7 @@ MANUAL_HINT = ("You can download it yourself on scimagojr.com/journalrank.php (c
                "'Download data') and import the file with “Import tables…”.")
 
 
-def download_year(db, year: int) -> int:
+def download_year(db, year: int, save_to=None) -> int:
     try:
         r = metadata.http_get(SJR_URL, params={"year": int(year), "out": "xls"}, browser=True, timeout=120)
     except metadata.MetadataError as exc:
@@ -159,11 +160,18 @@ def download_year(db, year: int) -> int:
         _fail(db, year, msg)
         raise metadata.MetadataError(msg)
     try:
-        return import_table(db, year, r.content)
+        n = import_table(db, year, r.content)
     except ValueError as exc:
         msg = f"SCImago's {year} table could not be read ({exc}). " + MANUAL_HINT
         _fail(db, year, msg)
         raise metadata.MetadataError(msg) from exc
+    if save_to is not None:  # keep a copy with the others in PaperShelf's journal-metrics folder
+        try:
+            save_to.mkdir(parents=True, exist_ok=True)
+            (save_to / f"scimagojr {int(year)}.csv").write_bytes(r.content)
+        except OSError:
+            pass
+    return n
 
 
 def find_journal(db, issns=(), name=""):

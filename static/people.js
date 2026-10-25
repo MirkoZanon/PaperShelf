@@ -115,7 +115,7 @@ const People = (() => {
     const catIdx = Object.fromEntries((S.person.categories || []).map((c, i) => [c.id, i]));
     const val = {
       year: w => w.year || null, title: w => (w.title || '').toLowerCase(), type: w => catIdx[cat(w)] ?? 99,
-      role: w => ROLE_ORDER[roleOf(w)] ?? 6, ifpub: w => ifVals(w)[0]?.value ?? null, ifnow: w => ifVals(w)[1]?.value ?? null,
+      role: w => ROLE_ORDER[roleOf(w)] ?? 6, ifpub: w => NO_IF_CATS.includes(cat(w)) ? null : ifVals(w)[0]?.value ?? null, ifnow: w => NO_IF_CATS.includes(cat(w)) ? null : ifVals(w)[1]?.value ?? null,
       cites: w => Math.max(w.cited_by || 0, w.scholar_cites || 0),
     }[f.sort] || (w => w.year || null);
     const sign = f.dir === 'asc' ? 1 : -1;
@@ -146,8 +146,16 @@ const People = (() => {
     if (now && m.current) now.q = m.current.quartile;
     return [pub, now];
   }
+  const NO_IF_CATS = ['preprint', 'data', 'other', 'thesis'];
   function ifCell(v, w, label, target) {
-    if (!v) return `<button class="if-cell empty" data-jm="${esc(w.key)}" title="No journal metrics for this journal in ${target || 'that year'} or earlier – click for details">–</button>`;
+    if (NO_IF_CATS.includes(cat(w))) return `<span class="if-cell na" title="No impact factor: this is not a journal publication (${esc(shortCat(cat(w)))})"></span>`;
+    if (!v) {
+      const m = S.jm?.metrics?.[w.key];
+      const why = !S.jm?.loaded?.length ? 'Journal metrics are not loaded yet'
+        : m && !m.journal ? `“${w.venue || 'This journal'}” is not in the SCImago tables (new or not indexed journal). Click to type its impact factor yourself`
+        : `No metrics for this journal in ${target || 'that year'} or earlier – click for details`;
+      return `<button class="if-cell empty" data-jm="${esc(w.key)}" title="${esc(why)}">${m && !m.journal && S.jm?.loaded?.length ? '<span class="if-ni">not indexed</span>' : '–'}</button>`;
+    }
     const shifted = target && v.year && v.year !== target;
     const ref = shifted ? ` (no ${target} data: closest previous year ${v.year} used)` : '';
     return `<button class="if-cell" data-jm="${esc(w.key)}" title="${label} – reference year ${v.year}${ref}: ${v.official ? 'official impact factor (entered by you)' : 'SCImago citations per document, 2 years (impact-factor formula, Scopus data)'}${v.q ? ' · ' + v.q : ''}">${v.value.toFixed(1)}${v.official ? '' : '<sup>*</sup>'}${v.q ? ` <span class="q q-${v.q}">${v.q}</span>` : ''}${shifted ? `<span class="ify">${v.year}</span>` : ''}</button>`;
@@ -350,13 +358,14 @@ const People = (() => {
     const pubYears = S.person.profile.works.filter(w => ['article', 'conference', 'abstract'].includes(cat(w)) && w.year)
       .map(w => w.year).filter(y => y >= st.first && y <= st.latest);
     const years = [...new Set([...pubYears, st.latest])].sort((a, b) => b - a);
-    try { await api('/api/sjr/await', {method: 'POST'}); } catch (e) { /* ignore */ }
+    let tablesDir = '~/PaperShelf/journal-metrics';
+    try { tablesDir = (await api('/api/sjr/await', {method: 'POST'})).tables_dir || tablesDir; } catch (e) { /* ignore */ }
     const url = y => `https://www.scimagojr.com/journalrank.php?year=${y}&out=xls`;
     const m = modal(`<h3>Journal metrics: get the missing years <span class="grow"></span><button class="btn small" data-help="journal-metrics">📘 Guide</button></h3>
-      <p class="muted small">This researcher needs the SCImago tables for <b>${years.length}</b> year${years.length === 1 ? '' : 's'} (the latest one and each publication year). Each button downloads one table <b>in your browser</b> (about 3–6 MB); PaperShelf <b>imports it automatically</b> from your Downloads folder – nothing else to do. If your browser asks to allow several downloads, click Allow.</p>
+      <p class="muted small">This researcher needs the SCImago tables for <b>${years.length}</b> year${years.length === 1 ? '' : 's'} (the latest one and each publication year). Each button downloads one table <b>in your browser</b> (about 3–6 MB). As soon as it lands in Downloads, PaperShelf <b>moves it into its own folder</b> <code>${esc(tablesDir)}</code> and uses it – nothing else to do. If your browser asks to allow several downloads, click Allow.</p>
       <div class="sjr-actions"><button class="btn primary" id="sjr-all">⬇ Download all missing years</button><button class="btn" id="sjr-files">Import files I already have…</button><input type="file" id="sjr-file2" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-sum"></span></div>
       <div class="sjr-years" id="sjr-years"></div>
-      <p class="muted small">If a download page asks you to confirm you are human, do it and the file will download. The files go to <code>${esc(state.settings.watch_dir || 'Downloads')}</code> (⚙︎ Settings → PDFs &amp; access). On a Mac, allow PaperShelf to read the Downloads folder if asked.</p>
+      <p class="muted small">If a download page asks you to confirm you are human, do it and the file will download. A web page can't choose where your browser saves files, so they first land in <code>${esc(state.settings.watch_dir || 'Downloads')}</code>; on a Mac, allow PaperShelf to read that folder if asked. Tables you put directly into the PaperShelf folder are used too. <button class="linklike" id="sjr-open">Open the folder</button></p>
       <div class="modal-actions"><button class="btn" data-close>Close</button></div>`, {wide: true});
     let loaded = new Set(st.loaded), timer = null;
     const render = () => {
@@ -383,6 +392,7 @@ const People = (() => {
       toast('Downloading in the background… each year turns ✓ when it has been imported. If nothing happens after a minute, click the years one by one.', 'info', 12000);
     };
     $('#sjr-files', m.el).onclick = () => $('#sjr-file2', m.el).click();
+    $('#sjr-open', m.el).onclick = () => api('/api/sjr/open-folder', {method: 'POST'}).catch(err => toast(err.message, 'error'));
     $('#sjr-file2', m.el).onchange = async e => { await importSjrFiles([...e.target.files]); e.target.value = ''; };
   }
 

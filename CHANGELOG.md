@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.12 – 2026-10-25
+
+- **Journal metrics kept in PaperShelf's own folder**: SCImago tables downloaded by the browser are
+  moved automatically from Downloads into `~/PaperShelf/journal-metrics` and used right away; tables
+  dropped into that folder are picked up too (Settings → Data sources → *Open tables folder*).
+- Clearer IF cells: no value for items that aren't journal publications (preprints, datasets,
+  supplementary files, peer-review reports); “not indexed” for journals missing from SCImago (often
+  new journals – click to type the IF). Papers of the current year use the latest table available.
+
 ## 1.11 – 2026-10-25
 
 - **Researchers – sortable table**: click any column title (Year, Publication, Type, Role, IF pub.,

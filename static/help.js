@@ -167,8 +167,12 @@ const Help = (() => {
       <h4>If the download is refused</h4>
       <p>scimagojr.com sometimes refuses downloads made by programs, but not those made by your browser. PaperShelf then shows a yellow note with <b>Get the missing years…</b>:</p>
       ${step(1, 'The window lists exactly the years this researcher needs (the latest one and each publication year). Click <b>Download all missing years</b> – or one year at a time.')}
-      ${step(2, 'Your browser downloads the tables into your Downloads folder (allow several downloads if it asks). PaperShelf <b>imports them by itself</b>: each year turns ✓ and the IF columns fill in.')}
-      <p>Tables are kept for every researcher: years already loaded are never asked again. Files you already downloaded can be added with <i>Import files I already have…</i> (several at once – the year is read from the file name).</p>
+      ${step(2, 'Your browser downloads the tables (allow several downloads if it asks). As soon as a table lands in Downloads, PaperShelf <b>moves it into its own folder</b> <code>~/PaperShelf/journal-metrics</code> and uses it: each year turns ✓ and the IF columns fill in.')}
+      <p>All the tables live in that folder (⚙︎ Settings → Data sources → <i>Open tables folder</i>) and serve every researcher: years already there are never asked again. You can also drop SCImago files into it yourself – they are picked up within a minute.</p>
+      <h4>Why some cells are empty</h4>
+      <ul><li><b>Not a journal publication</b> (preprint, dataset, supplementary file, peer-review report, thesis): no impact factor – the cell is left blank.</li>
+        <li><b>“not indexed”</b>: the journal isn't in SCImago (often a new journal). Click the cell to type its impact factor yourself.</li>
+        <li><b>The current year</b>: SCImago publishes a year's table only the following June, so this year's papers use the latest table available (shown in small, e.g. <i>2025</i>).</li></ul>
       <h4>Why not fully automatic?</h4>
       <p>The official Journal Impact Factor is sold by Clarivate and can't be downloaded freely. SCImago offers its yearly tables for free on its website; when the site doesn't answer programs, the one-click browser download is the legal way to get them.</p>
       ${step(3, 'Know the official impact factor (many journals show it on their homepage, or via your university\'s JCR access)? Type it in that window: it is stored only on your computer.')}
