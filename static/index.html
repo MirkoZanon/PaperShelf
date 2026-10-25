@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PaperShelf</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>📚</text></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand"><span>📚</span>PaperShelf</div>
+    <div class="seg tabs" id="tabs"><button data-tab="library" class="on">Library</button><button data-tab="people">Researchers</button></div>
+    <form id="add-form" class="tab-library-only" autocomplete="off">
+      <input id="add-input" class="input" placeholder="Paste a link, DOI, arXiv ID or title…  then press Enter">
+      <button class="btn primary" id="add-btn" type="submit">Add paper</button>
+      <div class="menu-wrap">
+        <button class="btn icon" type="button" id="more-btn" title="More ways to add">⋯</button>
+        <div class="menu" id="more-menu">
+          <button type="button" data-menu="bulk">Add many at once…<small>One link / DOI / title per line</small></button>
+          <button type="button" data-menu="import">Import PDF files…<small>Or drag PDFs onto the window</small></button>
+          <button type="button" data-menu="manual">Add manually<small>Type the details yourself</small></button>
+        </div>
+      </div>
+    </form>
+    <input id="search" class="input tab-library-only" type="search" placeholder="Search…  ( / )">
+    <div class="grow tab-people-only"></div>
+    <button class="btn small update-btn" id="update-btn" style="display:none">⬆ Update</button>
+    <button class="btn icon" id="sync-btn" title="Sync with GitHub" style="display:none">⟳</button>
+    <button class="btn icon" data-help="start" title="Guide and help">?</button>
+    <button class="btn icon" id="settings-btn" title="Settings">⚙︎</button>
+  </header>
+
+  <aside id="people-side" class="tab-people-only"></aside>
+  <main id="people-main" class="tab-people-only"></main>
+
+  <aside id="sidebar" class="tab-library-only">
+    <div class="side-head">Library</div>
+    <div id="nav"></div>
+    <div class="side-head" id="groups-head"><span title="Groups work like tags: a paper can be in any number of groups">Groups</span> <button id="new-group" title="New group">＋</button></div>
+    <div id="tree"></div>
+    <div class="side-head">Keywords</div>
+    <div id="kwcloud"></div>
+  </aside>
+
+  <main class="tab-library-only">
+    <div class="view-head">
+      <div>
+        <h1 id="view-title">All papers</h1>
+        <div class="sub" id="view-sub"></div>
+      </div>
+      <div class="head-right">
+        <div class="filters" id="filters"></div>
+        <div class="seg mode-seg" id="mode-seg" role="tablist">
+          <button data-mode="list" class="on" title="List of papers">☰ List</button>
+          <button data-mode="map" title="Citation map of these papers">🕸 Map</button>
+          <button data-mode="discover" title="Suggested papers related to these">💡 Discover</button>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar" id="list-toolbar">
+      <label class="check"><input type="checkbox" id="select-all"> <span id="count-label">0 papers</span></label>
+      <div id="bulk">
+        <select id="bulk-group"><option value="">Add to group…</option></select>
+        <button class="btn small" id="bulk-remove" style="display:none">Remove from this group</button>
+        <select id="bulk-status"><option value="">Set status…</option><option value="to_read">To read</option><option value="reading">Reading</option><option value="read">Read</option></select>
+        <button class="btn small" id="bulk-pdf">⬇ Find PDFs</button>
+        <button class="btn small danger" id="bulk-delete">Delete</button>
+      </div>
+      <div class="grow"></div>
+      <label class="check" id="incl-sub-wrap" style="display:none"><input type="checkbox" id="incl-sub"> include subgroups</label>
+      <select id="sort" title="Sort"></select>
+      <button class="btn small" id="export-btn">⤓ Export references</button>
+    </div>
+    <div id="list"></div>
+    <div id="map-view" class="mode-view"></div>
+    <div id="discover-view" class="mode-view"></div>
+  </main>
+</div>
+
+<section id="detail" aria-label="Paper details">
+  <div class="d-top"><span class="saved" id="saved">✓ Saved</span><button class="btn small" id="close-detail">Close ✕</button></div>
+  <div id="detail-body"></div>
+</section>
+
+<section id="reader" aria-label="PDF reader"></section>
+<section id="help" aria-label="Guide"></section>
+
+<input type="file" id="attach-input" accept="application/pdf,.pdf" hidden>
+<input type="file" id="import-input" accept="application/pdf,.pdf" multiple hidden>
+<div id="toasts"></div>
+<div id="drop-overlay">Drop PDF files to add them to your library</div>
+
+<script src="/static/app.js"></script>
+<script src="/static/graph.js"></script>
+<script src="/static/discover.js"></script>
+<script src="/static/reader.js"></script>
+<script src="/static/people.js"></script>
+<script src="/static/help.js"></script>
+<script src="/static/update.js"></script>
+</body>
+</html>

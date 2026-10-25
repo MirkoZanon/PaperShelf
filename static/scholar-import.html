@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Import from Google Scholar – PaperShelf</title>
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  body { overflow: auto; }
+  .wrap { max-width: 640px; margin: 50px auto; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px 26px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .row { display: flex; gap: 14px; align-items: center; margin: 16px 0; }
+  .row img { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; }
+  table { border-collapse: collapse; font-size: 13.5px; margin: 8px 0 14px; }
+  td, th { padding: 4px 14px 4px 0; text-align: left; }
+  select { width: 100%; }
+</style>
+</head>
+<body>
+<div class="wrap" id="box"><p class="muted">Reading the data…</p></div>
+<script>
+'use strict';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+(async function () {
+  const box = document.getElementById('box');
+  let data;
+  try { data = JSON.parse(decodeURIComponent(location.hash.slice(1))); } catch (e) { data = null; }
+  history.replaceState(null, '', location.pathname);  // keep the data out of the browser history
+  if (!data || !data.name) {
+    box.innerHTML = `<h1>Nothing to import</h1><p class="muted">Open a Google Scholar profile page (scholar.google.com/citations?user=…) and click the “Import Scholar profile” button in your bookmarks bar.</p><p><a class="btn" href="/">Back to PaperShelf</a></p>`;
+    return;
+  }
+  let people = [];
+  try { people = (await (await fetch('/api/people')).json()).people; } catch (e) { /* ignore */ }
+  const norm = s => (s || '').toLowerCase().normalize('NFKD').replace(/[^a-z ]/g, '').trim();
+  const match = people.find(p => norm(p.name) === norm(data.name));
+  const stats = data.stats || [];
+  box.innerHTML = `<h1>Import from Google Scholar</h1>
+    <p class="muted">Data read from the public profile page you were viewing. It is saved only on this computer.</p>
+    <div class="row">${data.photo && !/avatar_scholar/.test(data.photo) ? `<img src="${esc(data.photo)}" alt="">` : ''}
+      <div><b>${esc(data.name)}</b><div class="muted">${esc(data.affiliation)}</div><div class="muted small">${(data.interests || []).map(esc).join(' · ')}</div></div></div>
+    ${stats.length ? `<table><tr><th></th>${(data.head || []).slice(1).map(h => `<th>${esc(h)}</th>`).join('')}</tr>${stats.map(r => `<tr>${r.map((c, i) => i ? `<td>${esc(c)}</td>` : `<th>${esc(c)}</th>`).join('')}</tr>`).join('')}</table>` : ''}
+    <p><b>${(data.pubs || []).length}</b> publications on the page. ${(data.pubs || []).length >= 20 && (data.pubs || []).length % 20 === 0 ? '<span class="muted small">If the profile has more, click “Show more” at the bottom of the Scholar page until all are listed, then click the button again.</span>' : ''}</p>
+    <div class="section-label">Add to</div>
+    <select class="input" id="target"><option value="">A new researcher profile</option>${people.map(p => `<option value="${p.id}" ${match && match.id === p.id ? 'selected' : ''}>${esc(p.name)}${p.current?.[0]?.organization ? ' – ' + esc(p.current[0].organization) : ''}</option>`).join('')}</select>
+    <p class="muted small">Choose an existing profile (from ORCID/OpenAlex) to compare the metrics and complete the publication list; duplicates are merged.</p>
+    <div class="modal-actions"><a class="btn" href="/">Cancel</a><button class="btn primary" id="go">Import</button></div>`;
+  document.getElementById('go').onclick = async () => {
+    const b = document.getElementById('go'); b.disabled = true; b.textContent = 'Importing…';
+    try {
+      const r = await fetch('/api/scholar/import', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({data, person_id: document.getElementById('target').value || null})});
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'Import failed');
+      location.href = `/#person=${d.person_id}`;
+    } catch (err) { b.disabled = false; b.textContent = 'Import'; alert(err.message); }
+  };
+})();
+</script>
+</body>
+</html>

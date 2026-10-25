@@ -1,0 +1,9 @@
+# keep line endings right on every system
+*.command text eol=lf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.bat     -text
+# not needed inside the downloadable zip
+.github        export-ignore
+.gitattributes export-ignore
+.gitignore     export-ignore

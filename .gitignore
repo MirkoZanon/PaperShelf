@@ -1,0 +1,13 @@
+# Local environment and temporary files – never upload these
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+*.papershelf-tmp
+# Never upload a library by mistake (it belongs in ~/PaperShelf, not in the app folder)
+library.db
+library.db-*
+PDFs/
+backups/
+.venv/requirements.installed

@@ -1,0 +1,40 @@
+# Publishes a GitHub release whenever the number in VERSION changes on main.
+# Installed copies of PaperShelf find the release with their Update button.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check update.json
+        run: |
+          if grep -q "YOUR-GITHUB-NAME" update.json; then
+            echo "::error::Edit update.json and set \"repo\" to \"${GITHUB_REPOSITORY}\", then push again."
+            exit 1
+          fi
+
+      - name: Create the release (only if this version is new)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(tr -d '[:space:]' < VERSION)
+          if gh release view "v$V" >/dev/null 2>&1; then
+            echo "Release v$V already exists - nothing to do."
+            exit 0
+          fi
+          # release notes = the "## <version>" section of CHANGELOG.md
+          awk -v v="$V" '/^## /{p = ($2 == v)} p && !/^## /' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "PaperShelf $V" > notes.md
+          git archive --format=zip --prefix=PaperShelf-app/ -o "PaperShelf-app-$V.zip" HEAD
+          gh release create "v$V" "PaperShelf-app-$V.zip" --title "PaperShelf $V" --notes-file notes.md
