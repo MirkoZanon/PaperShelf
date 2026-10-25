@@ -341,7 +341,7 @@ function renderKeywords() {
     }
   const all = [...counts.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
   const head = $('#kw-head');
-  if (head) head.innerHTML = `<span class="sec-toggle" data-kwtoggle>${state.kwOpen !== false ? '▾' : '▸'} Keywords${all.length ? ` <span class="sec-n">${all.length}</span>` : ''}</span><button id="kw-manage" title="Rename, merge or delete keywords">✎</button>`;
+  if (head) head.innerHTML = `<span class="sec-toggle" data-kwtoggle><span class="sec-car">${state.kwOpen !== false ? '▾' : '▸'}</span> Keywords${all.length ? ` <span class="sec-n">${all.length}</span>` : ''}</span><button id="kw-manage" title="Rename, merge or delete keywords">✎</button>`;
   const box = $('#kwcloud');
   if (state.kwOpen === false) { box.innerHTML = ''; return; }
   if (!all.length) { box.innerHTML = '<div class="empty-hint">Keywords of the papers in this view appear here – click one to filter.</div>'; return; }

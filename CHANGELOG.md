@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.0.2 – 2026-10-25
+
+- Researchers: the publication list opens on the papers (journal articles, preprints, conference
+  papers); abstracts, theses, data and other items are one click away in the type chips (*All types*).
+- Sidebar: *Labels* and *Keywords* headers aligned, with the same fold arrows.
+
 ## 2.0.1 – 2026-10-25
 
 - **PaperShelf menu**: click the logo at the top left for the most used actions – update now, check

@@ -8,7 +8,9 @@ const People = (() => {
   };
   try { S.ptab = localStorage.getItem('papershelf-ptab') || 'overview'; } catch (e) { /* ignore */ }
   const THIS_YEAR = new Date().getFullYear();
-  const newFilters = () => ({cats: null, q: '', from: '', to: '', role: 'all', sort: 'year', dir: 'desc', thisYear: false,
+  // publications open on the papers (journal articles, preprints, conference papers); the chips show the rest
+  const PAPER_CATS = ['article', 'preprint', 'conference'];
+  const newFilters = () => ({cats: new Set(PAPER_CATS), q: '', from: '', to: '', role: 'all', sort: 'year', dir: 'desc', thisYear: false,
     byYear: true, showExcluded: false, hidePubPreprints: false});
   S.f = newFilters();
   const CAT_CLASS = c => `cat-badge cat-${c}`;
@@ -43,6 +45,7 @@ const People = (() => {
   }
   function setPerson(p) {
     S.person = p; S.selected.clear(); S.jm = null; S.f = newFilters();
+    if (!(p.profile?.works || []).some(w => PAPER_CATS.includes(cat(w)))) S.f.cats = null;  // no papers: show everything
     setTimeout(loadJournalMetrics, 0);
     if (!p.profile.roles_checked) setTimeout(checkRoles, 50);
     else if (deepCandidates().length) setTimeout(() => { if (S.person === p) deepCheck(false); }, 1500);
