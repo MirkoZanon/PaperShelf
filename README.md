@@ -70,16 +70,16 @@ copy updates itself with `git pull` at every start.
 
 - **First start**: double-click `start.command` (Mac) / `start.bat` (Windows). It sets things up and
   opens PaperShelf. A small Terminal / command window stays open; closing it stops PaperShelf.
-- **Make an icon** (recommended): ⚙︎ Settings → *App icon & window* → **🖥 Create PaperShelf icon**.
-  - Mac: PaperShelf appears in your *Applications* folder and on the Desktop – drag it onto the
-    **Dock**. Spotlight (⌘ Space → PaperShelf) finds it too.
-  - Windows: on the Desktop and in the Start menu – right-click → *Pin to taskbar*.
-- **From the icon** PaperShelf runs in the background (no Terminal window) and opens in its **own
-  window** called PaperShelf, without the `127.0.0.1` address bar, if Chrome, Edge or Brave is
-  installed (otherwise in your usual browser). Clicking the icon again brings the window back.
+- **Install it as an app** (recommended): ⚙︎ Settings → General → **⬇ Install PaperShelf as an app**
+  (Chrome, Edge or Brave). PaperShelf gets its own icon in the Dock / taskbar: a dot while it is open,
+  clicking it brings back the open window, right-click → *Quit* closes it. Keep it in the Dock (Mac:
+  right-click → Options → Keep in Dock) or pin it to the taskbar (Windows). If PaperShelf isn't running
+  when you open the app, it shows a **Start PaperShelf** button.
+- **Start in the background when you log in** (optional, same place): the app is then always ready,
+  and shared labels and sync keep up to date.
+- **Or a simple icon**: ⚙︎ Settings → General → **🖥 Create PaperShelf icon** (Applications + Desktop
+  on Mac, Desktop + Start menu on Windows); it starts PaperShelf and opens its window.
 - **Stop**: ⚙︎ Settings → **⏻ Quit** (or close the Terminal window if you used `start.command`).
-- **Start automatically** (optional): add PaperShelf from *Applications* to *System Settings → General
-  → Login Items* (Mac), or put the shortcut in the Startup folder (Windows: `Win+R` → `shell:startup`).
 - If no window opens, go to **http://127.0.0.1:5055** in any browser.
 
 **First five minutes**
@@ -121,7 +121,9 @@ is used); browser buttons that save the page you are reading. Duplicates are rec
 *Personal* labels (nested, used by the map and statistics) and *Shared* labels (see below). Automatic
 keywords: the sidebar shows the most frequent ones with a filter and *Show all*, and a keyword manager
 merges variants (“fMRI” / “fmri”), renames or deletes keywords across the library. Reading status,
-stars, notes; a compact library menu (*All papers*, *To read*, *Reading*, the rest under *More*);
+stars, notes; a compact library menu (*All papers*, *To read*, *Reading*, the rest under *More*) and
+collapsible label sections; label colours (24, the same symbol grey or coloured); a clean paper list
+(tick *Details* for keywords) with a **PDF** button on every paper – it opens the PDF, or fetches it;
 search in titles, authors, journals, keywords, abstracts, notes **and the text inside your PDFs**
 (indexed locally; matches show page and sentence).
 

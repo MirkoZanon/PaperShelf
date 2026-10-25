@@ -16,7 +16,7 @@
 <body>
 <div class="app">
   <header>
-    <div class="brand"><span>📚</span>PaperShelf</div>
+    <div class="brand"><img src="/static/icons/icon-64.png" alt="" width="26" height="26">PaperShelf</div>
     <div class="seg tabs" id="tabs"><button data-tab="library" class="on">Library</button><button data-tab="people">Researchers</button></div>
     <form id="add-form" class="tab-library-only" autocomplete="off">
       <input id="add-input" class="input" placeholder="Paste a link or DOI, or type a few words of the title…">
@@ -44,11 +44,13 @@
   <aside id="sidebar" class="tab-library-only">
     <div class="side-head">Library</div>
     <div id="nav"></div>
-    <div class="side-head"><span title="Labels work like tags: a paper can have any number of labels">Labels</span></div>
-    <div class="side-sub" id="groups-head"><span title="Your own labels (topics, projects…) – used by the map and the statistics">Personal</span> <button id="new-group" title="New label">＋</button></div>
+    <div class="side-head" id="labels-head">Labels</div>
+    <div id="labels-body">
+    <div class="side-sub" id="groups-head"><span class="sec-label sec-toggle" data-sec="personal" title="Your own labels (topics, projects…) – used by the map and the statistics. Click to show / hide">Personal</span> <button id="new-group" title="New label">＋</button></div>
     <div id="tree"></div>
-    <div class="side-sub" id="shares-head"><span title="Labels shared with colleagues: their papers reach everybody's library">Shared</span> <button id="new-share" title="New shared label, or join one">＋</button></div>
+    <div class="side-sub" id="shares-head"><span class="sec-label sec-toggle" data-sec="shared" title="Labels shared with colleagues: their papers reach everybody's library. Click to show / hide">Shared</span> <button id="new-share" title="New shared label, or join one">＋</button></div>
     <div id="sharelist"></div>
+    </div>
     <div class="side-head" id="kw-head">Keywords</div>
     <div id="kwcloud"></div>
   </aside>
@@ -83,7 +85,7 @@
       <label class="check" id="incl-sub-wrap" style="display:none"><input type="checkbox" id="incl-sub"> include sub-labels</label>
       <label class="check" title="Show keywords under each paper"><input type="checkbox" id="details-toggle"> Details</label>
       <select id="sort" title="Sort"></select>
-      <button class="btn small" id="export-btn">⤓ Export references</button>
+      <button class="btn small" id="export-btn" title="Export references (APA, Nature… / Zotero / BibTeX) or notes">⤓ Export</button>
     </div>
     <div id="list"></div>
     <div id="map-view" class="mode-view"></div>

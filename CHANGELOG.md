@@ -2,6 +2,25 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.0 – 2026-10-25
+
+PaperShelf 2.0 brings together everything added since 1.13:
+
+- **Notes, reworked** – a chat of notes for every paper (📝 on each row shows how many), private by
+  default, **public** on papers of shared labels (synced to all members, with your name), Markdown with
+  colours, notes from the PDF reader, and *Export notes* with the references.
+- **Shared labels, clearer** – *📤 Invite colleagues / code* with a ready-made invitation, the people
+  taking part and what each contributed, separate Settings tabs for *Sync my computers* and *Sharing*.
+- **A real app** – install PaperShelf as an app (Chrome, Edge, Brave): its own icon in the Dock or
+  taskbar, the window comes back when you click it, *Quit* in its menu; optional start at login.
+- **New look** – green colours and icon (also next to the name at the top), label colours (24), the
+  same label symbols grey or coloured, a clean paper list with a **PDF** button on every paper,
+  collapsible label sections, one round **⟳** button that syncs, updates shared labels and checks for
+  a new version.
+- **Paper details, tidier** – title, authors and journal at the top; notes, labels and abstract first;
+  the bibliographic fields under *✎ Edit details*; the panel closes when you click outside it.
+- Label colours are used in the map too.
+
 ## 1.14.8 – 2026-10-25
 
 - **PaperShelf as a real app**: Settings → General → *Install PaperShelf as an app* (Chrome, Edge,

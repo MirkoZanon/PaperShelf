@@ -792,3 +792,21 @@ mark { background: color-mix(in srgb, #f5c542 55%, transparent); color: inherit;
 .r-noteto { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 8px; }
 .r-noteto select { width: 100%; padding: 4px 6px; font-size: 12.5px; }
 .note-targets { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+
+/* ---------- 2.0: brand, collapsible sidebar sections, detail panel */
+.brand img { width: 26px; height: 26px; border-radius: 6px; display: block; }
+.sec-toggle { cursor: pointer; user-select: none; }
+.sec-car { display: inline-block; width: 10px; font-size: 10px; color: var(--faint); }
+#labels-head .sec-n, .side-sub .sec-n { color: var(--faint); font-weight: 500; margin-left: 2px; }
+.d-head { margin: 2px 0 12px; }
+.d-title { font-size: 18px; line-height: 1.3; margin: 0 0 6px; font-weight: 700; letter-spacing: -.01em; }
+.d-authors { font-size: 13.5px; color: var(--text); opacity: .85; }
+.d-meta { font-size: 12.5px; color: var(--muted); margin-top: 3px; overflow-wrap: anywhere; }
+.d-meta a { color: inherit; text-decoration: underline dotted; }
+details.d-sec > summary { cursor: pointer; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 4px 0; list-style: none; }
+details.d-sec > summary::-webkit-details-marker { display: none; }
+details.d-sec > summary::before { content: '▸ '; font-size: 10px; }
+details.d-sec[open] > summary::before { content: '▾ '; }
+details.d-sec > summary .muted { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 4px; }
+#d-edit { border-top: 1px solid var(--border-soft); padding-top: 8px; }
+.d-foot-btns { display: flex; gap: 6px; margin-bottom: 8px; }

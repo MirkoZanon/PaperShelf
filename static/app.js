@@ -33,11 +33,11 @@ function loadPrefs() {
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
     if (p.tab === 'people') state.tab = 'people';
-    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details;
+    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.closed = new Set(p.closed || []);
   } catch (e) { /* storage unavailable */ }
 }
 function savePrefs() {
-  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details})); }
+  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, closed: [...(state.closed || [])]})); }
   catch (e) { /* ignore */ }
 }
 
@@ -303,9 +303,18 @@ function renderSidebar() {
   $('#nav').innerHTML = main.map(item).join('')
     + `<div class="nav-item nav-more" data-navmore><span class="ico">${open ? '▾' : '▸'}</span><span class="label">${open ? 'Less' : 'More'}</span>${open ? '' : '<span class="count">starred, read…</span>'}</div>`
     + (open ? `<div class="nav-sub">${more.map(item).join('')}</div>` : '');
-  $('#tree').innerHTML = state.groups.length ? renderTree(null, 0)
+  // collapsible sections: Labels, and inside it Personal and Shared
+  const C = state.closed || (state.closed = new Set());
+  const car = k => `<span class="sec-car">${C.has(k) ? '▸' : '▾'}</span>`;
+  const nShared = (state.shares || []).length;
+  $('#labels-head').innerHTML = `<span class="sec-toggle" data-sec="labels" title="Show / hide labels">${car('labels')} Labels${C.has('labels') ? ` <span class="sec-n">${state.groups.length + nShared}</span>` : ''}</span>`;
+  $('#groups-head .sec-label').innerHTML = `${car('personal')} Personal${C.has('personal') && state.groups.length ? ` <span class="sec-n">${state.groups.length}</span>` : ''}`;
+  $('#shares-head .sec-label').innerHTML = `${car('shared')} Shared${C.has('shared') && nShared ? ` <span class="sec-n">${nShared}</span>` : ''}`;
+  $('#labels-body').hidden = C.has('labels');
+  $('#tree').hidden = C.has('personal'); $('#sharelist').hidden = C.has('shared');
+  $('#tree').innerHTML = C.has('personal') ? '' : state.groups.length ? renderTree(null, 0)
     : `<div class="empty-hint">No labels yet. Click ＋ to create one, then drag papers onto it. A paper can have many labels; hover a label to add sub-labels.</div>`;
-  if (typeof Shares !== 'undefined') Shares.renderSidebar();
+  if (typeof Shares !== 'undefined' && !C.has('shared')) Shares.renderSidebar();
   renderKeywords();
 }
 function renderTree(pid, depth) {
@@ -472,7 +481,22 @@ function renderDetail() {
   if (!p) { closeDetail(); return; }
   const link = linkFor(p);
   const authorsText = p.authors.map(a => a.given ? `${a.family}, ${a.given}` : a.family).join('\n');
-  $('#detail-body').innerHTML = `
+  $('#detail-body').innerHTML = detailHead(p) + detailRest(p, link, authorsText);
+  $('#d-edit').addEventListener('toggle', e => { state.editOpen = e.target.open; });
+  loadCitation(p.id);
+}
+function detailHead(p) {
+  const meta = [p.journal, p.year, TYPE_LABEL[p.type] && p.type !== 'article' ? TYPE_LABEL[p.type] : ''].filter(Boolean).map(esc).join(' · ');
+  const authorsLine = p.authors.length ? esc(p.authors.slice(0, 6).map(a => `${a.given ? a.given.split(/[\s.-]+/).filter(Boolean).map(x => x[0] + '.').join(' ') + ' ' : ''}${a.family}`).join(', ')) + (p.authors.length > 6 ? ` <span class="muted">+${p.authors.length - 6} more</span>` : '') : '<span class="muted">No authors</span>';
+  return `
+    <div class="d-head">
+      <h2 class="d-title">${esc(p.title || 'Untitled')}</h2>
+      <div class="d-authors">${authorsLine}</div>
+      ${meta ? `<div class="d-meta">${meta}${p.doi ? ` · <a href="https://doi.org/${esc(p.doi)}" target="_blank" rel="noopener">${esc(p.doi)}</a>` : ''}</div>` : ''}
+    </div>`;
+}
+function detailRest(p, link, authorsText) {
+  return `
     <div class="d-actions">
       ${p.pdf_exists
         ? `<button class="btn primary" data-act="read">📖 Read &amp; highlight</button><button class="btn" data-act="openapp" title="Open in Preview / your default PDF app">Open in app</button><button class="btn" data-act="reveal">${finderLabel()}</button>`
@@ -480,12 +504,19 @@ function renderDetail() {
       <button class="btn" data-act="attach">📎 ${p.pdf_exists ? 'Replace' : 'Attach'} PDF…</button>
       ${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">🔗 Article page</a>` : ''}
       <button class="btn" data-act="copy">❝ Copy citation</button>
-      <button class="btn" data-act="refresh">↻ Update metadata</button>
-      <button class="btn ${p.starred ? '' : ''}" data-act="star">${p.starred ? '★ Starred' : '☆ Star'}</button>
-      <button class="btn danger" data-act="delete">Delete</button>
+      <button class="btn" data-act="star" title="${p.starred ? 'Starred – click to unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
     </div>
     ${!p.pdf_exists && (p.doi || p.url) ? `<div class="lib-btns"><button class="btn small" data-act="institution" title="Opens the article on the publisher's site: use its “Access through your institution” / “Log in via your university” option, then download the PDF – it is attached automatically">🔐 Open article &amp; log in with my university</button>${(state.settings.proxies || []).map(x => `<button class="btn small" data-act="viaproxy" data-proxy="${esc(x.id)}" title="Open the article through ${esc(x.name)}, then download the PDF: it is attached automatically">🏛 Via ${esc(x.name)}</button>`).join('')}</div>` : ''}
     <div class="seg">${Object.keys(STATUS_LABEL).map(s => `<button data-status="${s}" class="${p.status === s ? 'on' : ''}">${STATUS_LABEL[s]}</button>`).join('')}</div>
+    ${Notes.detailField(p)}
+    <div class="fld"><span>Labels</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No labels yet – create one in the sidebar (Labels → Personal ＋).</span>'}</div></div>
+    ${typeof Shares !== 'undefined' ? Shares.detailField(p) : ''}
+    ${p.annotation_count ? `<div class="fld"><span>Highlights</span><div class="hl-summary">🖍 ${p.annotation_count} highlight${p.annotation_count > 1 ? 's' : ''} in the PDF · <button class="linklike" data-act="read">open reader</button> · <button class="linklike" data-act="hl-notes">copy them into a note</button></div></div>` : ''}
+    <details class="fld d-sec" ${p.abstract ? 'open' : ''}><summary>Abstract</summary><textarea data-f="abstract" rows="9" placeholder="No abstract">${esc(p.abstract)}</textarea></details>
+    <div class="fld"><span>Keywords</span><div class="kw-edit">${p.keywords.map((k, i) => `<span class="chip">${esc(k)}<button data-kwdel="${i}" title="Remove">×</button></span>`).join('')}<input id="kw-input" placeholder="Add keyword + Enter"></div></div>
+    <div class="fld"><span class="fld-row">Reference <select id="cite-style" title="Citation style (also used for exports)">${state.styles.map(s => `<option value="${s.id}" ${s.id === state.settings.default_style ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></span><div class="cite-box" id="cite-box"><span class="muted">…</span></div></div>
+    ${citationSection(p)}
+    <details class="fld d-sec" id="d-edit" ${state.editOpen ? 'open' : ''}><summary>✎ Edit details <span class="muted small">title, authors, journal, DOI…</span></summary>
     <label class="fld"><span>Title</span><textarea data-f="title" rows="2">${esc(p.title)}</textarea></label>
     <label class="fld"><span>Authors <em>– one per line, “Family, Given”</em></span><textarea data-f="authors" rows="${Math.min(8, Math.max(2, p.authors.length))}">${esc(authorsText)}</textarea></label>
     <div class="grid3">
@@ -504,16 +535,9 @@ function renderDetail() {
     <label class="fld"><span>Publisher</span><input data-f="publisher" value="${esc(p.publisher)}"></label>
     <label class="fld"><span>DOI</span><input data-f="doi" value="${esc(p.doi)}" placeholder="10.xxxx/…"></label>
     <label class="fld"><span>URL</span><input data-f="url" value="${esc(p.url)}"></label>
-    <div class="fld"><span>Keywords</span><div class="kw-edit">${p.keywords.map((k, i) => `<span class="chip">${esc(k)}<button data-kwdel="${i}" title="Remove">×</button></span>`).join('')}<input id="kw-input" placeholder="Add keyword + Enter"></div></div>
-    <div class="fld"><span>Labels</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No labels yet – create one in the sidebar (Labels → Personal ＋).</span>'}</div></div>
-    ${typeof Shares !== 'undefined' ? Shares.detailField(p) : ''}
-    <div class="fld"><span class="fld-row">Reference <select id="cite-style" title="Citation style (also used for exports)">${state.styles.map(s => `<option value="${s.id}" ${s.id === state.settings.default_style ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></span><div class="cite-box" id="cite-box"><span class="muted">…</span></div></div>
-    ${citationSection(p)}
-    ${p.annotation_count ? `<div class="fld"><span>Highlights</span><div class="hl-summary">🖍 ${p.annotation_count} highlight${p.annotation_count > 1 ? 's' : ''} in the PDF · <button class="linklike" data-act="read">open reader</button> · <button class="linklike" data-act="hl-notes">copy them into a private note</button></div></div>` : ''}
-    ${Notes.detailField(p)}
-    <details class="fld" ${p.abstract ? 'open' : ''}><summary>Abstract</summary><textarea data-f="abstract" rows="9">${esc(p.abstract)}</textarea></details>
-    <div class="d-foot">Added ${esc(new Date(p.added_at).toLocaleString())}${p.pdf_exists ? `<br>PDF: ${esc(p.pdf_path)} · <button class="linklike" data-act="detach">unlink PDF</button>` : ''}</div>`;
-  loadCitation(p.id);
+    </details>
+    <div class="d-foot"><div class="d-foot-btns"><button class="btn small" data-act="refresh">↻ Update metadata</button><button class="btn small danger" data-act="delete">Delete paper</button></div>
+      Added ${esc(new Date(p.added_at).toLocaleString())}${p.pdf_exists ? `<br>PDF: ${esc(p.pdf_path)} · <button class="linklike" data-act="detach">unlink PDF</button>` : ''}</div>`;
 }
 async function loadCitation(id) {
   try {
@@ -530,7 +554,7 @@ async function savePaper(id, changes, {rerender = true} = {}) {
   try {
     const d = await api(`/api/papers/${id}`, {method: 'PUT', body: changes});
     upsertPaper(d.paper); renderSidebar(); renderList();
-    if (state.openId === id) { if (rerender) renderDetail(); else loadCitation(id); flashSaved(); }
+    if (state.openId === id) { if (rerender) renderDetail(); else { loadCitation(id); const h = $('#detail-body .d-head'); if (h) h.outerHTML = detailHead(d.paper); } flashSaved(); }
     return d.paper;
   } catch (err) { toast(err.message, 'error'); return null; }
 }
@@ -1272,6 +1296,8 @@ function bind() {
     const kw = e.target.closest('[data-kw]');
     if (kw) { state.keyword = state.keyword === kw.dataset.kw ? null : kw.dataset.kw; state.selected.clear(); renderList(); renderKeywords(); return; }
     if (e.target.closest('[data-navmore]')) { state.navMore = !state.navMore; savePrefs(); renderSidebar(); return; }
+    const sec = e.target.closest('[data-sec]');
+    if (sec) { const k = sec.dataset.sec; state.closed.has(k) ? state.closed.delete(k) : state.closed.add(k); savePrefs(); renderSidebar(); return; }
     if (e.target.closest('[data-kwtoggle]')) { state.kwOpen = state.kwOpen === false; savePrefs(); renderKeywords(); return; }
     if (e.target.closest('[data-kwall]')) { state.kwAll = !state.kwAll; renderKeywords(); return; }
     if (e.target.closest('#kw-manage')) { manageKeywords(); return; }

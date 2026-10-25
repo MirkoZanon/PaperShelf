@@ -169,7 +169,7 @@ const Graph = (() => {
         const g = byId.get(gid);
         const count = nodes.filter(n => n.paper && (n.paper.group_ids || []).includes(gid)).length;
         const ti = tops.indexOf(topOf(gid));
-        const h = {key: 'g' + gid, hub: {kind: 'group', id: gid, label: g.name, path: groupPath(gid), count, color: ti >= 0 ? PALETTE[ti % PALETTE.length] : '#888',
+        const h = {key: 'g' + gid, hub: {kind: 'group', id: gid, label: g.name, path: groupPath(gid), count, color: lcol(g.color) || lcol(byId.get(topOf(gid))?.color) || (ti >= 0 ? PALETTE[ti % PALETTE.length] : '#888'),
           sub: g.parent_id != null}, deg: count, ...place('g' + gid)};
         nodes.push(h); hubs.set(gid, h);
       }
@@ -259,19 +259,19 @@ const Graph = (() => {
       const [a, b] = st.yr; const t = b > a ? (p.year - a) / (b - a) : 1;
       return `hsl(${220 - 210 * t}, 70%, 50%)`;
     }
-    const g = groupColorKey(p);
-    return g == null ? '#9aa0a6' : PALETTE[g % PALETTE.length];
+    const k = groupColorKey(p);
+    return k == null ? '#9aa0a6' : (lcol(k.g.color) || PALETTE[k.i % PALETTE.length]);  // the label's own colour if it has one
   }
   function groupColorKey(p) {
     if (!p.group_ids.length) return null;
     let ids = p.group_ids;
     if (state.view.type === 'group') {  // inside a group, color by its subgroups
       const kids = childrenOf(state.view.id).map(g => g.id);
-      for (const [i, kid] of kids.entries()) if (ids.some(gid => descendants(kid).has(gid))) return i;
+      for (const [i, kid] of kids.entries()) if (ids.some(gid => descendants(kid).has(gid))) return {i, g: state.groups.find(g => g.id === kid) || {}};
       return null;
     }
     const order = state.groups.filter(g => g.parent_id == null).map(g => g.id);
-    for (const [i, top] of order.entries()) if (ids.some(gid => descendants(top).has(gid))) return i;
+    for (const [i, top] of order.entries()) if (ids.some(gid => descendants(top).has(gid))) return {i, g: state.groups.find(g => g.id === top) || {}};
     return null;
   }
   function legend() {
@@ -281,7 +281,7 @@ const Graph = (() => {
     else if (st.colorBy === 'year') { st.yr = yearRange(); items = [[`hsl(220,70%,50%)`, st.yr[0]], [`hsl(10,70%,50%)`, st.yr[1]]]; }
     else {
       const groups = state.view.type === 'group' ? childrenOf(state.view.id) : state.groups.filter(g => g.parent_id == null);
-      items = groups.slice(0, 10).map((g, i) => [PALETTE[i % PALETTE.length], g.name]);
+      items = groups.slice(0, 10).map((g, i) => [lcol(g.color) || PALETTE[i % PALETTE.length], g.name]);
       items.push(['#9aa0a6', state.view.type === 'group' ? 'only this label' : 'no label']);
     }
     if (st.showExt && st.edgeMode === 'cites') items.push(['ghost', 'not in your library']);
