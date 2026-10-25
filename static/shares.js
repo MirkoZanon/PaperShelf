@@ -13,6 +13,21 @@ const Shares = (() => {
     return s < 90 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : new Date(iso).toLocaleDateString();
   };
   const publishReady = () => !!(state.settings.share_gist && state.settings.share_user);
+  const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
+  const initials = n => (String(n || '?').match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  const pname = p => p.id.startsWith('local-') ? (p.you ? (state.settings.display_name || 'You') : 'someone (not published)') : (p.name || p.id);
+  const pTip = p => [p.id.startsWith('local-') ? '' : `GitHub: ${p.id}`, p.creator ? 'created this label' : '', p.joined ? (p.since ? `taking part since ${new Date(p.since).toLocaleDateString()}` : 'has joined') : 'invited – not joined yet',
+    `${p.papers} paper${p.papers === 1 ? '' : 's'} added`, `${p.notes} public note${p.notes === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  function personChip(p, {remove = false} = {}) {
+    return `<span class="person ${p.joined ? '' : 'invited'}" title="${esc(pTip(p))}"><span class="p-av" style="background:hsl(${hue(p.id)} 55% 46%)">${esc(initials(pname(p)))}</span>
+      <span class="p-name">${esc(pname(p))}</span>${p.you ? '<span class="p-tag">you</span>' : ''}${p.creator ? '<span class="p-tag">creator</span>' : ''}${p.joined ? '' : '<span class="p-tag">invited</span>'}
+      ${remove && !p.you && !p.id.startsWith('local-') ? `<button data-mrm="${esc(p.id)}" title="Remove from the members">×</button>` : ''}</span>`;
+  }
+  function peopleList(x, opts = {}) {
+    const P = x.people || [];
+    return `<div class="people-list">${P.map(p => `<div class="person-row">${personChip(p, opts)}<span class="muted small">${esc(p.id.startsWith('local-') ? '' : '@' + p.id)}${p.joined ? '' : ' · not joined yet'} · ${p.papers} paper${p.papers === 1 ? '' : 's'} · ${p.notes} note${p.notes === 1 ? '' : 's'}</span></div>`).join('')}</div>
+      <p class="muted small">Everybody's name and contributions update together with the papers and notes. People who only <i>follow</i> the label with the code (read-only) don't publish anything, so they aren't listed.</p>`;
+  }
   const me = () => state.settings.share_user || '';
 
   /* ------------------------------------------------------------ sidebar & list */
@@ -32,11 +47,12 @@ const Shares = (() => {
 
   function viewSub(id) {
     const x = byId(id); if (!x) return '';
-    const others = x.members.filter(m => !m.you && !m.name.startsWith('local-')).map(m => m.name);
+    const P = x.people || [];
     const who = x.role === 'member'
-      ? (others.length ? `Shared with ${others.map(esc).join(', ')}` : 'Only you so far – add members to share it')
-      : `You follow this label (from ${esc((x.code || '').split('/')[0] || 'a file')})`;
-    return `<span class="share-sub">${x.role === 'member' ? '🔗' : '📥'} ${who} · updated ${ago(x.last_pull || x.updated_at)}
+      ? (P.length > 1 ? '' : 'Only you so far – invite colleagues to share it')
+      : `You follow this label (read-only)`;
+    const ppl = P.length ? `<span class="share-people" data-sact="people" data-id="${esc(id)}" title="Who takes part – click for details">👥 ${P.slice(0, 8).map(p => personChip(p)).join('')}${P.length > 8 ? `<span class="muted small">+${P.length - 8}</span>` : ''}</span>` : '';
+    return `<span class="share-sub">${ppl}${x.role === 'member' ? '🔗' : '📥'} ${who ? who + ' · ' : ''}updated ${ago(x.last_pull || x.updated_at)}
       ${x.last_error ? ` · <span class="warn-txt" title="${esc(x.last_error)}">⚠ ${esc(truncate(x.last_error, 70))}</span>` : ''}
       <button class="linklike" data-sact="sync" data-id="${esc(id)}">⟳ Update now</button> · <button class="linklike" data-sact="manage" data-id="${esc(id)}">Settings…</button>
       <button class="btn small primary invite-btn" data-sact="invite" data-id="${esc(id)}" title="Get the code to give to colleagues">📤 Invite colleagues / code</button></span>`;
@@ -217,7 +233,7 @@ const Shares = (() => {
       <div class="invite-step"><span class="num">3</span><div><b>They paste it in their PaperShelf</b>: sidebar → Labels → <b>Shared ＋</b> → <i>Join a shared label</i>. The papers appear in their library, with the label.</div></div>
       ${member ? `<div class="section-label">Should they also add papers and write public notes?</div>
         ${x.can_publish ? `<p class="muted small">With the code alone they <b>follow</b> the label (read-only). To let someone edit it, add their <b>GitHub user name</b> here <i>before</i> they join (they also turn on sharing once in their Settings).</p>
-          <div class="share-members">${others.map(mb => `<span class="chip">${esc(mb.name)}${mb.joined ? ' ✓' : ' · invited'}</span>`).join('')}</div>
+          <div class="share-members">${(x.people || []).map(p => personChip(p)).join('')}</div>
           <div style="display:flex;gap:6px;margin-top:6px"><input class="input" id="iv-new" style="flex:1" placeholder="Colleague's GitHub name, e.g. MarioRossi"><button class="btn" id="iv-add">Add as member</button></div>` : ''}` : `<p class="muted small">You follow this label: anyone you give this code to can follow it too (read-only).</p>`}`
       : `<div class="warn-box"><b>This label isn't online yet, so it has no code.</b><br>To get a code, turn on sharing once (2 minutes, free GitHub account): ⚙︎ Settings → <b>👥 Sharing</b>.
           <div style="margin-top:8px"><button class="btn small primary" id="iv-settings">Open sharing settings</button></div></div>`}
@@ -237,6 +253,13 @@ const Shares = (() => {
     $('#iv-new', m.el)?.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
   }
 
+  function peopleDialog(id) {
+    const x = byId(id); if (!x) return;
+    const m = modal(`<h3>👥 People in “${esc(x.name)}”</h3>${peopleList(x)}
+      <div class="modal-actions">${x.role === 'member' ? '<button class="btn" id="pp-invite">📤 Invite more…</button>' : ''}<span class="grow"></span><button class="btn" data-close>Close</button></div>`);
+    $('#pp-invite', m.el)?.addEventListener('click', () => { m.close(); inviteDialog(id); });
+  }
+
   function manageDialog(id, {focusMember = false} = {}) {
     const x = byId(id); if (!x) return;
     const member = x.role === 'member';
@@ -245,8 +268,8 @@ const Shares = (() => {
         <label class="fld"><span>Description</span><input class="input wide" id="sm-desc" value="${esc(x.description || '')}" placeholder="optional"></label>`
         : `<p class="muted">${x.description ? esc(x.description) + '<br>' : ''}You <b>follow</b> this shared label: you receive its papers and updates, but can't change it. To add papers too, ask a member to add your GitHub name${me() ? ` (<b>${esc(me())}</b>)` : ''}, then join again with the code.</p>`}
       ${x.creator && x.creator.by ? `<p class="muted small">Created by <b>${esc(x.creator.name || x.creator.by)}</b>${x.creator.name && !x.creator.by.startsWith('local-') && x.creator.name !== x.creator.by ? ` (${esc(x.creator.by)})` : ''}${x.creator.at ? ` on ${esc(new Date(x.creator.at).toLocaleDateString())}` : ''}${x.notes ? ` · ${x.notes} public note${x.notes === 1 ? '' : 's'}` : ''}</p>` : ''}
-      <div class="section-label">Members</div>
-      <div class="share-members">${x.members.map(mb => `<span class="chip" title="${mb.joined ? 'Has joined' : 'Invited – will be connected when they join with the code'}">${esc(mb.name.startsWith('local-') ? 'this computer (not published)' : mb.name)}${mb.you ? ' (you)' : mb.joined ? '' : ' · invited'}${member && !mb.you && !mb.name.startsWith('local-') ? `<button data-mrm="${esc(mb.name)}" title="Remove member">×</button>` : ''}</span>`).join('')}</div>
+      <div class="section-label">People taking part</div>
+      ${peopleList(x, {remove: member})}
       ${member ? (x.can_publish ? `<div style="display:flex;gap:6px;margin-top:6px"><input class="input" id="sm-new" style="flex:1" placeholder="Colleague's GitHub name, e.g. MarioRossi"><button class="btn" id="sm-add">Add member</button></div>
           <p class="muted small">Members can add and remove papers; everybody's changes reach everybody, also through other members. Each member turns on sharing once (⚙︎ Settings → 👥 Sharing) and joins with the code.</p>`
         : '<p class="warn-box small">Turn on sharing in ⚙︎ Settings → <b>👥 Sharing</b> to publish this label and add members.</p>') : ''}
@@ -346,6 +369,7 @@ const Shares = (() => {
       e.stopPropagation();
       if (a.dataset.sact === 'manage') manageDialog(a.dataset.id);
       if (a.dataset.sact === 'invite') inviteDialog(a.dataset.id);
+      if (a.dataset.sact === 'people') peopleDialog(a.dataset.id);
       if (a.dataset.sact === 'sync') syncNow(a.dataset.id);
     }, true);
     const body = $('#detail-body');
@@ -364,5 +388,5 @@ const Shares = (() => {
   init();
 
   return {renderSidebar, viewSub, bulkOptions, bulk, detailField, addPapers, removePapers, syncNow, newDialog, joinDialog,
-    manageDialog, inviteDialog, startMenu, settingsHtml, settingsBind, settingsValues};
+    manageDialog, inviteDialog, peopleDialog, startMenu, settingsHtml, settingsBind, settingsValues};
 })();

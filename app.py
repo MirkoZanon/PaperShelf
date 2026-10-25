@@ -1811,6 +1811,7 @@ def read_settings():
 def write_settings():
     body = request.get_json(silent=True) or {}
     db = get_db()
+    name_changed = False
     if "email" in body:
         email = (body.get("email") or "").strip()
         if email and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
@@ -1843,7 +1844,10 @@ def write_settings():
     if body.get("clear_core_key"):
         set_setting(db, "core_key", "")
     if "display_name" in body:
-        set_setting(db, "display_name", " ".join(str(body.get("display_name") or "").split())[:60])
+        dn = " ".join(str(body.get("display_name") or "").split())[:60]
+        if dn != get_settings(db).get("display_name"):
+            set_setting(db, "display_name", dn)
+            name_changed = True
     if "share_repo" in body:
         repo = _share_repo_value(body.get("share_repo"))
         if repo is None:
@@ -1865,6 +1869,15 @@ def write_settings():
                           "template": tpl})
         set_setting(db, "proxies", json.dumps(clean))
     db.commit()
+    if name_changed:  # your new name reaches the members of your shared labels
+        ident = share_identity(db)
+        for row in db.execute("SELECT id, state FROM shares").fetchall():
+            st = json.loads(row["state"])
+            me = _my_author(st, ident)
+            if me and sharing.set_profile(st, me, get_settings(db)["display_name"]):
+                _save_share(db, row["id"], st)
+                db.commit()
+                publish_soon(row["id"])
     return jsonify(settings=get_settings(db, secrets=False))
 
 
@@ -2337,8 +2350,11 @@ def share_summary_one(db, row, st, ident) -> dict:
         if not owner:
             owner, src = next(((n, rp) for n, rp in sm["members"].items() if rp), ("", ""))
         code = sharing.make_code(owner, src, row["id"]) if owner and src else ""
-    return {**sm, "members": [{"name": n, "joined": bool(rp), "you": n in (ident["user"], ident["local"])}
+    you = {ident["user"], ident["local"]} - {""}
+    prof = sharing.profiles(st)
+    return {**sm, "members": [{"name": n, "display": prof.get(n, ""), "joined": bool(rp), "you": n in you}
                               for n, rp in sorted(sm["members"].items())],
+            "people": [{**p, "you": p["id"] in you} for p in sm["people"]],
             "role": "member" if author else "follower", "can_publish": ident["can_publish"], "local_papers": local,
             "group_id": row["group_id"], "origin": row["origin"], "last_pull": row["last_pull"],
             "last_push": row["last_push"], "last_error": row["last_error"], "code": code,
@@ -2430,6 +2446,10 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
         elif ident["user"] in mem and mem[ident["user"]] != ident["src"]:
             sharing.set_member(st, ident["user"], ident["user"], ident["src"])  # you just joined as a member
             announce = True
+    me = _my_author(st, ident)
+    dn = get_settings(db).get("display_name") or ""
+    if me and dn:
+        sharing.set_profile(st, me, dn)  # the others see the name you chose (only changes when you change it)
     stats = materialize_share(db, sid, st, row["group_id"])
     fields = {"last_pull": now(), "last_error": "; ".join(errors)[:500]}
     published = False
@@ -2808,6 +2828,8 @@ def create_share():
                            display_name=get_settings(db).get("display_name") or ident["user"])
     if b.get("description"):
         sharing.set_description(st, author, b["description"])
+    if get_settings(db).get("display_name"):
+        sharing.set_profile(st, author, get_settings(db)["display_name"])
     ids = [int(i) for i in b.get("paper_ids") or []]
     if b.get("from_group"):
         gids = group_descendants(db, int(b["from_group"]))

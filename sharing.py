@@ -172,6 +172,9 @@ def clock(st: dict) -> int:
         for n in (e.get("notes") or {}).values():
             if n.get("s"):
                 c = max(c, n["s"][0])
+    for pr in (st.get("profiles") or {}).values():
+        if pr.get("s"):
+            c = max(c, pr["s"][0])
     return c
 
 
@@ -199,6 +202,20 @@ def set_member(st, author, member, repo="", remove=False):
         m["add"] = s
         if repo:
             m["repo"] = repo
+
+
+def set_profile(st, author, name) -> bool:
+    """The name `author` shows to the other members (each member sets only their own). True if changed."""
+    name = " ".join(str(name or "").split())[:60]
+    cur = (st.get("profiles") or {}).get(author) or {}
+    if cur.get("name") == name:
+        return False
+    st.setdefault("profiles", {})[author] = {"name": name, "since": cur.get("since") or _now(), "s": tick(st, author)}
+    return True
+
+
+def profiles(st) -> dict:
+    return {k: v.get("name") or "" for k, v in (st.get("profiles") or {}).items()}
 
 
 def add_item(st, author, meta) -> str:
@@ -274,6 +291,9 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
     """The copy published by `owner` (read from owner's own gist) is the authority on owner's notes:
     a version of one of owner's notes found in someone else's copy but not in owner's is dropped,
     so a member can't forge or change another member's note by editing their own copy by hand."""
+    theirs_p = (copy.get("profiles") or {}).get(owner)
+    if theirs_p and (st.get("profiles") or {}).get(owner) != theirs_p:
+        st.setdefault("profiles", {})[owner] = dict(theirs_p)
     for key, e in (st.get("items") or {}).items():
         mine = ((copy.get("items") or {}).get(key) or {})
         if not mine:
@@ -318,6 +338,17 @@ def merge(a: dict, b: dict) -> dict:
     ca, cb = a.get("creator"), b.get("creator")
     if ca or cb:
         out["creator"] = dict(min([c for c in (ca, cb) if c], key=lambda c: c.get("at") or "9"))
+    pa, pb = a.get("profiles") or {}, b.get("profiles") or {}
+    if pa or pb:
+        out["profiles"] = {}
+        for who in set(pa) | set(pb):
+            cands = [p for p in (pa.get(who), pb.get(who)) if p and p.get("s") and p["s"][1] == who]
+            if cands:
+                best = cands[0]
+                for c in cands[1:]:
+                    if newer(c.get("s"), best.get("s")):
+                        best = c
+                out["profiles"][who] = dict(best)
     out["items"] = {}
     for key in set(a.get("items", {})) | set(b.get("items", {})):
         x, y = a["items"].get(key), b["items"].get(key)
@@ -376,6 +407,12 @@ def validate(data) -> dict:
         if notes:
             item["notes"] = notes
         st["items"][item_key(meta)] = item
+    raw_p = data.get("profiles") if isinstance(data.get("profiles"), dict) else {}
+    for who, pr in list(raw_p.items())[:MAX_MEMBERS]:
+        stp = _stamp(pr.get("s")) if isinstance(pr, dict) else None
+        if stp and stp[1] == who and (NAME_RE.match(str(who)) or str(who).startswith("local-")):
+            st.setdefault("profiles", {})[str(who)] = {"name": " ".join(str(pr.get("name") or "").split())[:60],
+                                                       "since": str(pr.get("since") or "")[:40], "s": stp}
     c = data.get("creator") if isinstance(data.get("creator"), dict) else None
     if c and (NAME_RE.match(str(c.get("by") or "")) or str(c.get("by") or "").startswith("local-")):
         st["creator"] = {"by": str(c["by"])[:60], "name": str(c.get("name") or "")[:60], "at": str(c.get("at") or "")[:40]}
@@ -388,7 +425,26 @@ def summary(st: dict) -> dict:
     return {"id": st["id"], "name": st["name"]["v"], "description": (st.get("description") or {}).get("v", ""),
             "papers": len(its), "members": members(st), "updated_at": st.get("updated_at"),
             "creator": st.get("creator") or {},
-            "notes": sum(len(notes_of(e)) for e in its.values())}
+            "notes": sum(len(notes_of(e)) for e in its.values()),
+            "people": people(st)}
+
+
+def people(st: dict) -> list:
+    """Who takes part: every member with the name they chose, when they joined and what they contributed."""
+    its, prof = items(st), st.get("profiles") or {}
+    added, notes = {}, {}
+    for e in its.values():
+        a = (e.get("add") or [0, ""])[1]
+        added[a] = added.get(a, 0) + 1
+        for n in notes_of(e):
+            notes[n["by"]] = notes.get(n["by"], 0) + 1
+    creator = (st.get("creator") or {}).get("by")
+    out = []
+    for name, m in members(st).items():
+        pr = prof.get(name) or {}
+        out.append({"id": name, "name": pr.get("name") or "", "since": pr.get("since") or "", "joined": bool(m),
+                    "creator": name == creator, "papers": added.get(name, 0), "notes": notes.get(name, 0)})
+    return sorted(out, key=lambda p: (not p["creator"], not p["joined"], (p["name"] or p["id"]).lower()))
 
 
 # --------------------------------------------------------------------------- where lists live

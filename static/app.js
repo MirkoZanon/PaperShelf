@@ -764,6 +764,7 @@ function openSettings(startTab) {
     </div>
     </div>
     <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="set-save">Save</button></div>`, {wide: true});
+  m.el.querySelector('.modal').classList.add('settings-modal');
   const showTab = id => {
     $$('[data-stab]', m.el).forEach(b => b.classList.toggle('on', b.dataset.stab === id));
     $$('.stab-panel', m.el).forEach(p => { p.hidden = p.dataset.panel !== id; });

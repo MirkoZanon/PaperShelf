@@ -240,6 +240,8 @@ const Help = (() => {
       ${step(1, 'Sidebar → Labels → <b>Shared ＋</b> → <i>Join a shared label</i> → paste the code → <b>Join</b>.')}
       ${step(2, 'If they added you as a member (and you turned sharing on), you can edit it too: your PaperShelf tells theirs where your copy is with a short comment on their gist, signed by GitHub with your account. Otherwise you <b>follow</b> it 📥: you receive everything, read-only. Removing a paper from a label you follow removes it only for you.')}
 
+      <h4>Who takes part</h4>
+      <p>Above the papers of a shared label you see its <b>people</b> 👥: every member with the name they chose (⚙︎ Settings → 👥 Sharing), and tags for <i>you</i>, the <i>creator</i> and people <i>invited</i> who haven't joined yet. Click them for details: GitHub name, since when, how many papers and public notes each added. This list is shared and updated like the papers and notes. People who only follow the label with the code aren't listed, because they don't publish anything.</p>
       <h4>Without GitHub</h4>
       <p>In a shared label’s ⚙︎ click <b>Save as file</b> and send the <code>.papershelf</code> file by e-mail or chat. The recipient opens it with <i>Shared ＋ → Open a label file</i>. If the label is also online, their copy keeps updating by itself.</p>
 

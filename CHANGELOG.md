@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.3 – 2026-10-25
+
+- **People in a shared label**: above the papers of a shared label you see who takes part – each with
+  the name they chose, *you*, *creator* and *invited* tags; click for details (GitHub name, since when,
+  papers added, public notes written). Names are shared and updated together with papers and notes:
+  if someone changes their name in Settings, everybody sees the new one at the next update. Each
+  member's own copy decides about their name, so nobody can change someone else's.
+- Settings window wider: all tabs fit on one line.
+
 ## 1.14.2 – 2026-10-25
 
 - **Invite colleagues, made obvious**: a blue *📤 Invite colleagues / code* button above every shared
