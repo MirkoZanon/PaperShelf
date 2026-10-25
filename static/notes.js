@@ -139,7 +139,7 @@ const Notes = (() => {
       <textarea class="input nc-text" rows="${editing ? 4 : 3}" placeholder="Write a note… Markdown: **bold**, *italic*, ==highlight==, {red}colour{/}, - list, > quote">${esc(value)}</textarea>
       <div class="nc-preview md" style="display:none"></div>
       <div class="nc-foot">${vis}<span class="grow"></span><span class="muted small">${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter</span>
-        ${editing ? '<button class="btn small" data-ncancel>Cancel</button><button class="btn small primary" data-nsave>Save</button>' : '<button class="btn small primary" data-nsend>Add note</button>'}</div></div>`;
+        ${editing ? '<button class="btn small" data-ncancel>Cancel</button><button class="btn small primary" data-nsave>Save</button>' : '<button class="btn small" data-ndiscard title="Clear the text without saving">Discard</button><button class="btn small primary" data-nsend>Add note</button>'}</div></div>`;
   }
   function render() {
     const d = cur.data, all = allNotes(d);
@@ -214,7 +214,7 @@ const Notes = (() => {
     let d;
     try { d = await api(`/api/papers/${id}/notes`); } catch (err) { toast(err.message, 'error'); return; }
     if (cur?.m) cur.m.close();
-    const m = modal(`<h3 class="notes-h"><span class="notes-title"></span><span class="grow"></span><button class="btn small" data-nexport title="Download these notes with the reference">⤓ Export</button><button class="btn small" data-help="notes" title="How notes work">📘 Guide</button></h3>
+    const m = modal(`<h3 class="notes-h"><span class="notes-title"></span><span class="grow"></span><button class="btn small" data-nexport title="Download these notes with the reference">⤓ Export</button><button class="btn small" data-help="notes" title="How notes work">📘 Guide</button><button class="btn small" data-close title="Close without saving the text you are writing (Esc)">Close ✕</button></h3>
       <div class="notes-body"></div>`, {wide: true});
     m.el.querySelector('.modal').classList.add('notes-modal');
     cur = {id, m, data: d, filter, showHidden: false, editing: null, target: ''};
@@ -226,6 +226,7 @@ const Notes = (() => {
       const f = t.closest('[data-nf]'); if (f) { cur.filter = f.dataset.nf; render(); return; }
       if (t.closest('[data-nshowhidden]')) { cur.showHidden = !cur.showHidden; render(); return; }
       if (t.closest('[data-nsend]')) { send(); return; }
+      if (t.closest('[data-ndiscard]')) { const ta = $('.nc:not(.nc-edit) .nc-text', cur.m.el); ta.value = ''; const pv = $('.nc:not(.nc-edit) .nc-preview', cur.m.el); if (pv.style.display !== 'none') $('.nc:not(.nc-edit) [data-tb=preview]', cur.m.el).click(); ta.focus(); return; }
       if (t.closest('[data-nexport]')) { exportDialog([cur.id]); return; }
       const nb = t.closest('.nb'); if (!nb) return;
       const nid = nb.dataset.nid, kind = nb.dataset.kind, sid = nb.dataset.share;

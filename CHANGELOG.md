@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.1 – 2026-10-25
+
+- Notes window: a **Close ✕** button (closes without saving what you were typing) and a **Discard**
+  button that clears the text box.
+
 ## 1.14 – 2026-10-25
 
 - **Notes, reworked**: every paper has its own chat of notes. A 📝 button on each row shows whether a
