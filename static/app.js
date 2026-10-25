@@ -250,10 +250,18 @@ function setView(view) {
 
 /* ------------------------------------------------------------------ sidebar */
 /* ------------------------------------------------------------------ label colours */
-const LABEL_COLORS = {red: '#e05252', orange: '#e8833a', amber: '#d4a017', green: '#3a9d5d', teal: '#2a9d8f', cyan: '#2b9cc4',
-  blue: '#3f7be0', indigo: '#5b5fd6', purple: '#9256d6', pink: '#d65c9a', brown: '#9a6b4b', grey: '#8a8f98'};
+const LABEL_COLORS = {red: '#e05252', coral: '#f07560', orange: '#e8833a', amber: '#d4a017', yellow: '#e3c52c', olive: '#8f9a2e',
+  lime: '#84b93a', green: '#3a9d5d', mint: '#3fbf9f', teal: '#2a9d8f', cyan: '#2b9cc4', sky: '#5aaee8',
+  blue: '#3f7be0', navy: '#2c4a8a', indigo: '#5b5fd6', violet: '#7d5ce0', purple: '#9256d6', magenta: '#c04fc0',
+  pink: '#d65c9a', rose: '#e0708a', brown: '#9a6b4b', sand: '#c2a27a', grey: '#8a8f98', slate: '#4e5a6a'};
 const lcol = c => LABEL_COLORS[c] || '';
-const labelIcon = (c, fallback) => c && lcol(c) ? `<span class="ldot" style="--lc:${lcol(c)}"></span>` : fallback;
+// the same symbol for every label: grey when it has no colour, in its colour otherwise
+const LABEL_SVG = {
+  tag: '<path d="M2.2 2.2h5.4l6.2 6.2-5.4 5.4-6.2-6.2z" class="li-fill"/><circle cx="5.2" cy="5.2" r="1.1" class="li-dot"/>',
+  link: '<path d="M6.6 9.4l2.8-2.8" class="li-line"/><path d="M7.4 4.6l1.3-1.3a2.6 2.6 0 0 1 3.7 3.7l-1.3 1.3M8.6 11.4l-1.3 1.3a2.6 2.6 0 0 1-3.7-3.7l1.3-1.3" class="li-line"/>',
+  inbox: '<path d="M2.5 9.5l1.6-6h7.8l1.6 6v3.5h-11z" class="li-fill"/><path d="M2.5 9.5h3.3l.8 1.5h2.8l.8-1.5h3.3M8 4.5v3.6M6.5 6.7L8 8.2l1.5-1.5" class="li-line"/>',
+};
+const labelIcon = (c, kind = 'tag') => `<span class="licon ${c && lcol(c) ? 'colored' : ''}"${c && lcol(c) ? ` style="--lc:${lcol(c)}"` : ''}><svg viewBox="0 0 16 16" aria-hidden="true">${LABEL_SVG[kind] || LABEL_SVG.tag}</svg></span>`;
 const chipStyle = c => c && lcol(c) ? ` style="--lc:${lcol(c)}"` : '';
 function pickColor(anchor, current, onPick) {
   document.querySelector('.color-pop')?.remove();
@@ -261,7 +269,7 @@ function pickColor(anchor, current, onPick) {
   pop.className = 'color-pop';
   pop.innerHTML = `<div class="cp-title">Label colour</div><div class="cp-grid">${Object.entries(LABEL_COLORS).map(([k, v]) =>
     `<button data-c="${k}" title="${k}" class="${k === current ? 'on' : ''}" style="background:${v}"></button>`).join('')}</div>
-    <button class="cp-none ${current ? '' : 'on'}" data-c="">No colour</button>`;
+    <button class="cp-none ${current ? '' : 'on'}" data-c="">No colour (grey)</button>`;
   document.body.appendChild(pop);
   const r = anchor.getBoundingClientRect();
   pop.style.left = Math.min(r.left, window.innerWidth - pop.offsetWidth - 8) + 'px';
@@ -306,7 +314,7 @@ function renderTree(pid, depth) {
     const active = state.view.type === 'group' && state.view.id === g.id;
     return `<div class="nav-item group-item ${active ? 'active' : ''}" data-group="${g.id}" draggable="true" style="padding-left:${8 + depth * 16}px">
         <span class="caret ${kids.length ? '' : 'invisible'}" data-toggle="${g.id}">${collapsed ? '▸' : '▾'}</span>
-        <span class="ico">${labelIcon(g.color, kids.length ? '🏷️' : '🏷')}</span>
+        <span class="ico">${labelIcon(g.color, 'tag')}</span>
         <span class="label" title="${esc(groupPath(g.id))}">${esc(g.name)}</span>
         <span class="count">${groupCount(g.id)}</span>
         <span class="g-actions"><button title="Colour" data-gact="color" data-id="${g.id}">🎨</button><button title="Add sub-label" data-gact="sub" data-id="${g.id}">＋</button><button title="Rename" data-gact="rename" data-id="${g.id}">✎</button><button title="Delete label" data-gact="delete" data-id="${g.id}">🗑</button></span>
@@ -354,9 +362,9 @@ function rowHtml(p) {
   const chips = p.keywords.slice(0, 5).map(k => `<span class="chip" data-kw="${esc(k.toLowerCase())}">${esc(k)}</span>`).join('');
   const meta = [shortAuthors(p), p.journal, p.year].filter(Boolean).map(esc).join(' · ');
   const groups = p.group_ids.filter(g => !(state.view.type === 'group' && g === state.view.id))
-    .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${G?.color ? '' : '🏷 '}${esc(G?.name || '')}</span>`; }).join('')
+    .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${labelIcon(G?.color, 'tag')}${esc(G?.name || '')}</span>`; }).join('')
     + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id))
-      .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Shared label: ${esc(sh.name)}">🔗 ${esc(sh.name)}</span>` : ''; }).join('');
+      .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Shared label: ${esc(sh.name)}">${labelIcon(sh.color, sh.role === 'member' ? 'link' : 'inbox')}${esc(sh.name)}</span>` : ''; }).join('');
   return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''}" data-id="${p.id}" draggable="true">
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
@@ -418,7 +426,7 @@ function parseAuthors(text) {
   });
 }
 function groupChecks(p, pid = null, depth = 0) {
-  return childrenOf(pid).map(g => `<label style="padding-left:${depth * 18}px"><input type="checkbox" data-gcheck="${g.id}" ${p.group_ids.includes(g.id) ? 'checked' : ''}> ${g.color ? labelIcon(g.color, '') + ' ' : ''}${esc(g.name)}</label>` + groupChecks(p, g.id, depth + 1)).join('');
+  return childrenOf(pid).map(g => `<label style="padding-left:${depth * 18}px"><input type="checkbox" data-gcheck="${g.id}" ${p.group_ids.includes(g.id) ? 'checked' : ''}> ${labelIcon(g.color, 'tag')} ${esc(g.name)}</label>` + groupChecks(p, g.id, depth + 1)).join('');
 }
 function linkFor(p) { return p.doi ? `https://doi.org/${p.doi}` : p.url; }
 
@@ -1037,27 +1045,51 @@ async function setDefaultStyle(style) {
 
 function updateSyncButton() {
   const b = $('#sync-btn'); const s = state.settings;
-  b.style.display = s.sync_repo ? '' : 'none';
-  b.title = s.last_sync_error ? `Last sync failed: ${s.last_sync_error}` :
-    s.last_sync ? `Sync with GitHub (last: ${new Date(s.last_sync).toLocaleString()})` : 'Sync with GitHub';
+  b.style.display = '';
+  const what = [s.sync_repo ? 'sync your library with your other computers' : '', (state.shares || []).length ? 'update shared labels and notes' : '', 'check for a new version of PaperShelf'].filter(Boolean);
+  b.title = (s.last_sync_error ? `⚠ Last library sync failed: ${s.last_sync_error}\n` : '') + 'Update now: ' + what.join(', ') +
+    (s.last_sync ? `\n(last library sync: ${new Date(s.last_sync).toLocaleString()})` : '');
   b.classList.toggle('warn', !!s.last_sync_error);
 }
 let syncing = false;
 async function syncNow() {
+  // one button for everything: your library on your other computers, shared labels & notes, new app versions
   if (syncing) return;
   syncing = true; const b = $('#sync-btn'); b.classList.add('spinning');
-  const t = toast('Syncing with GitHub…', 'info', 0);
-  try {
-    const d = await api('/api/sync', {method: 'POST'});
-    state.settings = d.settings; const st = d.stats;
-    const bits = [st.added && `${st.added} new`, st.updated && `${st.updated} updated`, st.removed && `${st.removed} removed`,
-      st.pdfs_down && `${st.pdfs_down} PDFs received`, st.pdfs_up && `${st.pdfs_up} PDFs sent`].filter(Boolean);
-    t.close(); toast(`Synced. ${bits.length ? bits.join(', ') + '.' : 'Everything was already up to date.'}`, 'ok');
-    await loadLibrary();
-  } catch (err) {
-    t.close(); toast(err.message, 'error', 12000);
-    try { const d = await api('/api/settings'); state.settings = d.settings; } catch (e) { /* ignore */ }
-  } finally { syncing = false; b.classList.remove('spinning'); updateSyncButton(); }
+  const t = toast('Updating…', 'info', 0);
+  const done = [], problems = []; let newVersion = null;
+  if (state.settings.sync_repo) {
+    t.set('Syncing your library with your other computers…');
+    try {
+      const d = await api('/api/sync', {method: 'POST'});
+      state.settings = d.settings; const st = d.stats;
+      const bits = [st.added && `${st.added} new`, st.updated && `${st.updated} updated`, st.removed && `${st.removed} removed`,
+        st.pdfs_down && `${st.pdfs_down} PDFs received`, st.pdfs_up && `${st.pdfs_up} PDFs sent`].filter(Boolean);
+      done.push(`library synced${bits.length ? ' (' + bits.join(', ') + ')' : ''}`);
+    } catch (err) {
+      problems.push('library sync: ' + err.message);
+      try { const d = await api('/api/settings'); state.settings = d.settings; } catch (e) { /* ignore */ }
+    }
+  }
+  if ((state.shares || []).length) {
+    t.set('Updating shared labels and notes…');
+    try {
+      const d = await api('/api/shares/sync', {method: 'POST', body: {}});
+      const L = Object.values(d.result.lists || {});
+      const added = L.reduce((n, r) => n + (r.added || 0), 0);
+      done.push(`shared labels updated${added ? ` (${added} new paper${added > 1 ? 's' : ''})` : ''}`);
+      if (L.some(r => r.error || (r.errors || []).length)) problems.push('some members of a shared label could not be read (see the label)');
+    } catch (err) { problems.push('shared labels: ' + err.message); }
+  }
+  t.set('Checking for a new version of PaperShelf…');
+  try { const d = await Updates.check({force: true}); if (d.available) newVersion = d; else if (d.configured !== false) done.push(`PaperShelf ${d.current} is the latest version`); }
+  catch (err) { problems.push('update check: ' + err.message); }
+  t.close();
+  try { await loadLibrary(); } catch (e) { /* ignore */ }
+  syncing = false; b.classList.remove('spinning'); updateSyncButton();
+  if (done.length) toast('✓ ' + done.join(' · ') + '.', 'ok', 7000);
+  if (problems.length) toast('⚠ ' + problems.join(' · '), 'error', 12000);
+  if (newVersion) Updates.open();
 }
 
 function citationSection(p) {

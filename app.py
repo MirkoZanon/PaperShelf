@@ -135,7 +135,8 @@ NEW_PAPER_COLUMNS = {
     "citations_at": "TEXT NOT NULL DEFAULT ''", "note_list": "TEXT NOT NULL DEFAULT '[]'",
 }
 NEW_GROUP_COLUMNS = {"uid": "TEXT", "updated_at": "TEXT NOT NULL DEFAULT ''", "color": "TEXT NOT NULL DEFAULT ''"}
-LABEL_COLORS = {"", "red", "orange", "amber", "green", "teal", "cyan", "blue", "indigo", "purple", "pink", "brown", "grey"}
+LABEL_COLORS = {"", "red", "coral", "orange", "amber", "yellow", "olive", "lime", "green", "mint", "teal", "cyan", "sky", "blue",
+                "navy", "indigo", "violet", "purple", "magenta", "pink", "rose", "brown", "sand", "grey", "slate"}
 NEW_PEOPLE_COLUMNS = {"scholar": "TEXT NOT NULL DEFAULT ''", "roles_extra": "TEXT NOT NULL DEFAULT '{}'"}
 
 app = Flask(__name__, static_folder=str(BASE_DIR / "static"), static_url_path="/static")

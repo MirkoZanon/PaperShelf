@@ -50,7 +50,7 @@ const Help = (() => {
       <ul><li><b>Personal</b> – your own topics and projects. They can be nested (sub-labels) and are used by the map, Discover and the statistics.</li>
         <li><b>Shared</b> – labels you share with colleagues: their papers reach everybody's library. They are kept apart so that “from Mario” doesn't mix with your scientific topics. <a href="#" data-help="sharing">More</a></li></ul>
       <ul><li>Create a personal label with ＋; hover it for 🎨 (colour), ＋ (sub-label), ✎ (rename), 🗑 (delete). Drag a label onto another to nest it.</li>
-        <li><b>Colours</b>: 🎨 gives a label one of 12 colours, shown in the sidebar and on the papers' label chips. Shared labels can have a colour too – only on your computer.</li>
+        <li><b>Colours</b>: 🎨 gives a label one of 24 colours, shown in the sidebar and on the papers' label chips. Shared labels can have a colour too – only on your computer.</li>
         <li><b>Dragging a paper onto a label adds it</b> – it never removes its other labels. Select several papers (${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click) to drag or label them together.</li>
         <li>“include sub-labels” shows the papers of all sub-labels too. Deleting a label never deletes papers.</li></ul>
       <h4>The library menu</h4>
@@ -277,7 +277,7 @@ const Help = (() => {
       <h4>Automatic updates (default)</h4>
       <p>Every time PaperShelf starts it checks the project page on GitHub. If a new version exists it is installed <b>before the app opens</b> (a few seconds, a backup of the old version is kept), and a message tells you what's new. Nothing else to do. Turn it off in ⚙︎ Settings → <i>Updates</i> if you prefer to choose yourself.</p>
       <h4>Updating with the button</h4>
-      ${step(1, 'If automatic installation is off, or a version is published while PaperShelf is open, a <b>⬆ Update</b> button appears at the top right (or open ⚙︎ Settings → <i>Updates</i> → <i>Check for updates…</i>).')}
+      ${step(1, 'If automatic installation is off, or a version is published while PaperShelf is open, a <b>⬆ Update</b> button appears at the top right (or open ⚙︎ Settings → <i>Updates</i> → <i>Check for updates…</i>). The round <b>⟳</b> button at the top checks too – together with your library sync and shared labels – and opens the update window when a new version exists.')}
       ${step(2, 'Read what’s new and click <b>Install update and restart</b>. PaperShelf downloads the new version from GitHub, keeps a backup of the current one and restarts by itself; the page reloads after a few seconds.')}
       ${step(3, 'That’s it – your papers, PDFs, labels, notes and researcher profiles are exactly as before.')}
       <p>The check is an anonymous request to GitHub (like opening the project page): nothing about you or your library is sent. Both the check and the automatic installation can be turned off in the Updates window.</p>

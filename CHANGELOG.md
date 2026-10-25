@@ -2,6 +2,16 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.5 – 2026-10-25
+
+- **One ⟳ button updates everything**: the round button at the top syncs your library with your other
+  computers (if you use sync), updates shared labels and notes, and checks GitHub for a new version of
+  PaperShelf – if there is one, the update window opens. Only the arrows turn while it works.
+- **Label symbols keep their shape**: every label has the same small symbol (tag for personal labels,
+  link for shared ones, tray for labels you follow) – grey without colour, in its colour otherwise.
+  Labels without colour are grey on the papers too.
+- **24 colours** to choose from instead of 12.
+
 ## 1.14.4 – 2026-10-25
 
 - **Label colours**: hover a label in the sidebar → 🎨 to give it one of 12 colours. The colour shows in
