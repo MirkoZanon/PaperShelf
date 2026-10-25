@@ -2,6 +2,17 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.6 – 2026-10-25
+
+- **Cleaner paper list**: keywords are hidden by default – tick **Details** above the list to show
+  them. Selection boxes are hidden too: click opens a paper, ⌘/Ctrl-click and Shift-click select, and
+  the boxes appear as soon as something is selected (Settings → General → *Always show selection
+  boxes* to keep them visible).
+- **PDF button on every paper**: green *📄 PDF* opens the PDF right away in the reader; *⬇ PDF* looks
+  for a free copy, saves and opens it – and if there is none, opens the article page so you can log in
+  with your university (the downloaded PDF is attached automatically).
+- The details panel closes when you click anywhere outside it.
+
 ## 1.14.5 – 2026-10-25
 
 - **One ⟳ button updates everything**: the round button at the top syncs your library with your other

@@ -33,11 +33,11 @@ function loadPrefs() {
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
     if (p.tab === 'people') state.tab = 'people';
-    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false;
+    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details;
   } catch (e) { /* storage unavailable */ }
 }
 function savePrefs() {
-  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false})); }
+  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details})); }
   catch (e) { /* ignore */ }
 }
 
@@ -357,9 +357,30 @@ function shortAuthors(p) {
   if (a.length === 2) return `${a[0].family} & ${a[1].family}`;
   return `${a[0].family} et al.`;
 }
+function pdfButton(p) {
+  if (p.pdf_exists) return `<button class="pdf-btn has" data-pdfq title="Open the PDF">📄 PDF</button>`;
+  if (!(p.doi || p.url || p.arxiv_id)) return '';
+  return `<button class="pdf-btn get" data-pdfq title="Get the PDF: looks for a free copy and opens it; if there is none, opens the article page (log in with your university there – the downloaded PDF is attached automatically)">⬇ PDF</button>`;
+}
+async function quickPdf(id, btn) {
+  const p = paperById(id); if (!p) return;
+  if (p.pdf_exists) { Reader.open(id); return; }
+  setBusy(btn, true, 'PDF');
+  const t = toast('Looking for a free PDF…', 'info', 0);
+  try {
+    const d = await api(`/api/papers/${id}/pdf`, {method: 'POST'});
+    upsertPaper(d.paper); t.close(); renderAll();
+    toast(`PDF found via ${d.pdf.source} and saved.`, 'ok');
+    Reader.open(id);
+  } catch (err) {
+    t.close(); setBusy(btn, false);
+    if (err.data?.paper) { upsertPaper(err.data.paper); renderAll(); }
+    if (p.doi || p.url) openForLogin(id); else showPdfFail(id, err);
+  }
+}
 function rowHtml(p) {
   const sel = state.selected.has(p.id);
-  const chips = p.keywords.slice(0, 5).map(k => `<span class="chip" data-kw="${esc(k.toLowerCase())}">${esc(k)}</span>`).join('');
+  const chips = !state.details ? '' : p.keywords.slice(0, 5).map(k => `<span class="chip" data-kw="${esc(k.toLowerCase())}">${esc(k)}</span>`).join('');
   const meta = [shortAuthors(p), p.journal, p.year].filter(Boolean).map(esc).join(' · ');
   const groups = p.group_ids.filter(g => !(state.view.type === 'group' && g === state.view.id))
     .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${labelIcon(G?.color, 'tag')}${esc(G?.name || '')}</span>`; }).join('')
@@ -369,7 +390,7 @@ function rowHtml(p) {
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
     <div><div class="row-title">${esc(p.title || 'Untitled')}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${ftSnippet(p)}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
-    <div class="row-side"><span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span>${p.pdf_exists ? '<span class="pdf-badge" title="PDF saved">PDF</span>' : ''}${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}${Notes.badge(p)}</div>
+    <div class="row-side"><span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span><div class="row-acts">${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}${Notes.badge(p)}${pdfButton(p)}</div></div>
   </div>`;
 }
 function emptyHtml() {
@@ -414,7 +435,11 @@ function renderList() {
   $('#bulk-group').innerHTML = `<option value="">Add label…</option>${groupOptions()}<option value="__new">＋ New label…</option>`;
   $('#incl-sub-wrap').style.display = state.view.type === 'group' && childrenOf(state.view.id).length ? '' : 'none';
   $('#incl-sub').checked = state.includeSub;
-  $('#list').innerHTML = list.length ? list.map(rowHtml).join('') : emptyHtml();
+  const L = $('#list');
+  L.classList.toggle('with-checks', state.settings.list_checkboxes === '1' || n > 0);  // boxes appear while you select
+  L.classList.toggle('details', !!state.details);
+  $('#details-toggle').checked = !!state.details;
+  L.innerHTML = list.length ? list.map(rowHtml).join('') : emptyHtml();
 }
 
 /* ------------------------------------------------------------------ detail */
@@ -729,6 +754,8 @@ function openSettings(startTab) {
     <p class="muted small">Create a PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
     <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
+    <div class="section-label">Paper list</div>
+    <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes<small>Off: a cleaner list – select papers with ${state.platform === 'darwin' ? '⌘' : 'Ctrl'}-click (or Shift-click for a range); the boxes appear as soon as something is selected.</small></span></label>
     <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
     <select class="input wide" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
     <div class="section-label">Folder for downloaded PDFs</div>
@@ -812,6 +839,10 @@ function openSettings(startTab) {
     try { const d = await api('/api/shortcut', {method: 'POST', body: {desktop: true}}); $('#set-shortcut-res', m.el).innerHTML = `<span style="color:var(--ok)">✓ Done.</span> ${esc(d.hint)}`; }
     catch (err) { $('#set-shortcut-res', m.el).innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`; }
     finally { setBusy(b, false); }
+  };
+  $('#set-checks', m.el).onchange = async e => {
+    try { const d = await api('/api/settings', {method: 'PUT', body: {list_checkboxes: e.target.checked}}); state.settings = d.settings; renderList(); }
+    catch (err) { toast(err.message, 'error'); }
   };
   $('#set-ownwin', m.el).onchange = async e => {
     try { const d = await api('/api/settings', {method: 'PUT', body: {own_window: e.target.checked}}); state.settings = d.settings; }
@@ -1191,6 +1222,15 @@ function bind() {
   $('#sort').innerHTML = Object.entries(SORTS).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('');
   $('#sort').value = state.sort;
   $('#sort').addEventListener('change', e => { state.sort = e.target.value; savePrefs(); renderList(); });
+  $('#details-toggle').addEventListener('change', e => { state.details = e.target.checked; savePrefs(); renderList(); });
+  // clicking anywhere outside the details panel closes it (rows open another paper instead)
+  document.addEventListener('click', e => {
+    if (!state.openId || !e.isTrusted) return;
+    const t = e.target;
+    if (t.closest('#detail, .row, .modal-wrap, .toast, .color-pop, .menu, #toasts, .reader, #reader, .help-panel, #help')) return;
+    if (topModal() || Reader.isOpen() || Help.isOpen()) return;
+    closeDetail();
+  }, true);
   $('#incl-sub').addEventListener('change', e => { state.includeSub = e.target.checked; savePrefs(); renderAll(); });
   $('#filters').addEventListener('click', async e => {
     const c = e.target.closest('[data-clear]');
@@ -1286,6 +1326,7 @@ function bind() {
     const id = +row.dataset.id; const p = paperById(id);
     if (e.target.closest('.star')) { savePaper(id, {starred: !p.starred}); return; }
     if (e.target.closest('[data-notes]')) { Notes.open(id); return; }
+    const pq = e.target.closest('[data-pdfq]'); if (pq) { quickPdf(id, pq); return; }
     const chip = e.target.closest('[data-kw]');
     if (chip) { state.keyword = chip.dataset.kw; renderList(); renderKeywords(); return; }
     const gchip = e.target.closest('[data-goto]');

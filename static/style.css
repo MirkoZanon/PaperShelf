@@ -775,3 +775,16 @@ mark { background: color-mix(in srgb, #f5c542 55%, transparent); color: inherit;
 .licon.colored .li-fill { fill: color-mix(in srgb, var(--lc) 35%, transparent); }
 .gchip .licon, .schip .licon { width: 12px; height: 12px; vertical-align: -2px; margin-right: 3px; color: inherit; }
 .group-checks .licon { margin-right: 2px; }
+
+/* ---------- clean list (1.14.6) */
+#list .row { grid-template-columns: 26px 1fr auto; }
+#list .row > input.sel { display: none; }
+#list.with-checks .row { grid-template-columns: 22px 26px 1fr auto; }
+#list.with-checks .row > input.sel { display: block; }
+.pdf-btn { border: 1px solid var(--border); background: var(--panel); border-radius: 6px; font-size: 11.5px; font-weight: 600; padding: 2px 8px;
+  cursor: pointer; white-space: nowrap; color: var(--muted); }
+.pdf-btn.has { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
+.pdf-btn.get:hover { color: var(--text); border-color: var(--accent); }
+.pdf-btn.has:hover { background: var(--accent); color: var(--accent-ink); }
+.pdf-btn.busy { opacity: .7; pointer-events: none; }
+.row-acts { display: flex; align-items: center; gap: 6px; }

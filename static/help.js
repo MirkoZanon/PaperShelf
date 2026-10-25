@@ -52,6 +52,8 @@ const Help = (() => {
       <ul><li>Create a personal label with ＋; hover it for 🎨 (colour), ＋ (sub-label), ✎ (rename), 🗑 (delete). Drag a label onto another to nest it.</li>
         <li><b>Colours</b>: 🎨 gives a label one of 24 colours, shown in the sidebar and on the papers' label chips. Shared labels can have a colour too – only on your computer.</li>
         <li><b>Dragging a paper onto a label adds it</b> – it never removes its other labels. Select several papers (${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click) to drag or label them together.</li>
+        <li><b>The paper list</b> is kept clean: title, authors, labels, status and the buttons 📝 (notes) and <b>PDF</b>. Tick <b>Details</b> above the list to see the keywords too. Click a paper to open its details (click anywhere outside them to close); select several with ${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click – the selection boxes appear as soon as something is selected (⚙︎ Settings → General → <i>Always show selection boxes</i> to keep them).</li>
+        <li><b>📄 PDF</b> (green) opens the PDF in the reader. <b>⬇ PDF</b> fetches it: PaperShelf looks for a free legal copy and opens it; if there is none, it opens the article page – log in with your university there and download it: it is attached automatically.</li>
         <li>“include sub-labels” shows the papers of all sub-labels too. Deleting a label never deletes papers.</li></ul>
       <h4>The library menu</h4>
       <p><i>All papers</i>, <i>To read</i> and <i>Reading</i> are always shown; <i>Starred</i>, <i>Read</i>, <i>Without labels</i> and <i>Without PDF</i> are under <b>More</b>.</p>

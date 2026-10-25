@@ -235,12 +235,13 @@ def get_settings(db=None, secrets=True) -> dict:
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
          "update_auto": "1", "just_updated": "", "own_window": "1",
          "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
-         "display_name": ""}
+         "display_name": "", "list_checkboxes": ""}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
                                                 "update_check", "update_cache", "update_auto", "just_updated", "own_window",
-                                                "share_repo", "share_token", "share_auto", "share_user", "share_gist", "display_name"):
+                                                "share_repo", "share_token", "share_auto", "share_user", "share_gist", "display_name",
+                                                "list_checkboxes"):
             s[row["key"]] = row["value"]
     try:
         s["proxies"] = json.loads(s["proxies"] or "[]")
@@ -1838,7 +1839,8 @@ def write_settings():
         set_setting(db, "sync_token", body["sync_token"].strip())
     if body.get("clear_sync_token"):
         set_setting(db, "sync_token", "")
-    for key in ("sync_pdfs", "sync_auto", "auto_import", "remove_downloads", "sjr_auto", "update_check", "update_auto", "own_window", "share_auto"):
+    for key in ("sync_pdfs", "sync_auto", "auto_import", "remove_downloads", "sjr_auto", "update_check", "update_auto", "own_window", "share_auto",
+                "list_checkboxes"):
         if key in body:
             set_setting(db, key, "1" if body[key] else "")
     if body.get("openalex_key") is not None and body.get("openalex_key") != "":
