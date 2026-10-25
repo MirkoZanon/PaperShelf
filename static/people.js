@@ -163,7 +163,7 @@ const People = (() => {
   }
 
   /* ------------------------------------------------------------ charts (SVG, no external libraries) */
-  const CAT_COLORS = {article: '#2c64d6', preprint: '#d08a1c', conference: '#2a9d8f', abstract: '#9b5d8c',
+  const CAT_COLORS = {article: '#2e7d55', preprint: '#d08a1c', conference: '#2a9d8f', abstract: '#9b5d8c',
     book: '#59a14f', thesis: '#8cb04a', data: '#8d99ae', other: '#b5b5b5'};
   function stackedBars(labels, series, {height = 150, title = ''} = {}) {
     const n = labels.length; if (!n) return '<div class="muted small">No data</div>';
@@ -218,7 +218,7 @@ const People = (() => {
   }
   function rolesChart(works) {
     const peer = works.filter(w => ['article', 'conference'].includes(cat(w)));
-    const parts = [['first', 'First / sole', '#2c64d6', r => isFirst(r)], ['co-first', 'Co-first', '#6d9bff', r => r === 'co-first'],
+    const parts = [['first', 'First / sole', '#2e7d55', r => isFirst(r)], ['co-first', 'Co-first', '#6cc495', r => r === 'co-first'],
       ['middle', 'Co-author', '#8d99ae', r => r === 'middle'], ['co-last', 'Co-last', '#5fbf8f', r => r === 'co-last'],
       ['last', 'Last', '#2a9d8f', r => r === 'last'], ['', 'Unknown', '#d0d0d0', r => !r]]
       .map(([, l, c, fn]) => ({label: l, value: peer.filter(w => fn(roleOf(w))).length, color: c})).filter(x => x.value);

@@ -249,6 +249,33 @@ function setView(view) {
 }
 
 /* ------------------------------------------------------------------ sidebar */
+/* ------------------------------------------------------------------ label colours */
+const LABEL_COLORS = {red: '#e05252', orange: '#e8833a', amber: '#d4a017', green: '#3a9d5d', teal: '#2a9d8f', cyan: '#2b9cc4',
+  blue: '#3f7be0', indigo: '#5b5fd6', purple: '#9256d6', pink: '#d65c9a', brown: '#9a6b4b', grey: '#8a8f98'};
+const lcol = c => LABEL_COLORS[c] || '';
+const labelIcon = (c, fallback) => c && lcol(c) ? `<span class="ldot" style="--lc:${lcol(c)}"></span>` : fallback;
+const chipStyle = c => c && lcol(c) ? ` style="--lc:${lcol(c)}"` : '';
+function pickColor(anchor, current, onPick) {
+  document.querySelector('.color-pop')?.remove();
+  const pop = document.createElement('div');
+  pop.className = 'color-pop';
+  pop.innerHTML = `<div class="cp-title">Label colour</div><div class="cp-grid">${Object.entries(LABEL_COLORS).map(([k, v]) =>
+    `<button data-c="${k}" title="${k}" class="${k === current ? 'on' : ''}" style="background:${v}"></button>`).join('')}</div>
+    <button class="cp-none ${current ? '' : 'on'}" data-c="">No colour</button>`;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = Math.min(r.left, window.innerWidth - pop.offsetWidth - 8) + 'px';
+  pop.style.top = Math.min(r.bottom + 4, window.innerHeight - pop.offsetHeight - 8) + 'px';
+  const close = () => { pop.remove(); document.removeEventListener('mousedown', out, true); };
+  const out = e => { if (!pop.contains(e.target)) close(); };
+  setTimeout(() => document.addEventListener('mousedown', out, true), 0);
+  pop.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; close(); onPick(b.dataset.c); });
+}
+async function setGroupColor(gid, color) {
+  try { const d = await api(`/api/groups/${gid}`, {method: 'PUT', body: {color}}); const g = state.groups.find(x => x.id === gid); if (g) g.color = d.group.color; renderAll(); }
+  catch (err) { toast(err.message, 'error'); }
+}
+
 function renderSidebar() {
   const P = state.papers;
   const main = [
@@ -279,10 +306,10 @@ function renderTree(pid, depth) {
     const active = state.view.type === 'group' && state.view.id === g.id;
     return `<div class="nav-item group-item ${active ? 'active' : ''}" data-group="${g.id}" draggable="true" style="padding-left:${8 + depth * 16}px">
         <span class="caret ${kids.length ? '' : 'invisible'}" data-toggle="${g.id}">${collapsed ? '▸' : '▾'}</span>
-        <span class="ico">${kids.length ? '🏷️' : '🏷'}</span>
+        <span class="ico">${labelIcon(g.color, kids.length ? '🏷️' : '🏷')}</span>
         <span class="label" title="${esc(groupPath(g.id))}">${esc(g.name)}</span>
         <span class="count">${groupCount(g.id)}</span>
-        <span class="g-actions"><button title="Add sub-label" data-gact="sub" data-id="${g.id}">＋</button><button title="Rename" data-gact="rename" data-id="${g.id}">✎</button><button title="Delete label" data-gact="delete" data-id="${g.id}">🗑</button></span>
+        <span class="g-actions"><button title="Colour" data-gact="color" data-id="${g.id}">🎨</button><button title="Add sub-label" data-gact="sub" data-id="${g.id}">＋</button><button title="Rename" data-gact="rename" data-id="${g.id}">✎</button><button title="Delete label" data-gact="delete" data-id="${g.id}">🗑</button></span>
       </div>${kids.length && !collapsed ? renderTree(g.id, depth + 1) : ''}`;
   }).join('');
 }
@@ -327,9 +354,9 @@ function rowHtml(p) {
   const chips = p.keywords.slice(0, 5).map(k => `<span class="chip" data-kw="${esc(k.toLowerCase())}">${esc(k)}</span>`).join('');
   const meta = [shortAuthors(p), p.journal, p.year].filter(Boolean).map(esc).join(' · ');
   const groups = p.group_ids.filter(g => !(state.view.type === 'group' && g === state.view.id))
-    .map(g => `<span class="gchip" data-goto="${g}" title="${esc(groupPath(g))}">📁 ${esc(state.groups.find(x => x.id === g)?.name || '')}</span>`).join('')
+    .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${G?.color ? '' : '🏷 '}${esc(G?.name || '')}</span>`; }).join('')
     + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id))
-      .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip" data-goto-share="${esc(sid)}" title="Shared list: ${esc(sh.name)}">🔗 ${esc(sh.name)}</span>` : ''; }).join('');
+      .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Shared label: ${esc(sh.name)}">🔗 ${esc(sh.name)}</span>` : ''; }).join('');
   return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''}" data-id="${p.id}" draggable="true">
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
@@ -391,7 +418,7 @@ function parseAuthors(text) {
   });
 }
 function groupChecks(p, pid = null, depth = 0) {
-  return childrenOf(pid).map(g => `<label style="padding-left:${depth * 18}px"><input type="checkbox" data-gcheck="${g.id}" ${p.group_ids.includes(g.id) ? 'checked' : ''}> ${esc(g.name)}</label>` + groupChecks(p, g.id, depth + 1)).join('');
+  return childrenOf(pid).map(g => `<label style="padding-left:${depth * 18}px"><input type="checkbox" data-gcheck="${g.id}" ${p.group_ids.includes(g.id) ? 'checked' : ''}> ${g.color ? labelIcon(g.color, '') + ' ' : ''}${esc(g.name)}</label>` + groupChecks(p, g.id, depth + 1)).join('');
 }
 function linkFor(p) { return p.doi ? `https://doi.org/${p.doi}` : p.url; }
 
@@ -1151,7 +1178,8 @@ function bind() {
     const tog = e.target.closest('[data-toggle]');
     if (tog) { const id = +tog.dataset.toggle; state.collapsed.has(id) ? state.collapsed.delete(id) : state.collapsed.add(id); savePrefs(); renderSidebar(); return; }
     const act = e.target.closest('[data-gact]');
-    if (act) { const id = +act.dataset.id; ({sub: () => createGroup(id), rename: () => renameGroup(id), delete: () => deleteGroup(id)})[act.dataset.gact](); return; }
+    if (act) { const id = +act.dataset.id; ({sub: () => createGroup(id), rename: () => renameGroup(id), delete: () => deleteGroup(id),
+      color: () => pickColor(act, state.groups.find(g => g.id === id)?.color || '', c => setGroupColor(id, c))})[act.dataset.gact](); return; }
     const kw = e.target.closest('[data-kw]');
     if (kw) { state.keyword = state.keyword === kw.dataset.kw ? null : kw.dataset.kw; state.selected.clear(); renderList(); renderKeywords(); return; }
     if (e.target.closest('[data-navmore]')) { state.navMore = !state.navMore; savePrefs(); renderSidebar(); return; }

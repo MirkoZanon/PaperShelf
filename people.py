@@ -730,7 +730,7 @@ header{{display:flex;gap:1.2em;align-items:center;border-bottom:1px solid #ddd;p
 header img{{width:96px;height:96px;border-radius:50%;object-fit:cover}}
 h1{{margin:0;font-size:1.8em}} .meta{{color:#555;font-family:-apple-system,Segoe UI,sans-serif;font-size:.9em}}
 h2{{font-family:-apple-system,Segoe UI,sans-serif;font-size:1.15em;margin-top:2em;border-bottom:1px solid #eee;padding-bottom:.2em}}
-.n{{color:#888;font-weight:normal}} li{{margin:.55em 0}} a{{color:#2c64d6;word-break:break-all}}
+.n{{color:#888;font-weight:normal}} li{{margin:.55em 0}} a{{color:#2e7d55;word-break:break-all}}
 footer{{margin-top:3em;color:#777;font:13px -apple-system,Segoe UI,sans-serif;border-top:1px solid #eee;padding-top:1em}}
 @media (prefers-color-scheme:dark){{body{{background:#16171a;color:#e6e7e9}} .meta,footer{{color:#9c9fa6}} a{{color:#6d9bff}}}}
 </style></head><body>

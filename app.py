@@ -134,7 +134,8 @@ NEW_PAPER_COLUMNS = {
     "refs": "TEXT NOT NULL DEFAULT '[]'", "related": "TEXT NOT NULL DEFAULT '[]'", "cited_by_count": "INTEGER",
     "citations_at": "TEXT NOT NULL DEFAULT ''", "note_list": "TEXT NOT NULL DEFAULT '[]'",
 }
-NEW_GROUP_COLUMNS = {"uid": "TEXT", "updated_at": "TEXT NOT NULL DEFAULT ''"}
+NEW_GROUP_COLUMNS = {"uid": "TEXT", "updated_at": "TEXT NOT NULL DEFAULT ''", "color": "TEXT NOT NULL DEFAULT ''"}
+LABEL_COLORS = {"", "red", "orange", "amber", "green", "teal", "cyan", "blue", "indigo", "purple", "pink", "brown", "grey"}
 NEW_PEOPLE_COLUMNS = {"scholar": "TEXT NOT NULL DEFAULT ''", "roles_extra": "TEXT NOT NULL DEFAULT '{}'"}
 
 app = Flask(__name__, static_folder=str(BASE_DIR / "static"), static_url_path="/static")
@@ -168,6 +169,8 @@ def init_db():
             continue
         for (rid,) in db.execute(f"SELECT id FROM {table} WHERE uid IS NULL OR uid = ''").fetchall():
             db.execute(f"UPDATE {table} SET uid=? WHERE id=?", (uuid.uuid4().hex, rid))
+    if "color" not in {r[1] for r in db.execute("PRAGMA table_info(shares)")}:
+        db.execute("ALTER TABLE shares ADD COLUMN color TEXT NOT NULL DEFAULT ''")  # your own colour for a shared label
     # notes became a list of separate notes (version 1.14): the old single text becomes the first note
     for r in db.execute("SELECT id, notes, added_at, updated_at FROM papers WHERE notes != '' AND (note_list = '[]' OR note_list = '')").fetchall():
         db.execute("UPDATE papers SET note_list=? WHERE id=?", (json.dumps([{"id": uuid.uuid4().hex[:16], "body": r["notes"],
@@ -571,7 +574,7 @@ def library():
         p.pop("related", None)  # only needed on the server
         papers.append(p)
     groups = [dict(r) for r in db.execute(
-        "SELECT id, uid, name, parent_id, position FROM collections ORDER BY position, name COLLATE NOCASE")]
+        "SELECT id, uid, name, parent_id, position, color FROM collections ORDER BY position, name COLLATE NOCASE")]
     return jsonify(papers=papers, groups=groups, shares=shares_summary(db), settings=get_settings(db, secrets=False), data_dir=str(HOME),
                    styles=citations.style_list(), platform=sys.platform, version=APP_VERSION, app_dir=str(BASE_DIR))
 
@@ -1155,7 +1158,7 @@ def create_group():
     cur = db.execute("INSERT INTO collections (uid, name, parent_id, position, updated_at) VALUES (?, ?, ?, ?, ?)",
                      (uid, name, parent, pos, now()))
     db.commit()
-    return jsonify(group={"id": cur.lastrowid, "uid": uid, "name": name, "parent_id": parent, "position": pos})
+    return jsonify(group={"id": cur.lastrowid, "uid": uid, "name": name, "parent_id": parent, "position": pos, "color": ""})
 
 
 @app.put("/api/groups/<int:gid>")
@@ -1168,6 +1171,8 @@ def update_group(gid):
         name = " ".join((body.get("name") or "").split())
         if name:
             db.execute("UPDATE collections SET name=? WHERE id=?", (name, gid))
+    if "color" in body and (body.get("color") or "") in LABEL_COLORS:
+        db.execute("UPDATE collections SET color=? WHERE id=?", (body.get("color") or "", gid))
     if "parent_id" in body:
         parent = _int(body["parent_id"])
         if parent in group_descendants(db, gid):
@@ -1177,7 +1182,7 @@ def update_group(gid):
         db.execute("UPDATE collections SET parent_id=? WHERE id=?", (parent, gid))
     db.execute("UPDATE collections SET updated_at=? WHERE id=?", (now(), gid))
     db.commit()
-    row = db.execute("SELECT id, uid, name, parent_id, position FROM collections WHERE id=?", (gid,)).fetchone()
+    row = db.execute("SELECT id, uid, name, parent_id, position, color FROM collections WHERE id=?", (gid,)).fetchone()
     return jsonify(group=dict(row))
 
 
@@ -2166,7 +2171,7 @@ def quit_app():
 @app.get("/manifest.webmanifest")
 def web_manifest():
     data = {"name": "PaperShelf", "short_name": "PaperShelf", "start_url": "/", "scope": "/", "display": "standalone",
-            "background_color": "#f5f4f0", "theme_color": "#2c64d6",
+            "background_color": "#f5f4f0", "theme_color": "#2e7d55",
             "description": "Your private library of scientific papers",
             "icons": [{"src": f"/static/icons/icon-{n}.png", "sizes": f"{n}x{n}", "type": "image/png"} for n in (192, 512)]}
     return Response(json.dumps(data), mimetype="application/manifest+json")
@@ -2356,7 +2361,7 @@ def share_summary_one(db, row, st, ident) -> dict:
                               for n, rp in sorted(sm["members"].items())],
             "people": [{**p, "you": p["id"] in you} for p in sm["people"]],
             "role": "member" if author else "follower", "can_publish": ident["can_publish"], "local_papers": local,
-            "group_id": row["group_id"], "origin": row["origin"], "last_pull": row["last_pull"],
+            "group_id": row["group_id"], "color": row["color"] if "color" in row.keys() else "", "origin": row["origin"], "last_pull": row["last_pull"],
             "last_push": row["last_push"], "last_error": row["last_error"], "code": code,
             "published": bool(row["published_hash"])}
 
@@ -2865,6 +2870,8 @@ def update_share(sid):
     if "group_id" in b:
         gid = _int(b.get("group_id"))
         db.execute("UPDATE shares SET group_id=? WHERE id=?", (gid if group_exists(db, gid) else None, sid))
+    if "color" in b and (b.get("color") or "") in LABEL_COLORS:
+        db.execute("UPDATE shares SET color=? WHERE id=?", (b.get("color") or "", sid))  # only on this computer
     _save_share(db, sid, st)
     db.commit()
     if author:

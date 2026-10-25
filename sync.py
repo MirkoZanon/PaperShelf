@@ -195,12 +195,13 @@ def _merge(db, repo: Path, pdf_dir: Path, with_pdfs: bool):
             continue
         loc = lg.get(uid)
         if loc is None:
-            db.execute("INSERT INTO collections (uid, name, position, updated_at) VALUES (?, ?, ?, ?)",
-                       (uid, g.get("name") or "Group", g.get("position") or 0, g_time))
+            db.execute("INSERT INTO collections (uid, name, position, updated_at, color) VALUES (?, ?, ?, ?, ?)",
+                       (uid, g.get("name") or "Group", g.get("position") or 0, g_time, str(g.get("color") or "")[:12]))
             remote_won.add(uid)
         elif g_time > (loc.get("updated_at") or ""):
-            db.execute("UPDATE collections SET name=?, position=?, updated_at=? WHERE uid=?",
-                       (g.get("name") or loc["name"], g.get("position") or 0, g_time, uid))
+            db.execute("UPDATE collections SET name=?, position=?, updated_at=?, color=? WHERE uid=?",
+                       (g.get("name") or loc["name"], g.get("position") or 0, g_time,
+                        str(g.get("color") if "color" in g else loc.get("color") or "")[:12], uid))
             remote_won.add(uid)
     uid2gid = {r["uid"]: r["id"] for r in db.execute("SELECT id, uid FROM collections")}
     for uid in remote_won:
@@ -310,7 +311,7 @@ def _write_state(db, repo: Path, with_pdfs: bool, remote_papers: dict, stats: di
 
     gid2uid = {r["id"]: r["uid"] for r in db.execute("SELECT id, uid FROM collections")}
     groups = {r["uid"]: {"name": r["name"], "parent_uid": gid2uid.get(r["parent_id"]), "position": r["position"],
-                         "updated_at": r["updated_at"] or ""}
+                         "updated_at": r["updated_at"] or "", "color": r["color"] if "color" in r.keys() else ""}
               for r in db.execute("SELECT * FROM collections")}
     memberships: dict[int, list[str]] = {}
     for r in db.execute("SELECT paper_id, collection_id FROM paper_collections"):

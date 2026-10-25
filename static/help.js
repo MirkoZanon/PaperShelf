@@ -49,7 +49,8 @@ const Help = (() => {
       <p>Labels work like tags: a paper can have <b>any number of labels</b>, and clicking a label lists every paper that has it. There are two kinds, in the sidebar under <b>Labels</b>:</p>
       <ul><li><b>Personal</b> – your own topics and projects. They can be nested (sub-labels) and are used by the map, Discover and the statistics.</li>
         <li><b>Shared</b> – labels you share with colleagues: their papers reach everybody's library. They are kept apart so that “from Mario” doesn't mix with your scientific topics. <a href="#" data-help="sharing">More</a></li></ul>
-      <ul><li>Create a personal label with ＋; hover it for ＋ (sub-label), ✎ (rename), 🗑 (delete). Drag a label onto another to nest it.</li>
+      <ul><li>Create a personal label with ＋; hover it for 🎨 (colour), ＋ (sub-label), ✎ (rename), 🗑 (delete). Drag a label onto another to nest it.</li>
+        <li><b>Colours</b>: 🎨 gives a label one of 12 colours, shown in the sidebar and on the papers' label chips. Shared labels can have a colour too – only on your computer.</li>
         <li><b>Dragging a paper onto a label adds it</b> – it never removes its other labels. Select several papers (${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click) to drag or label them together.</li>
         <li>“include sub-labels” shows the papers of all sub-labels too. Deleting a label never deletes papers.</li></ul>
       <h4>The library menu</h4>

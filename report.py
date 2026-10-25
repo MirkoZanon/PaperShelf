@@ -250,9 +250,9 @@ header img{{width:92px;height:92px;border-radius:50%;object-fit:cover}}
 h1{{margin:0;font-size:1.7em}} .meta{{color:#555;font:14px -apple-system,Segoe UI,sans-serif;margin-top:3px}}
 h2{{font:600 1.15em -apple-system,Segoe UI,sans-serif;margin-top:1.8em;border-bottom:1px solid #e6e6e6;padding-bottom:.2em}}
 h3{{font:600 1em -apple-system,Segoe UI,sans-serif;margin:1.2em 0 .3em;color:#444}}
-.n{{color:#888;font-weight:normal}} li{{margin:.5em 0}} a{{color:#2c64d6;word-break:break-all}}
+.n{{color:#888;font-weight:normal}} li{{margin:.5em 0}} a{{color:#2e7d55;word-break:break-all}}
 ol.plain{{list-style:none;padding-left:0}} ol.num{{padding-left:2.6em}}
-.role{{font:600 11px -apple-system,Segoe UI,sans-serif;border-radius:4px;padding:1px 6px;background:#e5edfc;color:#2c64d6;white-space:nowrap}}
+.role{{font:600 11px -apple-system,Segoe UI,sans-serif;border-radius:4px;padding:1px 6px;background:#e2f1e8;color:#2e7d55;white-space:nowrap}}
 .r-last,.r-co-last{{background:#e2f3ec;color:#1f7a4d}}
 .if{{font:12px -apple-system,Segoe UI,sans-serif;color:#555;white-space:nowrap}}
 table.sum{{border-collapse:collapse;margin:1.4em 0;font:14px -apple-system,Segoe UI,sans-serif}}

@@ -2,6 +2,17 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.4 – 2026-10-25
+
+- **Label colours**: hover a label in the sidebar → 🎨 to give it one of 12 colours. The colour shows in
+  the sidebar, on the label chips of every paper and in the paper's details. Personal label colours
+  travel with your sync between computers; shared label colours are only yours (each member picks
+  their own).
+- **New green look** for the whole app, the icon included (to update the Dock/Desktop icon:
+  Settings → General → *Create PaperShelf icon* again).
+- Shared labels are now aligned with personal labels in the sidebar, and their buttons (🎨 📤 ⚙︎)
+  appear when you hover them.
+
 ## 1.14.3 – 2026-10-25
 
 - **People in a shared label**: above the papers of a shared label you see who takes part – each with

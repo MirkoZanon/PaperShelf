@@ -39,9 +39,9 @@ const Shares = (() => {
       const n = state.papers.filter(p => (p.share_ids || []).includes(x.id)).length;
       return `<div class="nav-item share-item ${x.role === 'member' ? 'editable' : ''} ${active ? 'active' : ''}" data-share="${esc(x.id)}"
           title="${x.role === 'member' ? 'Shared label – drag papers here to share them' : 'You follow this shared label (read-only)'}${x.creator && x.creator.by ? '\nCreated by ' + esc(x.creator.name || x.creator.by) : ''}${x.last_error ? '\n⚠ ' + esc(x.last_error) : ''}">
-          <span class="ico">${x.role === 'member' ? '🔗' : '📥'}</span><span class="label">${esc(x.name)}</span>
+          <span class="caret invisible"></span><span class="ico">${labelIcon(x.color, x.role === 'member' ? '🔗' : '📥')}</span><span class="label">${esc(x.name)}</span>
           ${x.last_error ? '<span class="warn-dot" title="Last update had a problem">!</span>' : ''}<span class="count">${n}</span>
-          <span class="g-actions"><button title="Invite colleagues – get the code" data-sact="invite" data-id="${esc(x.id)}">📤</button><button title="Members and options" data-sact="manage" data-id="${esc(x.id)}">⚙︎</button></span></div>`;
+          <span class="g-actions"><button title="Colour (only on this computer)" data-sact="color" data-id="${esc(x.id)}">🎨</button><button title="Invite colleagues – get the code" data-sact="invite" data-id="${esc(x.id)}">📤</button><button title="Members and options" data-sact="manage" data-id="${esc(x.id)}">⚙︎</button></span></div>`;
     }).join('') : '<div class="empty-hint">Share labels with colleagues – titles and DOIs only. ＋ to create or join.</div>';
   }
 
@@ -72,7 +72,7 @@ const Shares = (() => {
     const can = editable().filter(x => !mine.includes(x));
     if (!mine.length && !(state.shares || []).length) return '';
     return `<div class="fld"><span>Shared labels <button class="help-q" data-help="sharing" title="Explain this">?</button></span><div class="share-chips">
-      ${mine.map(x => `<span class="schip" title="${x.role === 'member' ? 'Remove this shared label for everybody (their copies stay, without the label)' : 'Hide this shared label for you'}">${x.role === 'member' ? '🔗' : '📥'} ${esc(x.name)}<button data-share-rm="${esc(x.id)}" title="Remove">×</button></span>`).join('')}
+      ${mine.map(x => `<span class="schip ${x.color ? 'colored' : ''}"${chipStyle(x.color)} title="${x.role === 'member' ? 'Remove this shared label for everybody (their copies stay, without the label)' : 'Hide this shared label for you'}">${x.role === 'member' ? '🔗' : '📥'} ${esc(x.name)}<button data-share-rm="${esc(x.id)}" title="Remove">×</button></span>`).join('')}
       ${can.length ? `<select class="share-add" data-share-add><option value="">＋ Share in…</option>${can.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select>` : ''}
       ${!mine.length && !can.length ? '<span class="muted small">Not shared.</span>' : ''}</div></div>`;
   }
@@ -370,6 +370,9 @@ const Shares = (() => {
       if (a.dataset.sact === 'manage') manageDialog(a.dataset.id);
       if (a.dataset.sact === 'invite') inviteDialog(a.dataset.id);
       if (a.dataset.sact === 'people') peopleDialog(a.dataset.id);
+      if (a.dataset.sact === 'color') pickColor(a, byId(a.dataset.id)?.color || '', async c => {
+        try { await api(`/api/shares/${a.dataset.id}`, {method: 'PUT', body: {color: c}}); await refresh(); } catch (err) { toast(err.message, 'error'); }
+      });
       if (a.dataset.sact === 'sync') syncNow(a.dataset.id);
     }, true);
     const body = $('#detail-body');
