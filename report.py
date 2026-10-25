@@ -226,7 +226,7 @@ def render_html(prof, items, metrics, style, opts) -> str:
         parts.append(f"<ol class='{'num' if nums else 'plain'}'>{''.join(lis)}</ol>")
     legend = []
     if opts["include_if"]:
-        legend.append("IF = journal impact factor in the year of publication and in the latest year available. "
+        legend.append("IF = journal impact factor in the year of publication and in the latest year available (or the closest previous year with data, as indicated). "
                       "Values with * are SCImago “citations per document (2 years)” – the impact-factor formula on Scopus data; "
                       "values without * are official Journal Impact Factors entered by the user.")
     if opts["highlight"]:

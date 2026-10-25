@@ -636,7 +636,12 @@ function openExport() {
 function openSettings() {
   const s = state.settings; const o = location.origin;
   const bm = pdf => `javascript:(function(){window.open('${o}/quickadd?url='+encodeURIComponent(location.href)${pdf ? "+'&pdf=1'" : ''},'_blank');})();`;
-  const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="start">📘 Guide</button> <button class="btn small" data-help="status">🩺 System check</button></h3>
+  const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="start">📘 Guide</button> <button class="btn small" data-help="status">🩺 System check</button> <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit</button></h3>
+    <div class="section-label">App icon &amp; window <button class="help-q" data-help="start" title="Explain this">?</button></div>
+    <p class="muted small">Create a PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
+    <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
+
     <div class="section-label">Privacy <button class="help-q" data-help="privacy" title="Explain this">?</button></div>
     <p class="muted small">PaperShelf runs only on this computer and answers only to it. Your library, notes, profiles and settings are stored only here (and in your own private GitHub repository if you turn on sync). Online services receive only what a lookup needs – a DOI, a title, a name or ORCID iD you search for – never your e-mail or other personal data, except the optional Unpaywall address below.</p>
     <div class="section-label">E-mail for Unpaywall (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
@@ -668,8 +673,8 @@ function openSettings() {
     <p class="muted small">Citation data, suggestions and researcher profiles come from OpenAlex. Without a key there is a small free daily allowance; a free key gives ten times more.</p>
 
     <div class="section-label">Journal rankings (SCImago) <button class="help-q" data-help="journal-metrics" title="Explain this">?</button></div>
-    <p class="muted small">Used for journal quartiles in the Researchers tab. Normally downloaded automatically; if that fails, download a year's table from <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">scimagojr.com</a> (“Download data”) and import it here.</p>
-    <div style="display:flex;gap:6px;align-items:center"><input class="input" id="sjr-year" type="number" placeholder="Year, e.g. 2024" style="width:150px"><button class="btn small" id="sjr-file-btn">Import table…</button><input type="file" id="sjr-file" accept=".csv,.txt,.xls" hidden></div>
+    <p class="muted small">Used for the IF columns and quartiles in the Researchers tab. Normally downloaded automatically; if scimagojr.com refuses, open <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">scimagojr.com</a>, choose a year, click “Download data”, and import the files here – several at once is fine (the year is read from the file name, e.g. <i>scimagojr 2024.csv</i>).</p>
+    <div style="display:flex;gap:6px;align-items:center"><button class="btn small" id="sjr-file-btn">Import tables…</button><input type="file" id="sjr-file" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-loaded"></span></div>
 
     <div class="section-label">Sync with GitHub <button class="help-q" data-help="sync" title="Explain this">?</button></div>
     <p class="muted small">Keep the same library on several computers (Mac or Windows) through a <b>private</b> GitHub repository. ${s.last_sync ? `Last sync: ${esc(new Date(s.last_sync).toLocaleString())}.` : ''} ${s.last_sync_error ? `<span style="color:var(--danger)">Last error: ${esc(s.last_sync_error)}</span>` : ''}</p>
@@ -688,6 +693,17 @@ function openSettings() {
     <a class="bookmarklet" href="${esc(bm(true))}" onclick="return false">⬇ Save + PDF</a>
     <p class="muted small">PaperShelf must be running for the buttons to work. Your library lives in <code>${esc(state.dataDir)}</code>.</p>
     <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="set-save">Save</button></div>`, {wide: true});
+  $('#set-shortcut', m.el).onclick = async () => {
+    const b = $('#set-shortcut', m.el); setBusy(b, true, 'Creating…');
+    try { const d = await api('/api/shortcut', {method: 'POST', body: {desktop: true}}); $('#set-shortcut-res', m.el).innerHTML = `<span style="color:var(--ok)">✓ Done.</span> ${esc(d.hint)}`; }
+    catch (err) { $('#set-shortcut-res', m.el).innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`; }
+    finally { setBusy(b, false); }
+  };
+  $('#set-ownwin', m.el).onchange = async e => {
+    try { const d = await api('/api/settings', {method: 'PUT', body: {own_window: e.target.checked}}); state.settings = d.settings; }
+    catch (err) { toast(err.message, 'error'); }
+  };
+  $('#set-quit', m.el).onclick = () => { m.close(); quitApp(); };
   $('#set-updates', m.el).onclick = () => { m.close(); Updates.open(); };
   $('#open-dir', m.el).onclick = () => api('/api/open-folder', {method: 'POST'}).catch(e => toast(e.message, 'error'));
   $('#sync-test', m.el).onclick = async () => {
@@ -697,13 +713,10 @@ function openSettings() {
       res.innerHTML = `<span style="color:var(--ok)">✓ Works${d.empty ? ' – repository still empty, it will be filled at the first sync' : ''}. Click Save.</span>`;
     } catch (err) { res.innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`; }
   };
-  $('#sjr-file-btn', m.el).onclick = () => { if (!+$('#sjr-year', m.el).value) { toast('Type the year of the table first.', 'error'); return; } $('#sjr-file', m.el).click(); };
-  $('#sjr-file', m.el).onchange = async e => {
-    const f = e.target.files[0]; if (!f) return;
-    const fd = new FormData(); fd.append('file', f); fd.append('year', $('#sjr-year', m.el).value);
-    try { const d = await api('/api/sjr/import', {method: 'POST', form: fd}); toast(`Imported ${d.journals.toLocaleString()} journals for ${d.year}.`, 'ok'); }
-    catch (err) { toast(err.message, 'error'); }
-  };
+  $('#sjr-file-btn', m.el).onclick = () => $('#sjr-file', m.el).click();
+  $('#sjr-file', m.el).onchange = async e => { await importSjrFiles([...e.target.files]); e.target.value = ''; showSjrLoaded(); };
+  const showSjrLoaded = () => api('/api/sjr/status').then(st => { const el = $('#sjr-loaded', m.el); if (el) el.textContent = st.loaded.length ? `Loaded: ${compactYears(st.loaded)}` : 'No tables loaded yet.'; }).catch(() => {});
+  showSjrLoaded();
   const addRow = tpl => { $('#proxy-rows', m.el).insertAdjacentHTML('beforeend', proxyRow({id: '', name: '', template: tpl || ''})); $$('.proxy-row .px-name', m.el).pop().focus(); };
   $('#proxy-add', m.el).onclick = () => addRow('');
   $('#proxy-preset', m.el).onchange = e => { if (e.target.value) { addRow(e.target.value); e.target.value = ''; } };
@@ -731,6 +744,36 @@ function openSettings() {
       if (firstSync) syncNow();
     } catch (err) { toast(err.message, 'error'); }
   };
+}
+
+/* ------------------------------------------------------------------ quit */
+async function quitApp() {
+  const ok = await confirmBox('Quit PaperShelf?', 'PaperShelf stops on this computer. Everything is already saved. Start it again with its icon or with start.command / start.bat.', {ok: 'Quit'});
+  if (!ok) return;
+  try { await api('/api/quit', {method: 'POST'}); }
+  catch (err) { toast(err.message, 'info', 8000); return; }
+  document.body.innerHTML = `<div class="quit-screen"><img src="/static/icons/icon-192.png" alt="" width="96" height="96"><h2>PaperShelf has been closed</h2><p>You can close this window. Start PaperShelf again with its icon or with start.command / start.bat.</p></div>`;
+  setTimeout(() => { try { window.close(); } catch (e) { /* not allowed */ } }, 600);
+}
+
+/* ------------------------------------------------------------------ SCImago tables imported by hand */
+function compactYears(ys) {
+  const a = [...ys].sort((x, y) => x - y); const out = [];
+  for (let i = 0; i < a.length; i++) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(j > i ? `${a[i]}–${a[j]}` : `${a[i]}`); i = j; }
+  return out.join(', ');
+}
+async function importSjrFiles(files) {
+  if (!files.length) return null;
+  const fd = new FormData(); files.forEach(f => fd.append('file', f));
+  if (files.length === 1 && !/(19|20)\d\d/.test(files[0].name)) {
+    const y = await askText('Which year is this table?', {label: 'The year is not in the file name.', placeholder: 'e.g. 2024', ok: 'Import'});
+    if (!y) return null; fd.append('year', y);
+  }
+  try {
+    const d = await api('/api/sjr/import', {method: 'POST', form: fd});
+    toast(`Imported ${d.imported.map(x => x.year).join(', ')} (${d.imported.reduce((n, x) => n + x.journals, 0).toLocaleString()} journal rows).${d.problems.length ? ' ' + d.problems.join(' ') : ''}`, d.problems.length ? 'info' : 'ok', 9000);
+    return d;
+  } catch (err) { toast(err.message, 'error', 12000); return null; }
 }
 
 /* ------------------------------------------------------------------ library access */
@@ -889,13 +932,17 @@ function bind() {
   $('#add-form').addEventListener('submit', async e => {
     e.preventDefault();
     const inp = $('#add-input'); const v = inp.value.trim(); if (!v) { inp.focus(); return; }
+    if (typeof Suggest !== 'undefined') Suggest.close();
     const btn = $('#add-btn'); setBusy(btn, true, 'Looking up…');
     try {
       const d = await addOne(v); inp.value = '';
       upsertPaper(d.paper); renderAll(); openDetail(d.paper.id);
       const g = currentGroupId() ? ` → ${groupPath(currentGroupId())}` : '';
       toast(d.duplicate ? 'Already in your library – opened it.' : `Added: ${truncate(d.paper.title, 80)}${g}`, d.duplicate ? 'info' : 'ok');
-    } catch (err) { toast(err.message, 'error', 9000); }
+    } catch (err) {
+      if (err.data?.nomatch && typeof Suggest !== 'undefined') { inp.focus(); Suggest.show(v, {fromError: true}); }
+      else toast(err.message, 'error', 9000);
+    }
     finally { setBusy(btn, false); }
   });
   $('#add-input').addEventListener('paste', e => {

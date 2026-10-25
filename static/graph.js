@@ -1,13 +1,15 @@
 'use strict';
-/* Citation map: papers of the current view as a force-directed network.
-   Arrows go from the citing paper to the cited one. Optional grey "ghost" nodes
-   are papers you don't have that several of these papers cite. */
+/* Map: papers of the current view as a force-directed network, linked by
+   - citations: arrows from the citing paper to the cited one; optional grey "ghost" nodes are
+     papers you don't have that several of these papers cite;
+   - keywords: keywords as hub nodes, or papers linked when they share keywords;
+   - groups: your groups as hub nodes (subgroups linked to their parent), papers linked to their groups. */
 const Graph = (() => {
   const PALETTE = ['#4e79a7', '#f28e2b', '#e15759', '#59a14f', '#b07aa1', '#76b7b2', '#edc948', '#ff9da7', '#9c755f', '#3d9970'];
   const STATUS_COLORS = {to_read: '#9aa0a6', reading: '#e3a008', read: '#2e9d5b'};
   const st = {
     canvas: null, ctx: null, nodes: [], edges: [], alpha: 0, raf: null, scale: 1, tx: 0, ty: 0, w: 0, h: 0,
-    edgeMode: 'cites', showExt: true, colorBy: 'group', hover: null, drag: null, pan: null, extInfo: {},
+    edgeMode: 'cites', showExt: true, kwStyle: 'hubs', minShared: 0, colorBy: 'group', hover: null, drag: null, pan: null, extInfo: {},
     key: '', fitPending: false, papers: [], colors: {},
   };
 
@@ -17,8 +19,11 @@ const Graph = (() => {
     root.dataset.ready = '1';
     root.innerHTML = `
       <div class="map-bar">
-        <div class="seg small-seg" id="map-edges"><button data-e="cites" class="on" title="Arrow = cites">Citations</button><button data-e="keywords" title="Linked when they share keywords">Shared keywords</button></div>
-        <label class="check" title="Grey dots: papers you don't have that at least two of these papers cite"><input type="checkbox" id="map-ext" checked> key papers you don't have</label>
+        <span class="muted small">Links:</span>
+        <div class="seg small-seg" id="map-edges"><button data-e="cites" class="on" title="Arrow = cites">Citations</button><button data-e="keywords" title="Papers connected through their keywords">Keywords</button><button data-e="groups" title="Papers connected to your groups (labels)">Groups</button></div>
+        <label class="check map-opt" data-for="cites" title="Grey dots: papers you don't have that at least two of these papers cite"><input type="checkbox" id="map-ext" checked> key papers you don't have</label>
+        <select id="map-kwstyle" class="map-opt" data-for="keywords" title="How keywords are shown"><option value="hubs">Keywords as nodes</option><option value="pairs">Papers linked by shared keywords</option></select>
+        <select id="map-minshared" class="map-opt" data-for="pairs" title="How many keywords two papers must share to be linked"><option value="0">Auto</option><option value="1">≥ 1 shared</option><option value="2">≥ 2 shared</option><option value="3">≥ 3 shared</option></select>
         <select id="map-color" title="Node color"><option value="group">Color by group</option><option value="status">Color by reading status</option><option value="year">Color by year</option></select>
         <div class="grow"></div>
         <span id="map-info" class="muted small"></span>
@@ -38,8 +43,11 @@ const Graph = (() => {
       const b = e.target.closest('[data-e]'); if (!b) return;
       st.edgeMode = b.dataset.e;
       $$('#map-edges button').forEach(x => x.classList.toggle('on', x === b));
-      render(st.papers, false, true);
+      showOpts(); render(st.papers, false, true);
     });
+    $('#map-kwstyle').addEventListener('change', e => { st.kwStyle = e.target.value; showOpts(); render(st.papers, false, true); });
+    $('#map-minshared').addEventListener('change', e => { st.minShared = +e.target.value; render(st.papers, false, true); });
+    showOpts();
     $('#map-ext').addEventListener('change', e => { st.showExt = e.target.checked; render(st.papers, false, true); });
     $('#map-color').addEventListener('change', e => { st.colorBy = e.target.value; legend(); draw(); });
     $('#map-fit').addEventListener('click', fit);
@@ -51,6 +59,13 @@ const Graph = (() => {
     });
     bindPointer();
     new ResizeObserver(resize).observe($('#map-wrap'));
+  }
+
+  function showOpts() {
+    $$('.map-opt').forEach(el => {
+      const f = el.dataset.for;
+      el.style.display = f === st.edgeMode || (f === 'pairs' && st.edgeMode === 'keywords' && st.kwStyle === 'pairs') ? '' : 'none';
+    });
   }
 
   const missingIds = papers => papers.filter(p => !p.openalex_id && !p.citations_at && (p.doi || p.arxiv_id)).map(p => p.id);
@@ -103,16 +118,70 @@ const Graph = (() => {
         }
         fetchExtInfo([...extNodes.keys()]);
       }
-    } else {
+    } else if (st.edgeMode === 'keywords' && st.kwStyle === 'hubs') {
+      // the most common keywords of these papers become nodes; each paper is linked to its keywords
+      const freq = new Map();
+      for (const n of nodes) for (const k of new Set(n.paper.keywords || [])) {
+        const key = k.toLowerCase(); const f = freq.get(key) || {label: k, n: 0}; f.n++; freq.set(key, f);
+      }
+      const maxHubs = nodes.length > 300 ? 40 : 30;
+      const top = [...freq.entries()].filter(([, f]) => f.n >= 2).sort((a, b) => b[1].n - a[1].n).slice(0, maxHubs);
+      const hubs = new Map();
+      top.forEach(([key, f], i) => {
+        const h = {key: 'k' + key, hub: {kind: 'kw', id: key, label: f.label, count: f.n, color: PALETTE[i % PALETTE.length]}, deg: f.n, ...place('k' + key)};
+        nodes.push(h); hubs.set(key, h);
+      });
+      for (const n of nodes) if (n.paper) for (const k of new Set((n.paper.keywords || []).map(x => x.toLowerCase()))) {
+        const h = hubs.get(k); if (h) { edges.push({s: n, t: h, w: 1, undirected: true, hub: true}); n.deg++; }
+      }
+    } else if (st.edgeMode === 'keywords') {
+      // papers linked when they share keywords; each paper keeps only its strongest links (readable map)
       const kw = nodes.map(n => new Set((n.paper.keywords || []).map(k => k.toLowerCase())));
-      const minShared = nodes.length > 400 ? 2 : 1;
+      const minShared = st.minShared || (nodes.length > 400 ? 2 : 1);
+      const cand = [];
       for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
         let shared = 0;
         for (const k of kw[i]) if (kw[j].has(k)) shared++;
-        if (shared >= minShared) { edges.push({s: nodes[i], t: nodes[j], w: shared, undirected: true}); nodes[i].deg++; nodes[j].deg++; }
+        if (shared >= minShared) cand.push({i, j, w: shared});
+      }
+      const KEEP = 6, per = nodes.map(() => []);
+      for (const c of cand) { per[c.i].push(c); per[c.j].push(c); }
+      const keep = new Set();
+      for (const list of per) list.sort((a, b) => b.w - a.w).slice(0, KEEP).forEach(c => keep.add(c));
+      for (const c of keep) {
+        edges.push({s: nodes[c.i], t: nodes[c.j], w: c.w, undirected: true}); nodes[c.i].deg++; nodes[c.j].deg++;
+      }
+    } else if (st.edgeMode === 'groups') {
+      // your groups as nodes (with their parent groups), papers linked to the groups they are in
+      const inScope = state.view.type === 'group' ? descendants(state.view.id) : null;
+      const used = new Set();
+      for (const n of nodes) for (const gid of n.paper.group_ids || []) if (!inScope || inScope.has(gid)) used.add(gid);
+      const byId = new Map(state.groups.map(g => [g.id, g]));
+      const show = new Set();
+      for (const gid of used) {  // add the parents too, so the group tree is visible
+        let g = byId.get(gid);
+        while (g && (!inScope || inScope.has(g.id))) { show.add(g.id); g = byId.get(g.parent_id); }
+      }
+      const tops = state.groups.filter(g => g.parent_id == null).map(g => g.id);
+      const topOf = gid => { let g = byId.get(gid); while (g && g.parent_id != null && byId.get(g.parent_id)) g = byId.get(g.parent_id); return g ? g.id : gid; };
+      const hubs = new Map();
+      for (const gid of show) {
+        const g = byId.get(gid);
+        const count = nodes.filter(n => n.paper && (n.paper.group_ids || []).includes(gid)).length;
+        const ti = tops.indexOf(topOf(gid));
+        const h = {key: 'g' + gid, hub: {kind: 'group', id: gid, label: g.name, path: groupPath(gid), count, color: ti >= 0 ? PALETTE[ti % PALETTE.length] : '#888',
+          sub: g.parent_id != null}, deg: count, ...place('g' + gid)};
+        nodes.push(h); hubs.set(gid, h);
+      }
+      for (const h of hubs.values()) {
+        const g = byId.get(h.hub.id); const parent = hubs.get(g.parent_id);
+        if (parent) edges.push({s: h, t: parent, w: 2, undirected: true, tree: true});
+      }
+      for (const n of nodes) if (n.paper) for (const gid of n.paper.group_ids || []) {
+        const h = hubs.get(gid); if (h) { edges.push({s: n, t: h, w: 1, undirected: true, hub: true}); n.deg++; }
       }
     }
-    for (const n of nodes) n.r = n.ext ? 3.5 + 1.6 * Math.sqrt(n.ext.count) : 5 + 2.2 * Math.sqrt(n.deg);
+    for (const n of nodes) n.r = n.hub ? 9 + 2.8 * Math.sqrt(n.hub.count || 1) : n.ext ? 3.5 + 1.6 * Math.sqrt(n.ext.count) : 5 + 2.2 * Math.sqrt(n.deg);
     st.nodes = nodes; st.edges = edges;
   }
 
@@ -141,7 +210,7 @@ const Graph = (() => {
     }
     for (const e of st.edges) {
       const dx = e.t.x - e.s.x, dy = e.t.y - e.s.y; const d = Math.sqrt(dx * dx + dy * dy) || 1;
-      const target = (e.ext ? 55 : 75) + e.s.r + e.t.r;
+      const target = (e.ext ? 55 : e.tree ? 110 : e.hub ? 45 : 75) + e.s.r + e.t.r;
       const f = (d - target) / d * 0.03 * k * Math.min(3, Math.sqrt(e.w));
       e.s.vx += dx * f; e.s.vy += dy * f; e.t.vx -= dx * f; e.t.vy -= dy * f;
     }
@@ -182,6 +251,7 @@ const Graph = (() => {
   }
   function nodeColor(n) {
     if (n.ext) return null;
+    if (n.hub) return n.hub.color;
     const p = n.paper;
     if (st.colorBy === 'status') return STATUS_COLORS[p.status] || '#999';
     if (st.colorBy === 'year') {
@@ -215,9 +285,12 @@ const Graph = (() => {
       items.push(['#9aa0a6', state.view.type === 'group' ? 'directly in this group' : 'no group']);
     }
     if (st.showExt && st.edgeMode === 'cites') items.push(['ghost', 'not in your library']);
-    el.innerHTML = items.map(([c, l]) => `<div><span class="dot ${c === 'ghost' ? 'ghost' : ''}" style="${c === 'ghost' ? '' : `background:${c}`}"></span>${esc(l)}</div>`).join('');
+    if (st.edgeMode === 'groups') items.push(['hub', 'group (size = papers; dashed = subgroup of)']);
+    if (st.edgeMode === 'keywords' && st.kwStyle === 'hubs') items.push(['hub', 'keyword (size = papers)']);
+    el.innerHTML = items.map(([c, l]) => `<div><span class="dot ${c === 'ghost' ? 'ghost' : c === 'hub' ? 'hubdot' : ''}" style="${c === 'ghost' || c === 'hub' ? '' : `background:${c}`}"></span>${esc(l)}</div>`).join('');
   }
   function label(n) {
+    if (n.hub) return truncate(n.hub.label, 28);
     if (n.ext) { const w = st.extInfo[n.ext.id]; return w ? `${(w.authors || '').split(' ')[0]} ${w.year || ''}`.trim() : ''; }
     const a = n.paper.authors[0]?.family || truncate(n.paper.title, 18);
     return `${a} ${n.paper.year || ''}`.trim();
@@ -242,8 +315,11 @@ const Graph = (() => {
       const [x1, y1] = S(e.s.x, e.s.y), [x2, y2] = S(e.t.x, e.t.y);
       c.globalAlpha = dim ? 0.06 : (e.ext ? 0.22 : 0.45);
       c.strokeStyle = focus && !dim ? accent : muted;
-      c.lineWidth = e.undirected ? Math.min(4, 0.6 + e.w * 0.6) : 1;
+      c.lineWidth = e.tree ? 1.6 : e.hub ? 0.9 : e.undirected ? Math.min(4, 0.6 + e.w * 0.6) : 1;
+      if (e.tree) { c.setLineDash([5, 4]); c.globalAlpha = dim ? 0.06 : 0.7; }
+      else if (e.hub && !dim) { c.globalAlpha = 0.3; if (!(focus && !dim)) c.strokeStyle = e.t.hub?.color || muted; }
       c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.setLineDash([]);
       if (!e.undirected) {  // arrowhead at the cited paper
         const ang = Math.atan2(y2 - y1, x2 - x1), rr = e.t.r * st.scale + 2;
         const ax = x2 - Math.cos(ang) * rr, ay = y2 - Math.sin(ang) * rr, sz = 6;
@@ -257,6 +333,12 @@ const Graph = (() => {
     for (const n of st.nodes) {
       const [x, y] = S(n.x, n.y); const r = Math.max(2.5, n.r * st.scale);
       c.globalAlpha = focus && !focus.has(n) ? 0.18 : 1;
+      if (n.hub) {  // group / keyword: a rounded diamond
+        c.beginPath(); c.moveTo(x, y - r * 1.25); c.lineTo(x + r * 1.25, y); c.lineTo(x, y + r * 1.25); c.lineTo(x - r * 1.25, y); c.closePath();
+        c.fillStyle = n.hub.color; c.globalAlpha *= n.hub.sub ? 0.8 : 0.95; c.fill();
+        c.lineWidth = n === st.hover ? 3 : 1.5; c.strokeStyle = n === st.hover ? text : bg; c.stroke();
+        continue;
+      }
       c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2);
       if (n.ext) {
         c.fillStyle = bg; c.fill(); c.setLineDash([3, 2]); c.strokeStyle = muted; c.lineWidth = 1.4; c.stroke(); c.setLineDash([]);
@@ -270,12 +352,13 @@ const Graph = (() => {
     c.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     c.textAlign = 'center'; c.textBaseline = 'top';
     for (const n of st.nodes) {
-      const show = (focus && focus.has(n)) || (!focus && (st.scale > 1.25 || n.r * st.scale > 9 || st.nodes.length < 25));
+      const show = n.hub ? !focus || focus.has(n) : (focus && focus.has(n)) || (!focus && (st.scale > 1.25 || n.r * st.scale > 9 || st.nodes.length < 25));
       if (!show) continue;
       const lbl = label(n); if (!lbl) continue;
-      const [x, y] = S(n.x, n.y);
-      c.globalAlpha = 1; c.lineWidth = 3; c.strokeStyle = bg; c.strokeText(lbl, x, y + n.r * st.scale + 3);
-      c.fillStyle = n.ext ? muted : text; c.fillText(lbl, x, y + n.r * st.scale + 3);
+      const [x, y] = S(n.x, n.y); const dy = n.r * st.scale * (n.hub ? 1.25 : 1) + 3;
+      c.font = n.hub ? '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' : '11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      c.globalAlpha = 1; c.lineWidth = 3; c.strokeStyle = bg; c.strokeText(lbl, x, y + dy);
+      c.fillStyle = n.ext ? muted : text; c.fillText(lbl, x, y + dy);
     }
     c.globalAlpha = 1;
   }
@@ -298,7 +381,11 @@ const Graph = (() => {
     const el = $('#map-tip');
     if (!n) { el.style.display = 'none'; return; }
     let html;
-    if (n.ext) {
+    if (n.hub) {
+      html = n.hub.kind === 'group'
+        ? `<b>Group: ${esc(n.hub.path || n.hub.label)}</b><div class="muted">${n.hub.count} paper${n.hub.count === 1 ? '' : 's'} here directly · click to open the group</div>`
+        : `<b>Keyword: ${esc(n.hub.label)}</b><div class="muted">${n.hub.count} papers · click to show only these papers</div>`;
+    } else if (n.ext) {
       const w = st.extInfo[n.ext.id];
       html = `<b>${esc(w?.title || 'Loading…')}</b><div>${esc([w?.authors, w?.venue, w?.year].filter(Boolean).join(' · '))}</div>
         <div class="muted">Cited by ${n.ext.count} of these papers · not in your library – click to add</div>`;
@@ -306,7 +393,9 @@ const Graph = (() => {
       const p = n.paper;
       const inLib = st.edges.filter(e => e.t === n && !e.undirected).length;
       html = `<b>${esc(p.title)}</b><div>${esc([shortAuthors(p), p.journal, p.year].filter(Boolean).join(' · '))}</div>
-        <div class="muted">${st.edgeMode === 'cites' ? `Cited by ${inLib} paper${inLib === 1 ? '' : 's'} here · ${(p.cited_by_count ?? 0).toLocaleString()} overall` : `${n.deg} connection${n.deg === 1 ? '' : 's'}`}</div>`;
+        <div class="muted">${st.edgeMode === 'cites' ? `Cited by ${inLib} paper${inLib === 1 ? '' : 's'} here · ${(p.cited_by_count ?? 0).toLocaleString()} overall`
+          : st.edgeMode === 'groups' ? (p.group_ids.length ? `In: ${p.group_ids.map(g => esc(groupPath(g))).join('; ')}` : 'Not in any group')
+          : `${n.deg} connection${n.deg === 1 ? '' : 's'}${p.keywords?.length ? ' · ' + esc(p.keywords.slice(0, 6).join(', ')) : ''}`}</div>`;
     }
     el.innerHTML = html; el.style.display = 'block';
     const x = Math.min(pt.sx + 14, st.w - 320), y = Math.min(pt.sy + 14, st.h - el.offsetHeight - 8);
@@ -347,6 +436,12 @@ const Graph = (() => {
   }
   function click(n) {
     if (n.paper) { openDetail(n.paper.id); draw(); return; }
+    if (n.hub) {
+      tip(null);
+      if (n.hub.kind === 'group') setView({type: 'group', id: n.hub.id});
+      else { state.keyword = n.hub.id; renderList(); renderKeywords(); renderMode(true); }
+      return;
+    }
     const w = st.extInfo[n.ext.id] || {id: n.ext.id, title: 'Unknown work'};
     const link = w.doi ? `https://doi.org/${w.doi}` : `https://openalex.org/${w.id}`;
     const m = modal(`<h3>${esc(w.title)}</h3><p class="muted">${esc([w.authors, w.venue, w.year].filter(Boolean).join(' · '))}</p>
@@ -366,7 +461,8 @@ const Graph = (() => {
   function render(papers, scopeChanged = false, force = false) {
     ensureDom();
     st.papers = papers;
-    const key = papers.map(p => `${p.id}:${p.openalex_id ? p.refs.length : 0}`).join(',') + `|${st.edgeMode}|${st.showExt}`;
+    const key = papers.map(p => `${p.id}:${p.openalex_id ? p.refs.length : 0}:${st.edgeMode === 'groups' ? p.group_ids.join('.') : st.edgeMode === 'keywords' ? (p.keywords || []).length : ''}`).join(',')
+      + `|${st.edgeMode}|${st.showExt}|${st.kwStyle}|${st.minShared}|${st.edgeMode === 'groups' ? state.groups.map(g => g.id + ':' + g.parent_id + g.name).join(',') : ''}`;
     resize();
     const msg = $('#map-msg');
     const missing = missingIds(papers);
@@ -380,11 +476,14 @@ const Graph = (() => {
     } else draw();
     legend();
     const links = st.edges.length;
-    $('#map-info').textContent = `${papers.length} paper${papers.length === 1 ? '' : 's'} · ${links} link${links === 1 ? '' : 's'}`;
+    const hubs = st.nodes.filter(n => n.hub).length;
+    $('#map-info').textContent = `${papers.length} paper${papers.length === 1 ? '' : 's'}${hubs ? ` · ${hubs} ${st.edgeMode === 'groups' ? 'group' : 'keyword'}${hubs === 1 ? '' : 's'}` : ''} · ${links} link${links === 1 ? '' : 's'}`;
     const withData = papers.filter(p => p.openalex_id).length;
     if (!papers.length) msg.innerHTML = 'No papers in this view.';
     else if (st.edgeMode === 'cites' && !withData) msg.innerHTML = `No citation data yet for these papers.<br><span class="muted small">PaperShelf gets it from OpenAlex, a free scholarly database (needs internet).</span>`;
-    else if (st.edgeMode === 'cites' && !links) msg.innerHTML = `These papers don't cite each other.<br><span class="muted small">Try “Shared keywords”, or a larger group.</span>`;
+    else if (st.edgeMode === 'cites' && !links) msg.innerHTML = `These papers don't cite each other.<br><span class="muted small">Try “Keywords” or “Groups”, or a larger group.</span>`;
+    else if (st.edgeMode === 'groups' && !links) msg.innerHTML = `None of these papers is in a group yet.<br><span class="muted small">Create groups with ＋ in the sidebar and drag papers onto them.</span>`;
+    else if (st.edgeMode === 'keywords' && !links) msg.innerHTML = `These papers share no keywords.<br><span class="muted small">Keywords are filled in automatically when papers are added; you can also type your own in a paper's details.</span>`;
     else msg.innerHTML = '';
     msg.style.display = msg.innerHTML ? '' : 'none';
   }

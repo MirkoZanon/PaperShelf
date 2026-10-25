@@ -42,6 +42,10 @@ class MetadataError(Exception):
     """A lookup failed; the message is meant to be shown to the user."""
 
 
+class NoMatch(MetadataError):
+    """A title search found nothing certain: the app then offers the closest candidates."""
+
+
 class NetworkError(MetadataError):
     """A remote service could not be reached."""
 
@@ -295,7 +299,7 @@ def search_crossref(text: str, email: str = "", strict: bool = False) -> dict:
         if score > best_score:
             best, best_score = it, score
     if not best or best_score < (0.85 if strict else 0.75):
-        raise MetadataError(
+        raise NoMatch(
             "No confident match found for that title. Try pasting the DOI or the article link instead."
         )
     return from_doi(best["DOI"], email, _crossref=(best["DOI"], best))
@@ -822,6 +826,43 @@ def from_page(url: str, email: str = "") -> dict:
 # --------------------------------------------------------------------------- #
 def _is_url(text: str) -> bool:
     return bool(re.match(r"^(https?://|www\.)", text, re.I))
+
+
+def search_candidates(text: str, limit: int = 8) -> list[dict]:
+    """Likely papers for a few words of a title (or authors / year): OpenAlex full-text search,
+    Crossref as fallback. Used for the suggestions under the "Add paper" box."""
+    text = re.sub(r"\s+", " ", (text or "").strip())[:300]
+    if len(text) < 4:
+        return []
+    out: list[dict] = []
+    try:
+        r = http_get("https://api.openalex.org/works", params={
+            "search": text, "per_page": limit,
+            "select": "id,doi,display_name,publication_year,authorships,primary_location,cited_by_count,type"})
+        if r.status_code == 200:
+            for w in r.json().get("results", []):
+                names = [((a.get("author") or {}).get("display_name") or "") for a in (w.get("authorships") or [])]
+                src = ((w.get("primary_location") or {}).get("source") or {})
+                out.append({"title": clean_text(w.get("display_name") or "", ""), "authors": [n for n in names if n][:12],
+                            "n_authors": len(names), "year": w.get("publication_year"), "venue": src.get("display_name") or "",
+                            "doi": clean_doi((w.get("doi") or "").replace("https://doi.org/", "")),
+                            "openalex_id": openalex_short(w.get("id")), "cites": w.get("cited_by_count") or 0,
+                            "type": w.get("type") or ""})
+    except MetadataError:
+        out = []
+    if not out:
+        r = http_get("https://api.crossref.org/works", params={"query.bibliographic": text, "rows": limit,
+                                                               "select": "DOI,title,author,issued,container-title,is-referenced-by-count,type"})
+        if r.status_code != 200:
+            raise NetworkError("The online search is not answering right now – try again in a moment.")
+        for it in r.json().get("message", {}).get("items", []):
+            names = [" ".join(x for x in (a.get("given"), a.get("family")) if x) for a in it.get("author") or []]
+            year = ((it.get("issued") or {}).get("date-parts") or [[None]])[0][0]
+            out.append({"title": clean_text((it.get("title") or [""])[0], ""), "authors": [n for n in names if n][:12],
+                        "n_authors": len(names), "year": year, "venue": ((it.get("container-title") or [""])[0]),
+                        "doi": it.get("DOI") or "", "openalex_id": "", "cites": it.get("is-referenced-by-count") or 0,
+                        "type": it.get("type") or ""})
+    return [c for c in out if c["title"] and (c["doi"] or c["openalex_id"])]
 
 
 def resolve(text: str, email: str = "") -> dict:

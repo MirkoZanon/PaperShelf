@@ -68,17 +68,24 @@ copy updates itself with `git pull` at every start.
 
 ## 2. Start, stop, first steps
 
-- **Start**: double-click `start.command` (Mac) / `start.bat` (Windows). A small Terminal / command
-  window opens – keep it open while you use PaperShelf.
-- **Stop**: close that window.
-- **Start automatically** (optional): add `start.command` to *System Settings → General → Login
-  Items* (Mac), or put a shortcut to `start.bat` in the Startup folder (Windows: `Win+R` →
-  `shell:startup`).
-- If the browser doesn't open by itself, go to **http://127.0.0.1:5055**.
+- **First start**: double-click `start.command` (Mac) / `start.bat` (Windows). It sets things up and
+  opens PaperShelf. A small Terminal / command window stays open; closing it stops PaperShelf.
+- **Make an icon** (recommended): ⚙︎ Settings → *App icon & window* → **🖥 Create PaperShelf icon**.
+  - Mac: PaperShelf appears in your *Applications* folder and on the Desktop – drag it onto the
+    **Dock**. Spotlight (⌘ Space → PaperShelf) finds it too.
+  - Windows: on the Desktop and in the Start menu – right-click → *Pin to taskbar*.
+- **From the icon** PaperShelf runs in the background (no Terminal window) and opens in its **own
+  window** called PaperShelf, without the `127.0.0.1` address bar, if Chrome, Edge or Brave is
+  installed (otherwise in your usual browser). Clicking the icon again brings the window back.
+- **Stop**: ⚙︎ Settings → **⏻ Quit** (or close the Terminal window if you used `start.command`).
+- **Start automatically** (optional): add PaperShelf from *Applications* to *System Settings → General
+  → Login Items* (Mac), or put the shortcut in the Startup folder (Windows: `Win+R` → `shell:startup`).
+- If no window opens, go to **http://127.0.0.1:5055** in any browser.
 
 **First five minutes**
 
-1. Paste a DOI, a link to an article or a title in the box at the top → `Enter`.
+1. Paste a DOI or a link to an article in the box at the top → `Enter` – or type a few words of the
+   title (or authors and year) and pick the paper from the list of matches that appears.
 2. Create a group with **＋** next to *Groups* and drag papers onto it (groups work like tags).
 3. Open a paper → **⬇ Find & download PDF**, or **🔐 Open article & log in with my university**.
 4. **📖 Read & highlight** the PDF.
@@ -106,7 +113,8 @@ Everything is saved immediately: closing the window, the browser or the computer
 ## 4. Features
 
 **Adding papers** – DOIs, doi.org links, journal pages, arXiv, bioRxiv, PubMed, PDF links, titles or
-whole copied references; many at once (one per line); PDF files dragged onto the window (the DOI inside
+whole copied references; a few words of a title show a list of likely papers to pick from (OpenAlex /
+Crossref search); many at once (one per line); PDF files dragged onto the window (the DOI inside
 is used); browser buttons that save the page you are reading. Duplicates are recognised.
 
 **Organising** – groups and subgroups that work like tags (a paper can be in many; dragging adds,
@@ -122,8 +130,9 @@ PDF, and PaperShelf attaches it automatically from your Downloads folder. Option
 **Reader** – read PDFs inside the app, highlight in five colours, add notes, copy highlights to your
 notes, or save them into the PDF file (visible in Preview, Acrobat, Zotero).
 
-**Citation map** – the papers of a group as a network of who cites whom, with the important papers you
-don't have yet. **Discover** – suggestions: works often cited by your papers, recent papers citing
+**Map** – the papers of a group as a network linked by **citations** (with the important papers you
+don't have yet), by **keywords** (keywords as nodes, or papers linked by shared keywords) or by your
+**groups** (groups as nodes, subgroups joined to their parents). **Discover** – suggestions: works often cited by your papers, recent papers citing
 yours, related works.
 
 **Researchers** – profile of any scientist in two views. *Overview*: summary (publications, first /
@@ -139,7 +148,9 @@ year. Optional import of the public Google Scholar profile page you are viewing.
 
 **Journal metrics** – SCImago quartile, SJR and citations-per-document (impact-factor formula, Scopus
 data) at publication time and today, OpenAlex 2-year mean citedness, and your own entries of the
-official impact factor.
+official impact factor. When a year's table is missing, the closest previous year is used and shown;
+otherwise the cell stays empty. If scimagojr.com refuses the automatic download, download the yearly
+files there (*Download data*) and import them all at once (the year is read from the file name).
 
 **Citation styles** – APA 7, Nature, Science, Cell Press (Cell, Neuron, Current Biology, Cell Reports,
 iScience), Royal Society (Proc B), J Neurosci, eLife, PNAS, PLOS / Vancouver.
@@ -299,9 +310,11 @@ report.py         publication-list documents (HTML, RTF, TXT, CSV) with IF, role
 journals.py       journal metrics (SCImago tables, OpenAlex, manual impact factor)
 watcher.py        attaches PDFs downloaded in the browser to the right paper
 updater.py        in-app updates (GitHub releases → download, backup, replace, restart)
+launcher.py       app window (Chrome/Edge --app) and the PaperShelf icon (Mac .app, Windows shortcut)
 VERSION           the app version (single source of truth)
 update.json       the GitHub repository the updater checks ("owner/name")
-static/           interface: app.js, graph.js, discover.js, reader.js, people.js, help.js, update.js, style.css
+static/           interface: app.js, graph.js, discover.js, reader.js, people.js, help.js, update.js,
+                  suggest.js (title search under the Add box), style.css, icons/
 static/vendor/pdfjs   PDF.js 4.10 (Apache-2.0), bundled for offline reading
 start.command / start.bat   launchers (create .venv, install requirements, update via git if cloned)
 .github/workflows/release.yml   creates a GitHub release when VERSION changes

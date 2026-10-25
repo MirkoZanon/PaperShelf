@@ -2,6 +2,21 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.8 – 2026-10-25
+
+- **PaperShelf icon**: Settings → App icon & window → *Create PaperShelf icon*. On a Mac it goes in
+  Applications and on the Desktop (drag it to the Dock); on Windows on the Desktop and in the Start
+  menu. From the icon PaperShelf starts in the background, without a Terminal window.
+- **Its own window**: with Chrome, Edge or Brave installed, PaperShelf opens as a separate
+  “PaperShelf” window without the 127.0.0.1 address bar. New app icon. *Quit* button in Settings.
+- **Find papers by a few words**: type part of a title (or authors and year) in the Add box and pick
+  the paper from the list of matches. A title without an exact match now shows the closest papers.
+- **Map**: links by *Keywords* (keywords as nodes, or papers linked by shared keywords) and by
+  *Groups* (your groups as nodes), besides citations.
+- **Journal metrics**: no more repeated download errors. Years that can't be downloaded are retried
+  only after a few days; tables downloaded by hand can be imported several at once. When a year has no
+  table, the closest previous year is used and shown; otherwise the cell stays empty.
+
 ## 1.7 – 2026-10-25
 
 - **Automatic updates**: when PaperShelf starts it checks github.com/MirkoZanon/PaperShelf and installs

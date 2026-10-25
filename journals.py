@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS sjr_issn (issn TEXT PRIMARY KEY, sourceid TEXT);
 CREATE TABLE IF NOT EXISTS sjr_year (sourceid TEXT, year INTEGER, sjr REAL, quartile TEXT, cites2y REAL,
                                      PRIMARY KEY (sourceid, year));
 CREATE TABLE IF NOT EXISTS sjr_loaded (year INTEGER PRIMARY KEY, journals INTEGER, loaded_at TEXT);
+CREATE TABLE IF NOT EXISTS sjr_failed (year INTEGER PRIMARY KEY, at REAL, error TEXT);
 CREATE TABLE IF NOT EXISTS jif_manual (norm_title TEXT, year INTEGER, value REAL, PRIMARY KEY (norm_title, year));
 CREATE INDEX IF NOT EXISTS idx_sjr_title ON sjr_journal(norm_title);
 """
@@ -54,10 +55,29 @@ def norm_issn(i):
     return i if len(i) == 8 else ""
 
 
+RETRY_DAYS = 3
+
+
 def latest_year() -> int:
     """SCImago publishes the previous year's table around May/June."""
     now = datetime.now()
     return now.year - 1 if now.month >= 7 else now.year - 2
+
+
+def failed_years(db) -> dict:
+    """Years whose download failed recently: {year: error}. They are not retried for a few days."""
+    cutoff = time.time() - RETRY_DAYS * 86400
+    return {r[0]: r[2] for r in db.execute("SELECT year, at, error FROM sjr_failed WHERE at > ?", (cutoff,))}
+
+
+def _fail(db, year, msg):
+    db.execute("INSERT OR REPLACE INTO sjr_failed VALUES (?, ?, ?)", (int(year), time.time(), msg[:300]))
+    db.commit()
+
+
+def year_from_filename(name: str):
+    m = re.search(r"(?<!\d)(19\d\d|20\d\d)(?!\d)", name or "")
+    return int(m.group(1)) if m else None
 
 
 def loaded_years(db) -> list[int]:
@@ -113,20 +133,37 @@ def import_table(db, year: int, raw: bytes) -> int:
                     _float(row.get(c_cites)) if c_cites else None))
         n += 1
     db.execute("INSERT OR REPLACE INTO sjr_loaded VALUES (?, ?, ?)", (int(year), n, datetime.now().isoformat(timespec="seconds")))
+    db.execute("DELETE FROM sjr_failed WHERE year=?", (int(year),))
     db.commit()
     return n
 
 
+MANUAL_HINT = ("You can download it yourself on scimagojr.com/journalrank.php (choose the year, then "
+               "'Download data') and import the file with “Import tables…”.")
+
+
 def download_year(db, year: int) -> int:
-    r = metadata.http_get(SJR_URL, params={"year": int(year), "out": "xls"}, browser=True, timeout=120)
+    try:
+        r = metadata.http_get(SJR_URL, params={"year": int(year), "out": "xls"}, browser=True, timeout=120)
+    except metadata.MetadataError as exc:
+        _fail(db, year, str(exc))
+        raise
+    head = (r.content or b"")[:400].lstrip().lower()
+    if r.status_code in (403, 429, 503) or head.startswith((b"<!doctype", b"<html")):
+        msg = (f"scimagojr.com refused the automatic download of {year} (it sometimes blocks programs). "
+               + MANUAL_HINT)
+        _fail(db, year, msg)
+        raise metadata.MetadataError(msg)
     if r.status_code != 200 or not r.content:
-        raise metadata.MetadataError(f"SCImago didn't provide the {year} table (HTTP {r.status_code}).")
+        msg = f"SCImago didn't provide the {year} table (HTTP {r.status_code}) – it may not be published yet."
+        _fail(db, year, msg)
+        raise metadata.MetadataError(msg)
     try:
         return import_table(db, year, r.content)
     except ValueError as exc:
-        raise metadata.MetadataError(
-            f"SCImago's {year} table could not be read ({exc}). You can download it yourself from "
-            "scimagojr.com/journalrank.php (button 'Download data') and import it in Settings.") from exc
+        msg = f"SCImago's {year} table could not be read ({exc}). " + MANUAL_HINT
+        _fail(db, year, msg)
+        raise metadata.MetadataError(msg) from exc
 
 
 def find_journal(db, issns=(), name=""):
@@ -145,14 +182,16 @@ def find_journal(db, issns=(), name=""):
 
 
 def year_metrics(db, sid, year):
-    """Metrics for that year, or the closest loaded year (at most 2 years away)."""
+    """Metrics for that year or, if that year's table isn't available, the closest PREVIOUS year
+    that has values for this journal. None when there is nothing at or before that year."""
     if not sid or not year:
         return None
-    rows = db.execute("SELECT year, sjr, quartile, cites2y FROM sjr_year WHERE sourceid=? "
-                      "ORDER BY ABS(year - ?) ASC, year DESC LIMIT 1", (sid, int(year))).fetchone()
-    if not rows or abs(rows[0] - int(year)) > 2:
+    row = db.execute("SELECT year, sjr, quartile, cites2y FROM sjr_year WHERE sourceid=? AND year<=? "
+                     "AND (cites2y IS NOT NULL OR sjr IS NOT NULL) ORDER BY year DESC LIMIT 1",
+                     (sid, int(year))).fetchone()
+    if not row:
         return None
-    return {"year": rows[0], "sjr": rows[1], "quartile": rows[2], "cites2y": rows[3]}
+    return {"year": row[0], "sjr": row[1], "quartile": row[2], "cites2y": row[3], "for_year": int(year)}
 
 
 def metrics_for(db, items):
@@ -169,10 +208,21 @@ def metrics_for(db, items):
             "journal": title, "norm_title": nt,
             "at_pub": year_metrics(db, sid, y) if y else None,
             "current": year_metrics(db, sid, latest) if latest else None,
-            "jif_pub": {"year": y, "value": jif[y]} if y in jif else None,
+            "jif_pub": _jif_at(jif, y),
             "jif_current": {"year": max(jif), "value": jif[max(jif)]} if jif else None,
         }
     return out
+
+
+def _jif_at(jif: dict, year):
+    """Official IF you entered for that year, or for the closest previous year."""
+    if not year:
+        return None
+    prev = [y for y in jif if y <= year]
+    if not prev:
+        return None
+    y = max(prev)
+    return {"year": y, "value": jif[y], "for_year": year}
 
 
 def set_manual_jif(db, name, year, value):

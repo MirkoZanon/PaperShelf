@@ -37,6 +37,7 @@ import pdffinder
 import people
 import report
 import sync as syncmod
+import launcher
 import updater
 import watcher as watchermod
 
@@ -50,6 +51,14 @@ HOME = Path(os.environ.get("PAPERSHELF_HOME", Path.home() / "PaperShelf")).expan
 DB_PATH = HOME / "library.db"
 DEFAULT_PDF_DIR = HOME / "PDFs"
 PORT = int(os.environ.get("PAPERSHELF_PORT", "5055"))
+LOG_PATH = HOME / "papershelf.log"
+
+if sys.stdout is None or sys.stderr is None:  # started without a console (Windows icon, pythonw)
+    try:
+        HOME.mkdir(parents=True, exist_ok=True)
+        sys.stdout = sys.stderr = open(LOG_PATH, "a", encoding="utf-8", buffering=1)
+    except OSError:
+        sys.stdout = sys.stderr = open(os.devnull, "w")
 
 TEXT_FIELDS = ["title", "journal", "journal_abbr", "volume", "issue", "pages", "publisher", "type", "doi",
                "arxiv_id", "url", "abstract", "pdf_url", "notes", "status"]
@@ -198,11 +207,11 @@ def get_settings(db=None, secrets=True) -> dict:
          "sync_pdfs": "", "sync_auto": "", "last_sync": "", "last_sync_error": "", "proxies": "[]",
          "auto_import": "", "remove_downloads": "", "watch_dir": str(Path.home() / "Downloads"), "openalex_key": "",
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
-         "update_auto": "1", "just_updated": ""}
+         "update_auto": "1", "just_updated": "", "own_window": "1"}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
-                                                "update_check", "update_cache", "update_auto", "just_updated"):
+                                                "update_check", "update_cache", "update_auto", "just_updated", "own_window"):
             s[row["key"]] = row["value"]
     try:
         s["proxies"] = json.loads(s["proxies"] or "[]")
@@ -435,7 +444,8 @@ def error(msg, status=400, **extra):
 
 
 def lookup_error(exc):
-    return error(str(exc), 502 if isinstance(exc, metadata.NetworkError) else 422)
+    return error(str(exc), 502 if isinstance(exc, metadata.NetworkError) else 422,
+                 nomatch=isinstance(exc, metadata.NoMatch))
 
 
 def try_download(db, pid) -> dict:
@@ -533,6 +543,21 @@ def add_paper():
     pid, dup = insert_paper(db, meta, _int(body.get("group_id")))
     pdf = try_download(db, pid) if body.get("download_pdf") else None
     return jsonify(paper=load_paper(db, pid), duplicate=dup, pdf=pdf)
+
+
+@app.get("/api/search-online")
+def search_online():
+    """Suggestions for the "Add paper" box: likely papers for a few words of a title."""
+    q = (request.args.get("q") or "").strip()
+    try:
+        cands = metadata.search_candidates(q, limit=min(_int(request.args.get("n")) or 8, 15))
+    except metadata.MetadataError as exc:
+        return lookup_error(exc)
+    db = get_db()
+    have = {r[0].lower(): r[1] for r in db.execute("SELECT doi, id FROM papers WHERE doi != ''")}
+    for c in cands:
+        c["in_library"] = have.get((c.get("doi") or "").lower())
+    return jsonify(results=cands, query=q)
 
 
 @app.put("/api/papers/<int:pid>")
@@ -1283,7 +1308,8 @@ def scholar_remove(pid):
 @app.get("/api/sjr/status")
 def sjr_status():
     db = get_db()
-    return jsonify(loaded=journals.loaded_years(db), latest=journals.latest_year(), first=journals.FIRST_YEAR)
+    return jsonify(loaded=journals.loaded_years(db), latest=journals.latest_year(), first=journals.FIRST_YEAR,
+                   failed={str(k): v for k, v in journals.failed_years(db).items()})
 
 
 @app.post("/api/sjr/load")
@@ -1301,15 +1327,25 @@ def sjr_load():
 
 @app.post("/api/sjr/import")
 def sjr_import():
-    f = request.files.get("file")
-    year = _int(request.form.get("year"))
-    if not f or not year:
-        return error("Choose the file and the year it refers to.")
-    try:
-        n = journals.import_table(get_db(), year, f.read())
-    except ValueError as exc:
-        return error(str(exc))
-    return jsonify(year=year, journals=n)
+    """Import one or more SCImago tables downloaded by hand. The year is read from the file name
+    ("scimagojr 2024.csv") unless given."""
+    files = request.files.getlist("file")
+    if not files:
+        return error("Choose the SCImago file(s) first.")
+    given = _int(request.form.get("year"))
+    done, problems = [], []
+    for f in files:
+        year = given if (given and len(files) == 1) else journals.year_from_filename(f.filename)
+        if not year:
+            problems.append(f"{f.filename}: the year isn't in the file name – import it alone and type the year.")
+            continue
+        try:
+            done.append({"year": year, "journals": journals.import_table(get_db(), year, f.read())})
+        except ValueError as exc:
+            problems.append(f"{f.filename}: {exc}")
+    if not done:
+        return error(" ".join(problems) or "Nothing imported.")
+    return jsonify(imported=done, problems=problems, year=done[0]["year"], journals=done[0]["journals"])
 
 
 def _cache_get(key):
@@ -1336,7 +1372,8 @@ def journal_metrics():
             oa = journals.openalex_sources(db, sids, _cache_get, _cache_put)
         except (metadata.MetadataError, ValueError):
             oa = {}
-    return jsonify(metrics=out, openalex=oa, loaded=journals.loaded_years(db), latest=journals.latest_year())
+    return jsonify(metrics=out, openalex=oa, loaded=journals.loaded_years(db), latest=journals.latest_year(),
+                   failed={str(k): v for k, v in journals.failed_years(db).items()})
 
 
 @app.put("/api/journal-jif")
@@ -1435,7 +1472,7 @@ def write_settings():
         set_setting(db, "sync_token", body["sync_token"].strip())
     if body.get("clear_sync_token"):
         set_setting(db, "sync_token", "")
-    for key in ("sync_pdfs", "sync_auto", "auto_import", "remove_downloads", "sjr_auto", "update_check", "update_auto"):
+    for key in ("sync_pdfs", "sync_auto", "auto_import", "remove_downloads", "sjr_auto", "update_check", "update_auto", "own_window"):
         if key in body:
             set_setting(db, key, "1" if body[key] else "")
     if body.get("openalex_key") is not None and body.get("openalex_key") != "":
@@ -1717,6 +1754,36 @@ def update_restart():
     return jsonify(ok=True)
 
 
+@app.post("/api/shortcut")
+def make_shortcut():
+    """Create the PaperShelf icon (Mac: Applications + Desktop; Windows: Desktop + Start menu)."""
+    b = request.get_json(silent=True) or {}
+    port = request.host.rsplit(":", 1)[-1] if ":" in (request.host or "") else PORT
+    try:
+        res = launcher.create_shortcut(int(port), LOG_PATH, APP_VERSION, desktop=b.get("desktop", True) is not False)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        return error(f"The icon could not be created: {exc}", 500)
+    return jsonify(res)
+
+
+@app.post("/api/quit")
+def quit_app():
+    """Stop PaperShelf (useful when it runs in the background, started from its icon)."""
+    if SERVER["srv"] is None:
+        return error("Close the PaperShelf Terminal / command window to stop it.", 409)
+    threading.Timer(0.5, SERVER["srv"].shutdown).start()
+    return jsonify(ok=True)
+
+
+@app.get("/manifest.webmanifest")
+def web_manifest():
+    data = {"name": "PaperShelf", "short_name": "PaperShelf", "start_url": "/", "scope": "/", "display": "standalone",
+            "background_color": "#f5f4f0", "theme_color": "#2c64d6",
+            "description": "Your private library of scientific papers",
+            "icons": [{"src": f"/static/icons/icon-{n}.png", "sizes": f"{n}x{n}", "type": "image/png"} for n in (192, 512)]}
+    return Response(json.dumps(data), mimetype="application/manifest+json")
+
+
 @app.post("/api/open-backups")
 def open_backups():
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -1729,6 +1796,18 @@ def _port_in_use(port: int) -> bool:
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
+def _own_window_setting() -> bool:
+    """Open PaperShelf in its own window (Chrome/Edge app window) unless turned off in Settings."""
+    try:
+        db = connect()
+        try:
+            return get_settings(db).get("own_window", "1") == "1"
+        finally:
+            db.close()
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def main():
     ap = argparse.ArgumentParser(description="PaperShelf - local reference manager")
     ap.add_argument("--port", type=int, default=PORT)
@@ -1738,7 +1817,7 @@ def main():
 
     if _port_in_use(args.port):
         print(f"PaperShelf already seems to be running - opening {url}")
-        webbrowser.open(url)
+        launcher.open_ui(url, _own_window_setting())
         return
 
     init_db()
@@ -1748,7 +1827,8 @@ def main():
     print(f"  -> library and PDFs are stored in {HOME}")
     print("  -> close this window (or press Ctrl+C) to stop it\n")
     if not args.no_browser:
-        threading.Timer(1.2, lambda: webbrowser.open(url)).start()
+        own = _own_window_setting()
+        threading.Timer(1.2, lambda: launcher.open_ui(url, own)).start()
     threading.Thread(target=auto_sync_loop, daemon=True).start()
     WATCHER.start()
     import flask.cli
@@ -1765,6 +1845,8 @@ def main():
         srv.server_close()
     STOP.set()
     WATCHER.stop()
+    if not SERVER["restart"]:
+        print("\n  PaperShelf has stopped. You can close this window.\n")
     if SERVER["restart"]:
         print("\n  Restarting PaperShelf with the new version...\n")
         updater.relaunch()

@@ -14,13 +14,17 @@ const Help = (() => {
         lets you read and highlight them, organise them in groups and export reference lists.</p>
       <p>It runs <b>on your computer</b>. The browser is only its window: your library is not online and works offline too.</p>
       <h4>Your first five minutes</h4>
-      ${step(1, `Paste a <b>DOI</b>, a <b>link</b> to an article (journal, arXiv, PubMed…) or simply a <b>title</b> in the box at the top and press ${kbd('Enter')}. Title, authors, journal, year, abstract and keywords are filled in automatically.`)}
+      ${step(1, `Paste a <b>DOI</b> or a <b>link</b> to an article (journal, arXiv, PubMed…) in the box at the top and press ${kbd('Enter')} – or just type <b>a few words of the title</b> (or authors and year): a list of matching papers appears, pick one. Title, authors, journal, year, abstract and keywords are filled in automatically.`)}
       ${step(2, `Create a <b>group</b> with ＋ next to “Groups” and drag papers onto it. A paper can be in many groups. <a href="#" data-help="organising">More</a>`)}
       ${step(3, `Open a paper and click <b>⬇ Find &amp; download PDF</b>. If it isn't free, use <b>🔐 Open article &amp; log in with my university</b>. <a href="#" data-help="university">More</a>`)}
       ${step(4, `Click <b>📖 Read &amp; highlight</b> to read the PDF and highlight passages.`)}
       ${step(5, `Click <b>⤓ Export references</b> to get your reference list in APA, Nature, Cell… or to move papers to Zotero.`)}
       <h4>Starting and stopping</h4>
-      <p>Start PaperShelf with <code>start.command</code> (Mac) or <code>start.bat</code> (Windows) in the app folder. A small Terminal / command window opens: keep it open while you work; close it to stop PaperShelf. Then open <code>http://127.0.0.1:5055</code> if the browser didn't open by itself.</p>
+      <p><b>The first time</b>, start PaperShelf with <code>start.command</code> (Mac) or <code>start.bat</code> (Windows) in the app folder: it sets itself up (about a minute).</p>
+      <p><b>Then make an icon</b>: ⚙︎ Settings → <i>App icon &amp; window</i> → <b>🖥 Create PaperShelf icon</b>.</p>
+      <ul><li><b>Mac</b>: PaperShelf appears in your Applications folder and on the Desktop. Drag it onto the <b>Dock</b> to keep it there; Spotlight (⌘ Space) finds it too.</li>
+        <li><b>Windows</b>: on the Desktop and in the Start menu; right-click it → <i>Pin to taskbar</i>.</li></ul>
+      <p>Started from the icon, PaperShelf runs quietly in the background and opens in its <b>own window</b> named PaperShelf (if Chrome, Edge or Brave is installed – otherwise in your browser). Clicking the icon again just brings the window back. To stop it: ⚙︎ Settings → <b>⏻ Quit</b>. Started with <code>start.command</code>, it stops when you close its Terminal window.</p>
       ${tip('Everything is saved immediately. Closing the window, the browser or the computer loses nothing.')}
       <h4>Recommended (optional) settings</h4>
       <ul><li><b>E-mail for Unpaywall</b> – finds more free PDFs.</li><li><b>OpenAlex key</b> – more daily lookups for citation map, suggestions and researcher profiles.</li>
@@ -103,7 +107,11 @@ const Help = (() => {
     {id: 'map', icon: '🕸', title: 'Citation map & Discover', html: () => `
       <h4>Map</h4>
       <p>Click <b>🕸 Map</b> above the list: the papers of the current view become a network. Arrows go from the citing paper to the cited one; grey dashed dots are papers you don't have that several of yours cite – click them to add them.</p>
-      <p>Scroll to zoom, drag to move, click a paper to open it. Colour by group, status or year, or link papers by shared keywords.</p>
+      <p>Scroll to zoom, drag to move, click a paper to open it. Colour by group, status or year.</p>
+      <h4>Three kinds of links</h4>
+      <ul><li><b>Citations</b> – who cites whom (data from OpenAlex).</li>
+        <li><b>Keywords</b> – the most common keywords become ◆ nodes and each paper is linked to its keywords, so papers on the same topics cluster together. Or choose <i>Papers linked by shared keywords</i> (thicker line = more keywords in common). Click a keyword ◆ to show only its papers.</li>
+        <li><b>Groups</b> – your groups become ◆ nodes (a dashed line joins a subgroup to its parent) and each paper is linked to the groups it's in: papers in several groups sit between them. Click a group ◆ to open it.</li></ul>
       <h4>Discover</h4>
       <p><b>💡 Discover</b> suggests papers for the current group (or the whole library): works often cited by your papers, recent papers that cite yours, and related works. One click adds them.</p>
       <h4>Citation data</h4>
@@ -145,8 +153,14 @@ const Help = (() => {
         <li><b>2-year mean citedness</b> – the same idea on OpenAlex data (current).</li></ul>
       ${step(1, 'In a researcher\'s <b>Publications</b> click <b>Load journal metrics</b> (once). The SCImago tables for the years needed are downloaded (3–6 MB per year) and kept on your computer; later, missing years are loaded automatically.')}
       ${step(2, 'The <b>IF pub.</b> and <b>IF now</b> columns fill in, with the quartile. Values marked * are SCImago citations per document; click a value for all the numbers.')}
+      <h4>Years without a table</h4>
+      <p>SCImago publishes each year's table around June of the following year, and not every year may be available on your computer. When the table for a year is missing, PaperShelf uses the <b>closest previous year</b> that has data for that journal and shows that reference year in small under the value (e.g. a 2026 paper with <i>2025</i> data). If there is no earlier data, the cell stays empty.</p>
+      <h4>If the download is refused</h4>
+      <p>scimagojr.com sometimes refuses downloads made by programs. PaperShelf then tries again only after a few days and shows a yellow note. You can add the tables by hand in two minutes:</p>
+      ${step(1, 'Open <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">scimagojr.com/journalrank.php</a>, choose the year at the top, then click <b>Download data</b> (a file like <i>scimagojr 2025.csv</i>). Repeat for the years you need.')}
+      ${step(2, 'Click <b>Import tables…</b> in the yellow note (or ⚙︎ Settings → Journal rankings) and select all the files at once. The year is read from the file name.')}
       ${step(3, 'Know the official impact factor (many journals show it on their homepage, or via your university\'s JCR access)? Type it in that window: it is stored only on your computer.')}
-      ${tip('If the automatic download fails, download the yearly table from scimagojr.com (“Download data”) and import it in ⚙︎ Settings → Journal rankings.')}`},
+`},
 
     {id: 'sync', icon: '⟳', title: 'Sync between computers (GitHub)', html: () => `
       <p>Keep the same library on several computers (Mac and/or Windows). Your library is copied to a <b>private</b> repository on your GitHub account; each computer sends and receives changes when you press <b>⟳</b>.</p>

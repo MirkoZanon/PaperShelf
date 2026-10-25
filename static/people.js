@@ -4,7 +4,7 @@
 const People = (() => {
   const S = {
     list: [], person: null, view: 'search', results: null, searching: false, query: '', loadingProfile: false,
-    ptab: 'overview', f: null, selected: new Set(), jm: null, jmLoading: null, rolesChecking: false,
+    ptab: 'overview', f: null, selected: new Set(), jm: null, jmLoading: null, jmAutoDone: new Set(), rolesChecking: false,
   };
   try { S.ptab = localStorage.getItem('papershelf-ptab') || 'overview'; } catch (e) { /* ignore */ }
   const THIS_YEAR = new Date().getFullYear();
@@ -134,9 +134,11 @@ const People = (() => {
     if (now && m.current) now.q = m.current.quartile;
     return [pub, now];
   }
-  function ifCell(v, w, label) {
-    if (!v) return `<button class="if-cell empty" data-jm="${esc(w.key)}" title="No journal metrics – click for details">–</button>`;
-    return `<button class="if-cell" data-jm="${esc(w.key)}" title="${label} ${v.year}: ${v.official ? 'official impact factor (entered by you)' : 'SCImago citations per document, 2 years (impact-factor formula, Scopus data)'}${v.q ? ' · ' + v.q : ''}">${v.value.toFixed(1)}${v.official ? '' : '<sup>*</sup>'}${v.q ? ` <span class="q q-${v.q}">${v.q}</span>` : ''}</button>`;
+  function ifCell(v, w, label, target) {
+    if (!v) return `<button class="if-cell empty" data-jm="${esc(w.key)}" title="No journal metrics for this journal in ${target || 'that year'} or earlier – click for details">–</button>`;
+    const shifted = target && v.year && v.year !== target;
+    const ref = shifted ? ` (no ${target} data: closest previous year ${v.year} used)` : '';
+    return `<button class="if-cell" data-jm="${esc(w.key)}" title="${label} – reference year ${v.year}${ref}: ${v.official ? 'official impact factor (entered by you)' : 'SCImago citations per document, 2 years (impact-factor formula, Scopus data)'}${v.q ? ' · ' + v.q : ''}">${v.value.toFixed(1)}${v.official ? '' : '<sup>*</sup>'}${v.q ? ` <span class="q q-${v.q}">${v.q}</span>` : ''}${shifted ? `<span class="ify">${v.year}</span>` : ''}</button>`;
   }
 
   /* ------------------------------------------------------------ charts (SVG, no external libraries) */
@@ -302,17 +304,22 @@ const People = (() => {
     const sources = [...new Set(P.profile.works.map(w => w.source_id).filter(Boolean))];
     try {
       const d = await api('/api/journal-metrics', {method: 'POST', body: {items, openalex_sources: sources}});
-      if (S.person === P) { S.jm = d; draw(); if (state.settings.sjr_auto === '1') loadRankings({auto: true}); }
+      if (S.person === P) {
+        S.jm = d; draw();
+        // load missing years automatically – once per researcher per session, never in a loop
+        if (state.settings.sjr_auto === '1' && !S.jmAutoDone.has(P.id)) { S.jmAutoDone.add(P.id); loadRankings({auto: true}); }
+      }
     } catch (e) { /* offline: no metrics */ }
   }
   function jmModal(key) {
     const w = S.person.profile.works.find(x => x.key === key); const m = S.jm?.metrics?.[key] || {};
     const oa = w.source_id && S.jm?.openalex?.[w.source_id];
-    const pubY = w.year, curY = m.current?.year || S.jm?.latest;
+    const pubY = w.year, curY = S.jm?.loaded?.length ? Math.max(...S.jm.loaded) : (m.current?.year || S.jm?.latest);
+    const refY = (x, want) => x && x.year !== want ? ` <span class="muted tiny">(${x.year} data)</span>` : '';
     const v = x => x == null || x === '' ? '–' : x;
     const md = modal(`<h3>${esc(m.journal || w.venue || 'Journal')}</h3>
       <table class="cmp"><tr><th></th><th>When published (${pubY || '?'})</th><th>Latest (${curY || '?'})</th></tr>
-        <tr><th>Quartile (SJR)</th><td>${v(m.at_pub?.quartile)}${m.at_pub && m.at_pub.year !== pubY ? ` <span class="muted tiny">(${m.at_pub.year})</span>` : ''}</td><td>${v(m.current?.quartile)}</td></tr>
+        <tr><th>Quartile (SJR)</th><td>${v(m.at_pub?.quartile)}${refY(m.at_pub, pubY)}</td><td>${v(m.current?.quartile)}${refY(m.current, curY)}</td></tr>
         <tr><th>SJR indicator</th><td>${v(m.at_pub?.sjr)}</td><td>${v(m.current?.sjr)}</td></tr>
         <tr><th>Cites per doc, 2 years <span class="muted tiny">(IF formula, Scopus data)</span></th><td>${v(m.at_pub?.cites2y)}</td><td>${v(m.current?.cites2y)}</td></tr>
         <tr><th>2-year mean citedness <span class="muted tiny">(OpenAlex)</span></th><td>–</td><td>${v(oa?.mean2y)}</td></tr>
@@ -320,7 +327,7 @@ const People = (() => {
           <td><input class="input" id="jif-pub" style="width:90px" value="${esc(m.jif_pub?.value ?? '')}" placeholder="${pubY || ''}"></td>
           <td><input class="input" id="jif-cur" style="width:90px" value="${esc(m.jif_current?.year === curY ? m.jif_current.value : '')}" placeholder="${curY || ''}"></td></tr>
       </table>
-      ${S.jm?.loaded?.length ? '' : '<p class="warn-box">Journal metrics are not loaded yet – use “Load journal metrics” in the Publications view.</p>'}
+      ${S.jm?.loaded?.length ? `<p class="muted small">When a year's table isn't available, the closest previous year is used (shown in brackets); if there is none, the value stays empty. Tables loaded: ${esc(compactYears(S.jm.loaded))}.</p>` : '<p class="warn-box">Journal metrics are not loaded yet – use “Load journal metrics” in the Publications view.</p>'}
       <p class="muted small"><a href="#" data-help="journal-metrics">More about these metrics</a>. The official Journal Impact Factor belongs to Clarivate (Journal Citation Reports) and is only available with a subscription, so PaperShelf can't download it. “Cites per doc (2 years)” from SCImago uses the same formula on Scopus data and is usually close. If your university gives you JCR access, you can type the official value here – it's stored only on this computer.
       Sources: <a href="https://www.scimagojr.com" target="_blank" rel="noopener">SCImago Journal &amp; Country Rank</a>, <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a>.</p>
       <div class="modal-actions"><button class="btn" data-close>Close</button><button class="btn primary" id="jif-save">Save impact factors</button></div>`, {wide: true});
@@ -333,16 +340,18 @@ const People = (() => {
       } catch (err) { toast(err.message, 'error'); }
     };
   }
-  async function neededYears() {
+  async function neededYears(retryFailed = false) {
     const st = await api('/api/sjr/status');
+    const failed = Object.keys(st.failed || {}).map(Number);
     const pubYears = S.person.profile.works.filter(w => ['article', 'conference', 'abstract'].includes(cat(w))).map(w => w.year)
       .filter(y => y && y >= st.first && y <= st.latest);
-    return [...new Set([...pubYears, st.latest])].filter(y => !st.loaded.includes(y)).sort((a, b) => b - a);
+    return [...new Set([...pubYears, st.latest])].filter(y => !st.loaded.includes(y) && (retryFailed || !failed.includes(y)))
+      .sort((a, b) => b - a);
   }
-  async function loadRankings({auto = false} = {}) {
+  async function loadRankings({auto = false, retry = false} = {}) {
     if (S.jmLoading) return;
-    const want = await neededYears();
-    if (!want.length) { if (!auto) toast('Journal metrics are already loaded for all these years.'); return; }
+    const want = await neededYears(retry);
+    if (!want.length) { if (!auto) toast('Journal metrics are already loaded for all these years (or waiting to be retried – use “Import tables…”).'); return; }
     if (!auto) {
       const ok = await confirmBox('Load journal impact metrics?',
         `PaperShelf will download the SCImago Journal Rank tables for ${want.length} year${want.length > 1 ? 's' : ''} (${want.slice(0, 6).join(', ')}${want.length > 6 ? '…' : ''}), about 3–6 MB each, once, and keep them on this computer. Missing years for other researchers will then be loaded automatically. Only the year is sent to scimagojr.com.`,
@@ -358,7 +367,7 @@ const People = (() => {
       S.jmLoading.done++; draw();
     }
     S.jmLoading = null;
-    if (failed.length) toast(`Some years could not be downloaded. ${failed[0]}`, 'error', 15000);
+    if (failed.length && !auto) toast(`Some years could not be downloaded. ${failed[0]}`, 'error', 15000);
     loadJournalMetrics();
   }
 
@@ -471,8 +480,8 @@ const People = (() => {
       </div>
       <span><select class="${CAT_CLASS(c)}" data-cat title="Type – change it if it is wrong">${S.person.categories.map(k => `<option value="${k.id}" ${k.id === c ? 'selected' : ''}>${esc(shortCat(k.id))}</option>`).join('')}</select></span>
       <span><span class="role r-${esc(r || 'none')}" title="${esc(w.role_source ? 'Source: ' + w.role_source : '')}">${ROLE_LABEL[r] ?? '–'}</span></span>
-      <span class="ifc">${ifCell(ifPub, w, 'At publication')}</span>
-      <span class="ifc">${ifCell(ifNow, w, 'Latest')}</span>
+      <span class="ifc">${ifCell(ifPub, w, 'At publication', w.year)}</span>
+      <span class="ifc">${ifCell(ifNow, w, 'Latest', S.jm?.loaded?.length ? Math.max(...S.jm.loaded) : null)}</span>
       <span class="cit" title="Citations: OpenAlex${w.scholar_cites != null ? ' · Google Scholar ' + fmt(w.scholar_cites) : ''}">${w.cited_by != null ? fmt(w.cited_by) : (w.scholar_cites != null ? fmt(w.scholar_cites) + '<sup>GS</sup>' : '')}</span>
       <span class="pact">${inLib ? '<span title="In your library" style="color:var(--ok)">✓</span>' : '<button class="iconbtn" data-addlib title="Add to my library">＋</button>'}<button class="iconbtn" data-exclude title="${ex ? 'Show again' : 'Not theirs / hide'}">${ex ? '↺' : '✕'}</button></span>
     </div>`;
@@ -501,8 +510,12 @@ const People = (() => {
       }
     } else rows = list.map(w => rowHtml(w, nums.get(w.key), lib.has(w.key), ex.has(w.key), byKey)).join('');
     const merged = p.merge_log?.length || 0;
+    const jmFailed = S.jm ? Object.keys(S.jm.failed || {}).map(Number).filter(y => !S.jm.loaded.includes(y)).sort((a, b) => b - a) : [];
     const jmBanner = S.jmLoading ? `<div class="s-note">Downloading journal metrics… ${S.jmLoading.done}/${S.jmLoading.total} years</div>`
-      : (S.jm && !S.jm.loaded.length) ? `<div class="s-note"><span>📊 To fill the <b>IF</b> columns, load the journal metrics once (SCImago, about 3–6 MB per year). <button class="help-q" data-help="journal-metrics">?</button></span><button class="btn small primary" id="p-rankings">Load journal metrics</button></div>` : '';
+      : (S.jm && !S.jm.loaded.length && !jmFailed.length) ? `<div class="s-note"><span>📊 To fill the <b>IF</b> columns, load the journal metrics once (SCImago, about 3–6 MB per year). <button class="help-q" data-help="journal-metrics">?</button></span><button class="btn small primary" id="p-rankings">Load journal metrics</button></div>`
+      : jmFailed.length ? `<div class="s-note warn"><span>⚠ The SCImago tables for <b>${esc(compactYears(jmFailed))}</b> couldn't be downloaded automatically${S.jm.loaded.length ? ' – the IF columns use the closest previous year available (shown in small)' : ''}. <span class="muted">${esc((S.jm.failed[jmFailed[0]] || '').split('. ')[0])}.</span>
+          To add them: on <a href="https://www.scimagojr.com/journalrank.php?year=${jmFailed[0]}" target="_blank" rel="noopener">scimagojr.com</a> choose the year → “Download data”, then import the files (several at once). <button class="help-q" data-help="journal-metrics">?</button></span>
+          <span class="s-note-btns"><button class="btn small primary" id="p-sjr-import">Import tables…</button><button class="btn small" id="p-sjr-retry">Try again</button></span><input type="file" id="p-sjr-file" accept=".csv,.txt,.xls" multiple hidden></div>` : '';
     return `
       <div class="cat-chips">${P.categories.filter(c => cc[c.id]).map(c => `<button class="cat-chip ${!S.f.cats || S.f.cats.has(c.id) ? 'on' : ''}" data-chip="${c.id}">${esc(shortCat(c.id))}<span>${cc[c.id]}</span></button>`).join('')}
         ${S.f.cats ? '<button class="btn small" id="p-allcats">All types</button>' : ''}
@@ -655,6 +668,8 @@ const People = (() => {
       }
       if (id === 'p-export') { exportDialog(); return; }
       if (id === 'p-rankings') { loadRankings(); return; }
+      if (id === 'p-sjr-retry') { loadRankings({retry: true}); return; }
+      if (id === 'p-sjr-import') { const inp = $('#p-sjr-file'); inp.onchange = async e => { const d = await importSjrFiles([...e.target.files]); e.target.value = ''; if (d) loadJournalMetrics(); }; inp.click(); return; }
       if (id === 'p-rm-scholar') { await api(`/api/people/${S.person.id}/scholar`, {method: 'DELETE'}); await openPerson(S.person.id); return; }
       const jm = e.target.closest('[data-jm]'); if (jm) { jmModal(jm.dataset.jm); return; }
       if (id === 'p-addsel') { addToLibrary([...S.selected]); return; }
