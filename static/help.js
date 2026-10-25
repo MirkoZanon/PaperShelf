@@ -195,6 +195,41 @@ const Help = (() => {
         <tr><td>No internet connection</td><td>Nothing is lost – sync later.</td></tr>
         <tr><td>⟳ is red</td><td>Hover it to read the last error.</td></tr></table>`},
 
+    {id: 'sharing', icon: '🔗', title: 'Sharing lists with colleagues', html: () => `
+      <p>A <b>shared list</b> is a list of papers you keep in common with one or more colleagues – a journal club, a lab reading list, “papers for Mario”. Only the <b>bibliographic details</b> travel (title, authors, year, journal, DOI): never PDFs, notes, highlights or anything else from your library.</p>
+      <h4>Shared lists are not groups</h4>
+      <p>They have their own section in the sidebar (<b>Shared lists</b>), separate from your groups. A paper can be in your scientific groups <i>and</i> in shared lists; the map, keywords and statistics use only your groups. If you like, a list can also drop the papers it brings into one of your groups (list ⚙︎ → <i>Also put papers that arrive…</i>).</p>
+      <h4>What happens to the papers</h4>
+      <ul><li>Papers that arrive through a list are <b>added to your library</b> with the list’s label 🔗 (or simply labelled, if you already had them).</li>
+        <li>If someone removes a paper from the list, your copy only <b>loses the label</b> – it stays in your library until you delete it yourself.</li>
+        <li>If you delete a paper that is in a list, PaperShelf asks whether to take it out of the list for everybody too (their copies stay, without the label) or to keep it in the list for the others.</li></ul>
+      <h4>Several people, always in sync</h4>
+      <p>Every member’s PaperShelf reads the copies of all the other members and merges them. Changes travel along any chain: if you share with Anna, and Anna adds Luca, Luca’s papers reach you through Anna’s copy even before you have ever read Luca’s. The merge doesn’t depend on the order or timing of the updates (each change carries a counter, not the clock time), so nothing is lost or brought back by mistake. Updates run when PaperShelf starts, every 15 minutes, and right after you change something; <b>⟳ Update now</b> forces one.</p>
+
+      <h4>1 · Set up once (only to publish lists – 5 minutes)</h4>
+      <p class="muted">Not needed to join someone else’s list.</p>
+      ${step(1, 'On GitHub: <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a> → name <code>papershelf-shared</code> → <b>Public</b> → tick <i>Add a README file</i> → <b>Create repository</b>. It will only ever contain titles and DOIs.')}
+      ${step(2, 'Create a token: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> → name <i>PaperShelf sharing</i> → Repository access: <b>Only select repositories</b> → <code>papershelf-shared</code> → Permissions → Repository permissions → <b>Contents: Read and write</b> → <b>Generate token</b> and copy it.')}
+      ${step(3, 'In PaperShelf: ⚙︎ Settings → <b>Sharing lists with colleagues</b> → write <code>your-github-name/papershelf-shared</code>, paste the token → <b>Test</b> → <b>Save</b>.')}
+      ${tip('If you use PaperShelf on several computers, enter the same repository and token on each: your lists are restored automatically.')}
+
+      <h4>2 · Share a list</h4>
+      ${step(1, 'Sidebar → <b>Shared lists ＋</b> → <i>New shared list</i>: start from a group, from the selected papers, or empty. Later, <b>drag papers onto the list</b> (or select them → <i>Share…</i>, or use “Shared lists” in a paper’s details).')}
+      ${step(2, 'In the list’s ⚙︎ add your colleagues as <b>members</b> (their GitHub names) – members can add and remove papers too.')}
+      ${step(3, 'Give them the <b>code</b> shown there (e.g. <code>YourName/3f2a9c1e0b7d</code>).')}
+
+      <h4>3 · Join a list</h4>
+      ${step(1, 'Sidebar → <b>Shared lists ＋</b> → <i>Join a list</i> → paste the code (or just the colleague’s GitHub name to see all their lists) → <b>Join</b>.')}
+      ${step(2, 'If they added you as a member (and you set up step 1), you can edit the list too; otherwise you <b>follow</b> it 📥: you receive everything, read-only. Removing a paper from a list you follow hides it only for you.')}
+
+      <h4>Without GitHub</h4>
+      <p>In a list’s ⚙︎ click <b>Save as file</b> and send the <code>.papershelf</code> file by e-mail or chat. The recipient opens it with <i>Shared lists ＋ → Open a list file</i>. If the list is also published online, their copy keeps updating by itself.</p>
+
+      <h4>Privacy</h4>
+      <ul><li>Your sharing repository is public: anyone who finds it can see the titles in your lists – don’t share lists you want to keep confidential.</li>
+        <li>Your library, PDFs, notes, highlights and your private sync repository are never involved.</li>
+        <li>PaperShelf only reads the repositories of the people listed as members of a list (and the one you joined from).</li></ul>`},
+
     {id: 'updates', icon: '⬆️', title: 'Installing & updating the app', html: () => `
       <h4>Two separate folders</h4>
       <ul><li><b>The app</b>: the folder with <code>start.command</code> – here: <code>${esc(state.appDir || '')}</code></li>

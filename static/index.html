@@ -46,6 +46,8 @@
     <div id="nav"></div>
     <div class="side-head" id="groups-head"><span title="Groups work like tags: a paper can be in any number of groups">Groups</span> <button id="new-group" title="New group">＋</button></div>
     <div id="tree"></div>
+    <div class="side-head" id="shares-head"><span title="Lists of papers you share with colleagues – separate from your groups">Shared lists</span> <button id="new-share" title="New shared list, or join one">＋</button></div>
+    <div id="sharelist"></div>
     <div class="side-head">Keywords</div>
     <div id="kwcloud"></div>
   </aside>
@@ -69,6 +71,7 @@
       <label class="check"><input type="checkbox" id="select-all"> <span id="count-label">0 papers</span></label>
       <div id="bulk">
         <select id="bulk-group"><option value="">Add to group…</option></select>
+        <select id="bulk-share"><option value="">Share…</option></select>
         <button class="btn small" id="bulk-remove" style="display:none">Remove from this group</button>
         <select id="bulk-status"><option value="">Set status…</option><option value="to_read">To read</option><option value="reading">Reading</option><option value="read">Read</option></select>
         <button class="btn small" id="bulk-pdf">⬇ Find PDFs</button>
@@ -106,5 +109,6 @@
 <script src="/static/help.js"></script>
 <script src="/static/update.js"></script>
 <script src="/static/suggest.js"></script>
+<script src="/static/shares.js"></script>
 </body>
 </html>

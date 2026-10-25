@@ -95,14 +95,15 @@ function askText(title, {value = '', label = '', placeholder = '', ok = 'OK'} = 
   });
 }
 
-function confirmBox(title, message, {ok = 'OK', danger = false, checkbox = ''} = {}) {
+function confirmBox(title, message, {ok = 'OK', danger = false, checkbox = '', checkbox2 = '', checked2 = false} = {}) {
   return new Promise(resolve => {
     const m = modal(`<h3>${esc(title)}</h3><p class="muted">${esc(message)}</p>
       ${checkbox ? `<label class="opt"><input type="checkbox" id="cb-extra"><span>${esc(checkbox)}</span></label>` : ''}
+      ${checkbox2 ? `<label class="opt"><input type="checkbox" id="cb-extra2" ${checked2 ? 'checked' : ''}><span>${esc(checkbox2)}<small>If unticked, the paper stays in the list for everybody and won't come back to your library.</small></span></label>` : ''}
       <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cb-ok">${esc(ok)}</button></div>`);
     let result = false;
     m.onclose = () => resolve(result);
-    $('#cb-ok', m.el).onclick = () => { result = {checked: !!$('#cb-extra', m.el)?.checked}; m.close(); };
+    $('#cb-ok', m.el).onclick = () => { result = {checked: !!$('#cb-extra', m.el)?.checked, checked2: !!$('#cb-extra2', m.el)?.checked}; m.close(); };
     setTimeout(() => $('#cb-ok', m.el).focus(), 40);
   });
 }
@@ -116,12 +117,13 @@ function setBusy(btn, busy, label) {
 /* ------------------------------------------------------------------ data */
 async function loadLibrary() {
   const d = await api('/api/library');
-  state.papers = d.papers; state.groups = d.groups; state.settings = d.settings; state.dataDir = d.data_dir;
+  state.papers = d.papers; state.groups = d.groups; state.shares = d.shares || []; state.settings = d.settings; state.dataDir = d.data_dir;
   state.styles = d.styles || []; state.platform = d.platform || ''; state.version = d.version || ''; state.appDir = d.app_dir || '';
   updateSyncButton();
   const ids = new Set(state.papers.map(p => p.id));
   state.selected = new Set([...state.selected].filter(i => ids.has(i)));
   if (state.view.type === 'group' && !state.groups.some(g => g.id === state.view.id)) state.view = {type: 'all'};
+  if (state.view.type === 'share' && !state.shares.some(x => x.id === state.view.id)) state.view = {type: 'all'};
   if (state.openId && !ids.has(state.openId)) state.openId = null;
   renderAll();
 }
@@ -223,7 +225,7 @@ function filteredPapers({ignoreKeyword = false} = {}) {
   else if (v.type === 'group') {
     const ids = state.includeSub ? descendants(v.id) : new Set([v.id]);
     list = list.filter(p => p.group_ids.some(g => ids.has(g)));
-  }
+  } else if (v.type === 'share') list = list.filter(p => (p.share_ids || []).includes(v.id));
   if (!ignoreKeyword && state.keyword) list = list.filter(p => p.keywords.some(k => k.toLowerCase() === state.keyword));
   const terms = state.search.toLowerCase().split(/\s+/).filter(Boolean);
   if (terms.length) list = list.filter(p => { const h = haystack(p); return terms.every(t => h.includes(t)); });
@@ -231,12 +233,13 @@ function filteredPapers({ignoreKeyword = false} = {}) {
 }
 function viewKey() {
   const v = state.view;
-  return v.type === 'status' ? `status:${v.value}` : v.type === 'group' ? `group:${v.id}` : v.type;
+  return v.type === 'status' ? `status:${v.value}` : v.type === 'group' ? `group:${v.id}` : v.type === 'share' ? `share:${v.id}` : v.type;
 }
 function viewTitle() {
   const v = state.view;
   return {all: 'All papers', starred: 'Starred', unfiled: 'Unfiled papers', nopdf: 'Without PDF'}[v.type]
-    || (v.type === 'status' ? STATUS_LABEL[v.value] : v.type === 'group' ? groupPath(v.id) : 'Papers');
+    || (v.type === 'status' ? STATUS_LABEL[v.value] : v.type === 'group' ? groupPath(v.id)
+      : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Shared list') : 'Papers');
 }
 function setView(view) {
   state.view = view; state.selected.clear(); state.keyword = null; state.lastIndex = null;
@@ -259,6 +262,7 @@ function renderSidebar() {
     `<div class="nav-item ${key === k ? 'active' : ''}" data-view="${k}"><span class="ico">${ico}</span><span class="label">${label}</span><span class="count">${n}</span></div>`).join('');
   $('#tree').innerHTML = state.groups.length ? renderTree(null, 0)
     : `<div class="empty-hint">No groups yet. Click ＋ to create one, then drag papers onto it. Hover a group to add subgroups.</div>`;
+  if (typeof Shares !== 'undefined') Shares.renderSidebar();
   renderKeywords();
 }
 function renderTree(pid, depth) {
@@ -301,7 +305,9 @@ function rowHtml(p) {
   const chips = p.keywords.slice(0, 5).map(k => `<span class="chip" data-kw="${esc(k.toLowerCase())}">${esc(k)}</span>`).join('');
   const meta = [shortAuthors(p), p.journal, p.year].filter(Boolean).map(esc).join(' · ');
   const groups = p.group_ids.filter(g => !(state.view.type === 'group' && g === state.view.id))
-    .map(g => `<span class="gchip" data-goto="${g}" title="${esc(groupPath(g))}">📁 ${esc(state.groups.find(x => x.id === g)?.name || '')}</span>`).join('');
+    .map(g => `<span class="gchip" data-goto="${g}" title="${esc(groupPath(g))}">📁 ${esc(state.groups.find(x => x.id === g)?.name || '')}</span>`).join('')
+    + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id))
+      .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip" data-goto-share="${esc(sid)}" title="Shared list: ${esc(sh.name)}">🔗 ${esc(sh.name)}</span>` : ''; }).join('');
   return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''}" data-id="${p.id}" draggable="true">
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
@@ -325,6 +331,7 @@ function renderList() {
   const total = filteredPapers({ignoreKeyword: true}).length;
   $('#view-sub').textContent = state.view.type === 'group' && state.includeSub && childrenOf(state.view.id).length
     ? 'Showing papers in this group and its subgroups' : '';
+  if (state.view.type === 'share' && typeof Shares !== 'undefined') $('#view-sub').innerHTML = Shares.viewSub(state.view.id);
   const chips = [];
   if (state.keyword) {
     const label = list[0]?.keywords.find(k => k.toLowerCase() === state.keyword) || state.keyword;
@@ -340,7 +347,9 @@ function renderList() {
   all.checked = list.length > 0 && list.every(p => state.selected.has(p.id));
   all.indeterminate = n > 0 && !all.checked;
   $('#bulk').classList.toggle('show', n > 0);
-  $('#bulk-remove').style.display = state.view.type === 'group' ? '' : 'none';
+  $('#bulk-remove').style.display = state.view.type === 'group' || state.view.type === 'share' ? '' : 'none';
+  $('#bulk-remove').textContent = state.view.type === 'share' ? 'Remove from this shared list' : 'Remove from this group';
+  if (typeof Shares !== 'undefined') $('#bulk-share').innerHTML = Shares.bulkOptions();
   $('#bulk-group').innerHTML = `<option value="">Add to group…</option>${groupOptions()}<option value="__new">＋ New group…</option>`;
   $('#incl-sub-wrap').style.display = state.view.type === 'group' && childrenOf(state.view.id).length ? '' : 'none';
   $('#incl-sub').checked = state.includeSub;
@@ -411,6 +420,7 @@ function renderDetail() {
     <label class="fld"><span>URL</span><input data-f="url" value="${esc(p.url)}"></label>
     <div class="fld"><span>Keywords</span><div class="kw-edit">${p.keywords.map((k, i) => `<span class="chip">${esc(k)}<button data-kwdel="${i}" title="Remove">×</button></span>`).join('')}<input id="kw-input" placeholder="Add keyword + Enter"></div></div>
     <div class="fld"><span>Groups</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No groups yet – create one in the sidebar.</span>'}</div></div>
+    ${typeof Shares !== 'undefined' ? Shares.detailField(p) : ''}
     <div class="fld"><span class="fld-row">Reference <select id="cite-style" title="Citation style (also used for exports)">${state.styles.map(s => `<option value="${s.id}" ${s.id === state.settings.default_style ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></span><div class="cite-box" id="cite-box"><span class="muted">…</span></div></div>
     ${citationSection(p)}
     ${p.annotation_count ? `<div class="fld"><span>Highlights</span><div class="hl-summary">🖍 ${p.annotation_count} highlight${p.annotation_count > 1 ? 's' : ''} in the PDF · <button class="linklike" data-act="read">open reader</button> · <button class="linklike" data-act="hl-notes">copy them into my notes</button></div></div>` : ''}
@@ -510,12 +520,15 @@ async function deletePapers(ids) {
   if (!ids.length) return;
   const withPdf = ids.filter(id => paperById(id)?.pdf_exists).length;
   const one = ids.length === 1 ? paperById(ids[0]) : null;
+  const editable = new Set((state.shares || []).filter(x => x.role === 'member').map(x => x.id));
+  const inShared = ids.filter(id => (paperById(id)?.share_ids || []).some(sid => editable.has(sid))).length;
   const res = await confirmBox(one ? 'Delete this paper?' : `Delete ${ids.length} papers?`,
     one ? `“${truncate(one.title, 120)}” will be removed from your library.` : 'They will be removed from your library and from all groups.',
-    {ok: 'Delete', danger: true, checkbox: withPdf ? `Also move ${withPdf > 1 ? `the ${withPdf} PDF files` : 'the PDF file'} to the Trash` : ''});
+    {ok: 'Delete', danger: true, checkbox: withPdf ? `Also move ${withPdf > 1 ? `the ${withPdf} PDF files` : 'the PDF file'} to the Trash` : '',
+     checkbox2: inShared ? `Also remove ${inShared > 1 ? 'them' : 'it'} from the shared lists – the others keep their copy, without the list's label` : '', checked2: true});
   if (!res) return;
   try {
-    await api('/api/papers/delete', {method: 'POST', body: {ids, delete_files: res.checked}});
+    await api('/api/papers/delete', {method: 'POST', body: {ids, delete_files: res.checked, unshare: inShared ? res.checked2 : true}});
     ids.forEach(id => state.selected.delete(id));
     if (ids.includes(state.openId)) closeDetail();
     await loadLibrary();
@@ -687,6 +700,8 @@ function openSettings() {
     <div class="section-label">Updates <button class="help-q" data-help="updates" title="Explain this">?</button></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">Version ${esc(state.version || '')}${Updates.info && Updates.info.available ? ` – <b>${esc(Updates.info.latest)} available</b>` : ''}</span><button class="btn small" id="set-updates">Check for updates…</button></div>
 
+    ${typeof Shares !== 'undefined' ? Shares.settingsHtml(s) : ''}
+
     <div class="section-label">Browser buttons <button class="help-q" data-help="adding" title="Explain this">?</button></div>
     <p class="muted small" style="margin-bottom:4px">Show the bookmarks bar (⇧⌘B on Mac, Ctrl+Shift+B on Windows), then <b>drag</b> these buttons onto it. On any article page click one to save it here.</p>
     <a class="bookmarklet" href="${esc(bm(false))}" onclick="return false">＋ Save to PaperShelf</a>
@@ -704,6 +719,7 @@ function openSettings() {
     catch (err) { toast(err.message, 'error'); }
   };
   $('#set-quit', m.el).onclick = () => { m.close(); quitApp(); };
+  if (typeof Shares !== 'undefined') Shares.settingsBind(m);
   $('#set-updates', m.el).onclick = () => { m.close(); Updates.open(); };
   $('#open-dir', m.el).onclick = () => api('/api/open-folder', {method: 'POST'}).catch(e => toast(e.message, 'error'));
   $('#sync-test', m.el).onclick = async () => {
@@ -737,9 +753,12 @@ function openSettings() {
         sync_pdfs: $('#set-sync-pdfs', m.el).checked, sync_auto: $('#set-sync-auto', m.el).checked,
         proxies: $$('.proxy-row', m.el).map(r => ({id: r.dataset.id, name: $('.px-name', r).value, template: $('.px-tpl', r).value.trim()})).filter(x => x.template),
         auto_import: $('#set-auto-import', m.el).checked, remove_downloads: $('#set-remove-dl', m.el).checked,
-        watch_dir: $('#set-watch', m.el).value, openalex_key: $('#set-oakey', m.el).value, core_key: $('#set-core', m.el).value}});
+        watch_dir: $('#set-watch', m.el).value, openalex_key: $('#set-oakey', m.el).value, core_key: $('#set-core', m.el).value,
+        ...(typeof Shares !== 'undefined' ? Shares.settingsValues(m) : {})}});
       const firstSync = !state.settings.sync_repo && d.settings.sync_repo;
+      const shareNow = !state.settings.has_share_token && d.settings.has_share_token && d.settings.share_repo;
       state.settings = d.settings; updateSyncButton(); m.close(); toast('Settings saved.', 'ok');
+      if (shareNow && typeof Shares !== 'undefined') Shares.syncNow(null, true);
       if (state.openId) loadCitation(state.openId);
       if (firstSync) syncNow();
     } catch (err) { toast(err.message, 'error'); }
@@ -998,6 +1017,8 @@ function bind() {
     if (nav) { const [type, value] = nav.dataset.view.split(':'); setView(value ? {type, value} : {type}); return; }
     const grp = e.target.closest('[data-group]');
     if (grp) setView({type: 'group', id: +grp.dataset.group});
+    const sh = e.target.closest('[data-share]');
+    if (sh && !e.target.closest('button')) setView({type: 'share', id: sh.dataset.share});
   });
   $('#sidebar').addEventListener('dblclick', e => { const grp = e.target.closest('[data-group]'); if (grp && !e.target.closest('button')) renameGroup(+grp.dataset.group); });
   $('#new-group').addEventListener('click', e => { e.stopPropagation(); createGroup(null); });
@@ -1018,16 +1039,18 @@ function bind() {
   document.addEventListener('dragend', () => { dragKind = null; $$('.drop').forEach(x => x.classList.remove('drop')); });
   $('#sidebar').addEventListener('dragover', e => {
     if (!dragKind) return;
-    const target = e.target.closest('.group-item') || (dragKind === 'group' ? e.target.closest('#groups-head') : null);
+    const target = e.target.closest('.group-item') || (dragKind === 'papers' ? e.target.closest('.share-item.editable') : null)
+      || (dragKind === 'group' ? e.target.closest('#groups-head') : null);
     $$('.drop').forEach(x => x !== target && x.classList.remove('drop'));
     if (target) { e.preventDefault(); target.classList.add('drop'); }
   });
   $('#sidebar').addEventListener('drop', e => {
-    const target = e.target.closest('.group-item') || e.target.closest('#groups-head');
+    const target = e.target.closest('.group-item') || e.target.closest('#groups-head') || e.target.closest('.share-item.editable');
     $$('.drop').forEach(x => x.classList.remove('drop'));
     if (!target || !dragKind) return;
     e.preventDefault();
     const data = e.dataTransfer.getData('text/plain');
+    if (dragKind === 'papers' && target.dataset.share) { Shares.addPapers(target.dataset.share, JSON.parse(data)); dragKind = null; return; }
     if (dragKind === 'papers' && target.dataset.group) assign(+target.dataset.group, JSON.parse(data));
     if (dragKind === 'group') moveGroup(+data, target.dataset.group ? +target.dataset.group : null);
     dragKind = null;
@@ -1056,6 +1079,8 @@ function bind() {
     if (chip) { state.keyword = chip.dataset.kw; renderList(); renderKeywords(); return; }
     const gchip = e.target.closest('[data-goto]');
     if (gchip) { setView({type: 'group', id: +gchip.dataset.goto}); return; }
+    const schip = e.target.closest('[data-goto-share]');
+    if (schip) { setView({type: 'share', id: schip.dataset.gotoShare}); return; }
     const idx = state.visible.indexOf(id);
     if (e.target.classList.contains('sel') || e.metaKey || e.ctrlKey || e.shiftKey) {
       if (e.shiftKey && state.lastIndex !== null) {
@@ -1078,7 +1103,9 @@ function bind() {
     if (v === '__new') { const g = await createGroup(null); if (g) assign(g.id, ids); }
     else if (v) assign(+v, ids);
   });
-  $('#bulk-remove').addEventListener('click', () => assign(state.view.id, [...state.selected], 'remove'));
+  $('#bulk-remove').addEventListener('click', () => state.view.type === 'share'
+    ? Shares.removePapers(state.view.id, [...state.selected]) : assign(state.view.id, [...state.selected], 'remove'));
+  $('#bulk-share').addEventListener('change', e => { const v = e.target.value; e.target.value = ''; if (v) Shares.bulk(v, [...state.selected]); });
   $('#bulk-status').addEventListener('change', async e => {
     const status = e.target.value; e.target.value = ''; if (!status) return;
     try { const d = await api('/api/papers/bulk', {method: 'POST', body: {ids: [...state.selected], changes: {status}}}); d.papers.forEach(upsertPaper); renderAll(); }

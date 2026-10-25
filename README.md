@@ -152,6 +152,14 @@ official impact factor. When a year's table is missing, the closest previous yea
 otherwise the cell stays empty. If scimagojr.com refuses the automatic download, download the yearly
 files there (*Download data*) and import them all at once (the year is read from the file name).
 
+**Shared lists** – share lists of papers with colleagues (journal club, lab reading list…): only
+titles, authors, year, journal and DOI travel, never PDFs or notes. Shared lists are separate from your
+groups. Papers you receive are added to your library with the list's label and stay yours even if the
+list later drops them (only the label goes). Lists with several members stay in sync among everybody,
+also along chains of people, in any order; they update by themselves. Publishing needs a small public
+GitHub repository; joining or following needs nothing. Lists can also be sent as `.papershelf` files.
+Guide in the app: **? → Sharing lists with colleagues**.
+
 **Citation styles** – APA 7, Nature, Science, Cell Press (Cell, Neuron, Current Biology, Cell Reports,
 iScience), Royal Society (Proc B), J Neurosci, eLife, PNAS, PLOS / Vancouver.
 
@@ -171,6 +179,7 @@ All in ⚙︎ Settings, stored only on this computer. PaperShelf works without t
 | CORE key | free copies from university repositories | core.ac.uk/services/api |
 | Library access address | 🏛 button opening articles through your library | your library website ("off-campus access", "EZproxy") |
 | GitHub repository + token | sync between computers | section 6 |
+| Sharing repository + token | publish shared lists (joining needs nothing) | public repo `your-name/papershelf-shared` – guide in the app (**? → Sharing lists**) |
 
 ---
 
@@ -268,6 +277,9 @@ needed and restarts; the page reloads by itself. Your library is never touched.
   Unpaywall, Europe PMC, SCImago tables) and legal open-access sources are used. Google Scholar is never
   queried automatically – only the public page you choose to import. No "shadow libraries".
 - Subscription PDFs are for personal use: keep a synced repository private and don't share them.
+- Shared lists contain only bibliographic details (title, authors, year, journal, DOI) and live in your
+  public `papershelf-shared` repository: don't share lists you want to keep confidential. PaperShelf
+  only reads the sharing repositories of the members of the lists you joined.
 - Researcher profiles hold public professional data, kept locally; ask before publishing someone
   else's publication page.
 
@@ -311,10 +323,11 @@ journals.py       journal metrics (SCImago tables, OpenAlex, manual impact facto
 watcher.py        attaches PDFs downloaded in the browser to the right paper
 updater.py        in-app updates (GitHub releases → download, backup, replace, restart)
 launcher.py       app window (Chrome/Edge --app) and the PaperShelf icon (Mac .app, Windows shortcut)
+sharing.py        shared lists: order-independent merge (Lamport-stamped add/remove sets), GitHub files
 VERSION           the app version (single source of truth)
 update.json       the GitHub repository the updater checks ("owner/name")
 static/           interface: app.js, graph.js, discover.js, reader.js, people.js, help.js, update.js,
-                  suggest.js (title search under the Add box), style.css, icons/
+                  suggest.js (title search under the Add box), shares.js (shared lists), style.css, icons/
 static/vendor/pdfjs   PDF.js 4.10 (Apache-2.0), bundled for offline reading
 start.command / start.bat   launchers (create .venv, install requirements, update via git if cloned)
 .github/workflows/release.yml   creates a GitHub release when VERSION changes

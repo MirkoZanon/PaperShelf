@@ -2,6 +2,20 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.9 – 2026-10-25
+
+- **Shared lists**: share lists of papers with colleagues – titles, authors, year, journal and DOI
+  only, never PDFs or notes. Sidebar → *Shared lists* ＋: create a list (from a group, a selection, or
+  empty), add members by their GitHub name and give them the list's code; they *Join* it. Anyone with
+  the code can follow a list read-only.
+- Separate from groups: shared lists have their own section and labels; the map and keywords use only
+  your groups. Optionally, papers that arrive from a list can also go into one of your groups.
+- Papers you receive are added to your library. If a list later drops a paper, your copy only loses
+  the label. When you delete a shared paper you choose whether it leaves the list for everybody.
+- Lists with several members stay in sync automatically (at start, every 15 minutes and after each
+  change), also along chains of people and in any order, without losing or resurrecting papers.
+- Lists can be saved as `.papershelf` files and opened by anyone, even without GitHub.
+
 ## 1.8 – 2026-10-25
 
 - **PaperShelf icon**: Settings → App icon & window → *Create PaperShelf icon*. On a Mac it goes in
