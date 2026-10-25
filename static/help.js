@@ -195,7 +195,7 @@ const Help = (() => {
       <h4>On each computer</h4>
       ${step(4, isMac() ? 'Install Git (once): open the <b>Terminal</b> app, type <code>xcode-select --install</code>, press Enter and accept. If it says it\'s already installed, you\'re done.'
         : 'Install Git (once) from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a> with the default options, then restart PaperShelf.')}
-      ${step(5, 'Open <b>⚙︎ Settings → GitHub sync &amp; sharing</b>, paste the token and the repository address, click <b>Test connection</b>, then <b>Save</b>. The first sync starts by itself.')}
+      ${step(5, 'Open <b>⚙︎ Settings → 💻 Sync my computers</b>, paste the token and the repository address, click <b>Test connection</b>, then <b>Save</b>. The first sync starts by itself.')}
       ${step(6, 'On the other computer install PaperShelf and repeat steps 4–5 with the same address (same or new token). After the sync, the library appears there.')}
       <div class="h-live" id="h-sync-live"><button class="btn small" id="h-sync-test">Test my current settings</button> <span id="h-sync-res" class="muted small"></span></div>
       <h4>Every day</h4>
@@ -228,13 +228,13 @@ const Help = (() => {
       <h4>1 · Turn sharing on (once, 2 minutes)</h4>
       <p class="muted">Only to create or edit shared labels. To follow a colleague’s label you need nothing.</p>
       ${step(1, 'Your GitHub token needs the <b>Gists</b> permission. If you already use library sync, just edit that token: GitHub → your photo → Settings → Developer settings → Personal access tokens → <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">Fine-grained tokens</a> → your PaperShelf token → <b>Edit</b> → Account permissions → <b>Gists: Read and write</b> → <b>Update</b>. Otherwise create a token with that permission (see <a href="#" data-help="sync">Sync</a>, step 3).')}
-      ${step(2, 'In PaperShelf: ⚙︎ Settings → <b>GitHub sync &amp; sharing</b> → paste the token (if it isn’t there yet) → <b>Turn on sharing</b>.')}
+      ${step(2, 'In PaperShelf: ⚙︎ Settings → <b>👥 Sharing</b> → choose your name, paste the token (or leave it empty if your sync token already has the Gists permission) → <b>Turn on sharing</b>.')}
       <p>That’s all: PaperShelf creates a <b>secret gist</b> on your account to keep your shared labels – a small online notebook that isn’t listed anywhere; only people with a code can read it. No repository to create. On your other computers, turning sharing on with the same token finds the same gist and restores your shared labels.</p>
 
       <h4>2 · Share</h4>
       ${step(1, 'Sidebar → Labels → <b>Shared ＋</b> → <i>New shared label</i>: start from one of your labels, from the selected papers, or empty. Later, <b>drag papers onto it</b> (or select them → <i>Share…</i>, or use “Shared labels” in a paper’s details).')}
       ${step(2, 'In its ⚙︎ add your colleagues as <b>members</b> (their GitHub names) – members can add and remove papers too.')}
-      ${step(3, 'Give them the <b>code</b> shown there (e.g. <code>YourName/1a2b…/9f8e…</code>).')}
+      ${step(3, 'Click the shared label, then the blue <b>📤 Invite colleagues / code</b> button above the list (or 📤 next to the label in the sidebar) → <b>Copy code</b> (e.g. <code>YourName/1a2b…/9f8e…</code>) and send it by e-mail or chat. <i>Copy invitation message</i> copies a ready-made text with the instructions.')}
 
       <h4>3 · Join</h4>
       ${step(1, 'Sidebar → Labels → <b>Shared ＋</b> → <i>Join a shared label</i> → paste the code → <b>Join</b>.')}
@@ -245,7 +245,7 @@ const Help = (() => {
 
       <h4>Privacy</h4>
       <ul><li>Your shared labels live in a secret gist: anyone who has a code can read the titles in it, nobody else can find it.</li>
-        <li>Your library, PDFs, private notes, highlights and your private sync repository are never involved. Public notes travel only inside the label they were written in, with the name you chose in ⚙︎ Settings → General.</li>
+        <li>Your library, PDFs, private notes, highlights and your private sync repository are never involved. Public notes travel only inside the label they were written in, with the name you chose in ⚙︎ Settings → 👥 Sharing.</li>
         <li>PaperShelf only reads the gists of the members of the labels you joined.</li></ul>`},
 
     {id: 'notes', icon: '📝', title: 'Notes – private and public', html: () => `
@@ -259,7 +259,7 @@ const Help = (() => {
         <li>You can <b>hide</b> 🙈 someone else's note on your computer only; the others still see it. Hidden notes can be shown again (“Show hidden”).</li>
         <li>People who only follow a label (read-only) see its public notes but can't write public notes.</li></ul>
       <h4>Your name</h4>
-      <p>The first time you write a public note or create a shared label, PaperShelf asks the name to show next to it: your name, initials or a nickname. Change it in ⚙︎ Settings → General → <i>Your name in shared notes &amp; labels</i>. Shared labels also remember who created them (⚙︎ of the label).</p>
+      <p>The first time you write a public note or create a shared label, PaperShelf asks the name to show next to it: your name, initials or a nickname. Change it in ⚙︎ Settings → 👥 Sharing → <i>Your name for colleagues</i>. Shared labels also remember who created them (⚙︎ of the label).</p>
       <h4>Styles and colours</h4>
       <p>Use the buttons above the text box, or type Markdown: <code>**bold**</code>, <code>*italic*</code>, <code>~~strike~~</code>, <code>==highlight==</code>, <code>{red}coloured{/}</code> (red, orange, green, blue, purple, grey), <code>## heading</code>, <code>- list</code>, <code>- [ ] to do</code>, <code>&gt; quote</code>, <code>\`code\`</code>, <code>[text](https://…)</code>. 👁 Preview shows the result; ${kbd('⌘/Ctrl')} + ${kbd('Enter')} saves.</p>
       <h4>Exporting notes</h4>

@@ -677,11 +677,13 @@ function openExport() {
   };
 }
 
-function openSettings() {
+function openSettings(startTab) {
   const s = state.settings; const o = location.origin;
   const bm = pdf => `javascript:(function(){window.open('${o}/quickadd?url='+encodeURIComponent(location.href)${pdf ? "+'&pdf=1'" : ''},'_blank');})();`;
-  const TABS = [['general', 'General'], ['pdfs', 'PDFs & access'], ['github', 'GitHub sync & sharing'], ['data', 'Data sources'], ['updates', 'Updates']];
+  const TABS = [['general', 'General'], ['pdfs', 'PDFs & access'], ['sync', '💻 Sync my computers'], ['sharing', '👥 Sharing'], ['data', 'Data sources'], ['updates', 'Updates']];
   let tab = 'general'; try { tab = localStorage.getItem('papershelf-settings-tab') || 'general'; } catch (e) { /* ignore */ }
+  if (tab === 'github') tab = 'sync';
+  if (typeof startTab === 'string') tab = startTab;
   if (!TABS.some(t => t[0] === tab)) tab = 'general';
   const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="start">📘 Guide</button> <button class="btn small" data-help="status">🩺 System check</button> <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit</button></h3>
     <div class="stabs">${TABS.map(([id, label]) => `<button data-stab="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>
@@ -692,9 +694,6 @@ function openSettings() {
     <p class="muted small">Create a PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
     <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
-    <div class="section-label">Your name in shared notes &amp; labels <button class="help-q" data-help="notes" title="Explain this">?</button></div>
-    <input class="input wide" id="set-dispname" maxlength="60" value="${esc(s.display_name || '')}" placeholder="e.g. Mirko Z., MZ or a nickname">
-    <p class="muted small">Shown next to your public notes and on the shared labels you create – only the members of those labels see it. Leave empty to use your GitHub name. Private notes never leave your computers.</p>
     <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
     <select class="input wide" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
     <div class="section-label">Folder for downloaded PDFs</div>
@@ -728,16 +727,23 @@ function openSettings() {
     <p class="muted small">On a Mac, the first time macOS may ask to let PaperShelf (or “Terminal”) access the Downloads folder: click Allow.</p>
     </div>
 
-    <div class="stab-panel" data-panel="github">
-    <div class="section-label">Your GitHub token <button class="help-q" data-help="sync" title="Explain this">?</button></div>
-    <p class="muted small">One token for everything GitHub: library sync and shared labels. Both are optional. <button class="linklike" data-help="sync">How to create the token</button></p>
+    <div class="stab-panel" data-panel="sync">
+    <div class="set-intro sync"><b>💻 Sync my computers</b> – the same library on all <i>your</i> computers (Mac or Windows), through a <b>private</b> GitHub repository that only you can see.
+      <ul><li>Synced: papers, details, personal labels, private notes, highlights, reading status – and PDFs if you want.</li>
+        <li>Nobody else sees any of this. To share papers with colleagues, see the tab <button class="linklike" data-stab="sharing">👥 Sharing</button>.</li>
+        <li>Optional: with one computer only, you don't need it.</li></ul></div>
+    ${s.last_sync || s.last_sync_error ? `<p class="muted small">${s.last_sync ? `Last sync: ${esc(new Date(s.last_sync).toLocaleString())}.` : ''} ${s.last_sync_error ? `<span style="color:var(--danger)">Last error: ${esc(s.last_sync_error)}</span>` : ''}</p>` : ''}
+    <div class="section-label">1 · GitHub token <button class="help-q" data-help="sync" title="Explain this">?</button></div>
+    <p class="muted small">Needs <b>Contents: Read and write</b> on your library repository. <button class="linklike" data-help="sync">How to create the token</button></p>
     <input class="input wide" id="set-token" type="password" placeholder="${s.has_sync_token ? '•••••••• token saved – paste a new one to replace it' : 'GitHub access token (github_pat_…)'}" autocomplete="off">
-    <div class="section-label">Library sync between your computers <button class="help-q" data-help="sync" title="Explain this">?</button></div>
-    <p class="muted small">Keep the same library on several computers (Mac or Windows) through a <b>private</b> GitHub repository. ${s.last_sync ? `Last sync: ${esc(new Date(s.last_sync).toLocaleString())}.` : ''} ${s.last_sync_error ? `<span style="color:var(--danger)">Last error: ${esc(s.last_sync_error)}</span>` : ''}</p>
+    <div class="section-label">2 · Your private library repository</div>
     <input class="input wide" id="set-repo" value="${esc(s.sync_repo)}" placeholder="https://github.com/your-name/papershelf-library  (leave empty if you don't sync)">
     <label class="opt" style="margin-top:8px"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>Convenient, but uses space: GitHub works best under ~1 GB (≈ 400–500 papers). Off = only the list, labels, notes and highlights sync; free PDFs can be re-downloaded on the other computer with “Find PDFs”.</small></span></label>
     <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>When PaperShelf starts and every 20 minutes while it runs</small></span></label>
     <div class="sync-actions"><button class="btn small" data-help="sync">📘 Step-by-step guide</button><button class="btn small" id="sync-test">Test connection</button><span id="sync-test-res" class="muted small"></span></div>
+    </div>
+
+    <div class="stab-panel" data-panel="sharing">
     ${typeof Shares !== 'undefined' ? Shares.settingsHtml(s) : ''}
     </div>
 
@@ -764,7 +770,7 @@ function openSettings() {
     try { localStorage.setItem('papershelf-settings-tab', id); } catch (e) { /* ignore */ }
   };
   showTab(tab);
-  $('.stabs', m.el).addEventListener('click', e => { const b = e.target.closest('[data-stab]'); if (b) showTab(b.dataset.stab); });
+  m.el.addEventListener('click', e => { const b = e.target.closest('[data-stab]'); if (b) showTab(b.dataset.stab); });
   $('#set-shortcut', m.el).onclick = async () => {
     const b = $('#set-shortcut', m.el); setBusy(b, true, 'Creating…');
     try { const d = await api('/api/shortcut', {method: 'POST', body: {desktop: true}}); $('#set-shortcut-res', m.el).innerHTML = `<span style="color:var(--ok)">✓ Done.</span> ${esc(d.hint)}`; }
@@ -806,7 +812,7 @@ function openSettings() {
   $('#set-save', m.el).onclick = async () => {
     try {
       const d = await api('/api/settings', {method: 'PUT', body: {
-        email: $('#set-email', m.el).value, pdf_dir: $('#set-dir', m.el).value, default_style: $('#set-style', m.el).value, display_name: $('#set-dispname', m.el).value,
+        email: $('#set-email', m.el).value, pdf_dir: $('#set-dir', m.el).value, default_style: $('#set-style', m.el).value,
         sync_repo: $('#set-repo', m.el).value, sync_token: $('#set-token', m.el).value,
         sync_pdfs: $('#set-sync-pdfs', m.el).checked, sync_auto: $('#set-sync-auto', m.el).checked,
         proxies: $$('.proxy-row', m.el).map(r => ({id: r.dataset.id, name: $('.px-name', r).value, template: $('.px-tpl', r).value.trim()})).filter(x => x.template),

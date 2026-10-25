@@ -189,7 +189,7 @@ and labels as tags), BibTeX, CSL-JSON, CSV. In Zotero: *File → Import…*.
 
 ## 5. Optional settings
 
-All in ⚙︎ Settings (tabs *General*, *PDFs & access*, *GitHub sync & sharing*, *Data sources*, *Updates*),
+All in ⚙︎ Settings (tabs *General*, *PDFs & access*, *Sync my computers*, *Sharing*, *Data sources*, *Updates*),
 stored only on this computer. PaperShelf works without them.
 
 | Setting | What for | Where to get it |
@@ -230,7 +230,7 @@ test, is in the app: **? → Sync between computers**.)
 4. Install Git (once):
    - Mac: Terminal → `xcode-select --install` → accept (if "already installed", you're done).
    - Windows: <https://git-scm.com/download/win>, default options; then restart PaperShelf.
-5. ⚙︎ Settings → **GitHub sync & sharing**: paste token and address → **Test connection** → **Save**.
+5. ⚙︎ Settings → **Sync my computers**: paste token and address → **Test connection** → **Save**.
    The first sync starts by itself.
 6. On the other computer: install PaperShelf, repeat steps 4–5 with the same address.
 

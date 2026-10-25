@@ -84,7 +84,7 @@ const Notes = (() => {
     if (state.settings.display_name) return state.settings.display_name;
     return new Promise(resolve => {
       const m = modal(`<h3>Your name for ${esc(what)}</h3>
-        <p class="muted small">Shown next to your public notes and on the shared labels you create, so members know who wrote what. Use your name, initials or a nickname – it's seen only by the members of your shared labels. You can change it later in ⚙︎ Settings → General.</p>
+        <p class="muted small">Shown next to your public notes and on the shared labels you create, so members know who wrote what. Use your name, initials or a nickname – it's seen only by the members of your shared labels. You can change it later in ⚙︎ Settings → 👥 Sharing.</p>
         <input class="input wide" id="dn-in" maxlength="60" placeholder="e.g. Mirko Z. or MZ" value="${esc(state.settings.share_user || '')}">
         <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="dn-ok">Save</button></div>`);
       let res = null; m.onclose = () => resolve(res);

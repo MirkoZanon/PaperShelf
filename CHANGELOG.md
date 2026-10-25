@@ -2,6 +2,17 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14.2 – 2026-10-25
+
+- **Invite colleagues, made obvious**: a blue *📤 Invite colleagues / code* button above every shared
+  label (and 📤 next to it in the sidebar) shows the code in big with *Copy code*, a ready-made
+  invitation message with instructions, and the three steps for your colleague. It opens by itself
+  right after you create a shared label.
+- **Settings split in two**: *💻 Sync my computers* (your private library on all your computers –
+  nobody else sees it) and *👥 Sharing* (shared labels and public notes with colleagues: your name,
+  the token for sharing, turning sharing on), each explaining what is and isn't shared.
+- Fixed: checking for updates by hand gave an error the first time (the second time worked).
+
 ## 1.14.1 – 2026-10-25
 
 - Notes window: a **Close ✕** button (closes without saving what you were typing) and a **Discard**

@@ -2024,7 +2024,7 @@ def update_check():
         except ValueError:
             cached = {}
         if cached.get("current") == APP_VERSION and time.time() - cached.get("ts", 0) < UPDATE_CACHE_HOURS * 3600:
-            return jsonify(cached, cached_result=True)
+            return jsonify({**cached, "cached_result": True})
     try:
         info = updater.check(current=APP_VERSION)
     except updater.UpdateError as exc:
@@ -3051,8 +3051,8 @@ def share_setup():
         gist = gh.find_or_create_gist()
     except sharing.ShareError as exc:
         return error(str(exc), 502)
-    if (b.get("token") or "").strip() and not s.get("sync_token"):
-        set_setting(db, "sync_token", token.strip())
+    if (b.get("token") or "").strip():
+        set_setting(db, "share_token", token.strip())
     set_setting(db, "share_user", user)
     set_setting(db, "share_gist", gist)
     db.commit()

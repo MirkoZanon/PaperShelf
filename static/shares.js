@@ -26,7 +26,7 @@ const Shares = (() => {
           title="${x.role === 'member' ? 'Shared label – drag papers here to share them' : 'You follow this shared label (read-only)'}${x.creator && x.creator.by ? '\nCreated by ' + esc(x.creator.name || x.creator.by) : ''}${x.last_error ? '\n⚠ ' + esc(x.last_error) : ''}">
           <span class="ico">${x.role === 'member' ? '🔗' : '📥'}</span><span class="label">${esc(x.name)}</span>
           ${x.last_error ? '<span class="warn-dot" title="Last update had a problem">!</span>' : ''}<span class="count">${n}</span>
-          <span class="g-actions"><button title="Members, code, options" data-sact="manage" data-id="${esc(x.id)}">⚙︎</button></span></div>`;
+          <span class="g-actions"><button title="Invite colleagues – get the code" data-sact="invite" data-id="${esc(x.id)}">📤</button><button title="Members and options" data-sact="manage" data-id="${esc(x.id)}">⚙︎</button></span></div>`;
     }).join('') : '<div class="empty-hint">Share labels with colleagues – titles and DOIs only. ＋ to create or join.</div>';
   }
 
@@ -38,7 +38,8 @@ const Shares = (() => {
       : `You follow this label (from ${esc((x.code || '').split('/')[0] || 'a file')})`;
     return `<span class="share-sub">${x.role === 'member' ? '🔗' : '📥'} ${who} · updated ${ago(x.last_pull || x.updated_at)}
       ${x.last_error ? ` · <span class="warn-txt" title="${esc(x.last_error)}">⚠ ${esc(truncate(x.last_error, 70))}</span>` : ''}
-      <button class="linklike" data-sact="sync" data-id="${esc(id)}">⟳ Update now</button> · <button class="linklike" data-sact="manage" data-id="${esc(id)}">Members &amp; sharing…</button></span>`;
+      <button class="linklike" data-sact="sync" data-id="${esc(id)}">⟳ Update now</button> · <button class="linklike" data-sact="manage" data-id="${esc(id)}">Settings…</button>
+      <button class="btn small primary invite-btn" data-sact="invite" data-id="${esc(id)}" title="Get the code to give to colleagues">📤 Invite colleagues / code</button></span>`;
   }
 
   function bulkOptions() {
@@ -95,13 +96,13 @@ const Shares = (() => {
   /* ------------------------------------------------------------ dialogs */
   function startMenu() {
     const m = modal(`<h3>Shared labels <span class="grow"></span><button class="btn small" data-help="sharing">📘 How sharing works</button></h3>
-      <p class="muted small">Share labels with colleagues – only titles, authors, year, journal and DOI travel, never PDFs, notes or highlights. Papers you receive are added to your library with the shared label; they stay yours even if the label changes.</p>
+      <p class="muted small">Share labels with colleagues – only titles, authors, year, journal and DOI travel, plus the public notes members write – never PDFs, private notes or highlights. Papers you receive are added to your library with the shared label; they stay yours even if the label changes.</p>
       <div class="share-start">
         <button class="share-opt" data-o="new"><b>＋ New shared label</b><small>From a group, from selected papers, or empty</small></button>
         <button class="share-opt" data-o="join"><b>⤵ Join a shared label</b><small>With the code or the GitHub name a colleague gave you</small></button>
         <button class="share-opt" data-o="file"><b>📄 Open a label file</b><small>A .papershelf file received by e-mail or chat</small></button>
       </div>
-      ${publishReady() ? '' : `<p class="warn-box small">To share your own labels online, turn on sharing once in ⚙︎ Settings → GitHub sync & sharing (2 minutes). Without it you can still join and follow your colleagues’ labels, and send labels as files.</p>`}
+      ${publishReady() ? '' : `<p class="warn-box small">To share your own labels online, turn on sharing once in ⚙︎ Settings → 👥 Sharing (2 minutes). Without it you can still join and follow your colleagues’ labels, and send labels as files.</p>`}
       <div class="modal-actions"><button class="btn" data-close>Close</button></div>`, {wide: true});
     m.el.addEventListener('click', e => {
       const o = e.target.closest('[data-o]')?.dataset.o; if (!o) return;
@@ -122,7 +123,7 @@ const Shares = (() => {
         ${state.groups.length ? `<label class="opt"><input type="radio" name="sh-src" value="group" ${!paperIds.length && gid ? 'checked' : ''}><span>All papers with my label <select id="sh-group">${groupOptions()}</select><small>The papers that have that label today – later, add papers by dragging them onto the shared label.</small></span></label>` : ''}
         <label class="opt"><input type="radio" name="sh-src" value="empty" ${!paperIds.length && !gid ? 'checked' : ''}><span>Empty – I'll drag papers onto it</span></label></div>
       ${publishReady() ? '<p class="muted small">After creating it, add members (their GitHub names) and give them the code.</p>'
-        : '<p class="warn-box small">Sharing isn’t turned on yet: the label is kept here and can be sent as a file. Turn on sharing in ⚙︎ Settings → GitHub sync & sharing to keep it in sync with others.</p>'}
+        : '<p class="warn-box small">Sharing isn’t turned on yet: the label is kept here and can be sent as a file. Turn on sharing in ⚙︎ Settings → 👥 Sharing to keep it in sync with others.</p>'}
       <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="sh-create">Create shared label</button></div>`);
     if (gid && $('#sh-group', m.el)) $('#sh-group', m.el).value = gid;
     $('#sh-create', m.el).onclick = async () => {
@@ -136,14 +137,15 @@ const Shares = (() => {
         const d = await api('/api/shares', {method: 'POST', body});
         m.close(); await refresh(); setView({type: 'share', id: d.share.id});
         toast(`Shared label “${d.share.name}” created with ${d.share.papers} paper${d.share.papers === 1 ? '' : 's'}.`, 'ok');
-        if (publishReady()) manageDialog(d.share.id, {focusMember: true});
+        inviteDialog(d.share.id);
       } catch (err) { toast(err.message, 'error'); }
     };
   }
 
   function joinDialog(prefill = '') {
     const m = modal(`<h3>Join a shared label</h3>
-      <p class="muted small">Paste the <b>code</b> your colleague gave you (it looks like <code>MarioRossi/1a2b…/9f8e…</code>; they find it in the shared label’s ⚙︎). Its papers are added to your library with the shared label.</p>
+      <p class="muted small">Paste the <b>code</b> your colleague sent you – it looks like <code>MarioRossi/1a2b…/9f8e…</code>. Its papers are added to your library with the shared label.</p>
+      <p class="muted small">No code yet? Ask your colleague: in their PaperShelf they click the shared label in the sidebar (Labels → Shared), then the blue <b>📤 Invite colleagues / code</b> button above the list, and send you the code.</p>
       <div style="display:flex;gap:6px"><input class="input" id="sh-code" style="flex:1" placeholder="MarioRossi/1a2b3c…/9f8e7d…" value="${esc(prefill)}"><button class="btn primary" id="sh-look">Look up</button></div>
       <div id="sh-found" style="margin-top:10px"></div>
       ${state.groups.length ? `<label class="opt" style="margin-top:8px"><input type="checkbox" id="sh-g-on"><span>Also give the papers I receive my label <select id="sh-g">${groupOptions()}</select><small>Optional – shared and personal labels stay separate otherwise.</small></span></label>` : ''}
@@ -185,6 +187,56 @@ const Shares = (() => {
     inp.click();
   }
 
+  const copy = (text, what) => {
+    const ok = () => toast(`${what} copied – paste it in an e-mail or chat.`, 'ok');
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(ok).catch(() => fallbackCopy(text, ok));
+    else fallbackCopy(text, ok);
+  };
+  function fallbackCopy(text, ok) {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok(); } catch (e) { toast('Select the code and copy it with ⌘C / Ctrl+C.', 'info'); }
+    ta.remove();
+  }
+  const invitation = x => `Hi! I'm sharing the paper list “${x.name}” with you in PaperShelf.\n\n` +
+    `1. Install PaperShelf (free): https://github.com/MirkoZanon/PaperShelf\n` +
+    `2. In PaperShelf, sidebar → Labels → Shared ＋ → “Join a shared label”\n` +
+    `3. Paste this code: ${x.code}\n\nOnly titles, authors and DOIs are shared (plus the notes we decide to make public).`;
+
+  async function inviteDialog(id) {
+    let x = byId(id); if (!x) return;
+    const member = x.role === 'member';
+    if (member && x.can_publish && !x.published) { await syncNow(id, true); x = byId(id) || x; }  // publish before giving the code
+    const others = x.members.filter(mb => !mb.you && !mb.name.startsWith('local-'));
+    const ready = !!x.code;
+    const m = modal(`<h3>📤 Invite colleagues to “${esc(x.name)}” <span class="grow"></span><button class="btn small" data-help="sharing">📘 Guide</button></h3>
+      ${ready ? `
+      <div class="invite-step"><span class="num">1</span><div><b>Copy the code of this label</b>
+        <div class="invite-code"><code id="iv-code">${esc(x.code)}</code><button class="btn primary" id="iv-copy">📋 Copy code</button></div>
+        <button class="linklike small" id="iv-msg">or copy a ready-made invitation message (with instructions)</button></div></div>
+      <div class="invite-step"><span class="num">2</span><div><b>Send it to your colleagues</b> by e-mail, chat… <span class="muted small">The code is not secret like a password, but only people who have it can see the label.</span></div></div>
+      <div class="invite-step"><span class="num">3</span><div><b>They paste it in their PaperShelf</b>: sidebar → Labels → <b>Shared ＋</b> → <i>Join a shared label</i>. The papers appear in their library, with the label.</div></div>
+      ${member ? `<div class="section-label">Should they also add papers and write public notes?</div>
+        ${x.can_publish ? `<p class="muted small">With the code alone they <b>follow</b> the label (read-only). To let someone edit it, add their <b>GitHub user name</b> here <i>before</i> they join (they also turn on sharing once in their Settings).</p>
+          <div class="share-members">${others.map(mb => `<span class="chip">${esc(mb.name)}${mb.joined ? ' ✓' : ' · invited'}</span>`).join('')}</div>
+          <div style="display:flex;gap:6px;margin-top:6px"><input class="input" id="iv-new" style="flex:1" placeholder="Colleague's GitHub name, e.g. MarioRossi"><button class="btn" id="iv-add">Add as member</button></div>` : ''}` : `<p class="muted small">You follow this label: anyone you give this code to can follow it too (read-only).</p>`}`
+      : `<div class="warn-box"><b>This label isn't online yet, so it has no code.</b><br>To get a code, turn on sharing once (2 minutes, free GitHub account): ⚙︎ Settings → <b>👥 Sharing</b>.
+          <div style="margin-top:8px"><button class="btn small primary" id="iv-settings">Open sharing settings</button></div></div>`}
+      <div class="section-label">Without GitHub</div>
+      <p class="muted small"><button class="btn small" id="iv-file">📄 Save as file (.papershelf)</button> and send it by e-mail: they open it with <i>Shared ＋ → Open a label file</i>. It contains titles, DOIs and public notes only.</p>
+      <div class="modal-actions"><button class="btn" data-close>Close</button></div>`, {wide: true});
+    $('#iv-copy', m.el)?.addEventListener('click', () => copy(x.code, 'Code'));
+    $('#iv-msg', m.el)?.addEventListener('click', () => copy(invitation(x), 'Invitation'));
+    $('#iv-settings', m.el)?.addEventListener('click', () => { m.close(); openSettings('sharing'); });
+    $('#iv-file', m.el).onclick = () => { location.href = `/api/shares/${id}/export`; };
+    const add = async () => {
+      const name = $('#iv-new', m.el).value.trim(); if (!name) return;
+      try { await api(`/api/shares/${id}/members`, {method: 'POST', body: {name}}); await refresh(); m.close(); inviteDialog(id); toast(`${name} is now a member – send them the code.`, 'ok', 8000); }
+      catch (err) { toast(err.message, 'error'); }
+    };
+    $('#iv-add', m.el)?.addEventListener('click', add);
+    $('#iv-new', m.el)?.addEventListener('keydown', e => { if (e.key === 'Enter') add(); });
+  }
+
   function manageDialog(id, {focusMember = false} = {}) {
     const x = byId(id); if (!x) return;
     const member = x.role === 'member';
@@ -196,12 +248,10 @@ const Shares = (() => {
       <div class="section-label">Members</div>
       <div class="share-members">${x.members.map(mb => `<span class="chip" title="${mb.joined ? 'Has joined' : 'Invited – will be connected when they join with the code'}">${esc(mb.name.startsWith('local-') ? 'this computer (not published)' : mb.name)}${mb.you ? ' (you)' : mb.joined ? '' : ' · invited'}${member && !mb.you && !mb.name.startsWith('local-') ? `<button data-mrm="${esc(mb.name)}" title="Remove member">×</button>` : ''}</span>`).join('')}</div>
       ${member ? (x.can_publish ? `<div style="display:flex;gap:6px;margin-top:6px"><input class="input" id="sm-new" style="flex:1" placeholder="Colleague's GitHub name, e.g. MarioRossi"><button class="btn" id="sm-add">Add member</button></div>
-          <p class="muted small">Members can add and remove papers; everybody's changes reach everybody, also through other members. Each member turns on sharing once (⚙︎ Settings → GitHub sync & sharing) and joins with the code.</p>`
-        : '<p class="warn-box small">Turn on sharing in ⚙︎ Settings → GitHub sync & sharing to publish this label and add members.</p>') : ''}
+          <p class="muted small">Members can add and remove papers; everybody's changes reach everybody, also through other members. Each member turns on sharing once (⚙︎ Settings → 👥 Sharing) and joins with the code.</p>`
+        : '<p class="warn-box small">Turn on sharing in ⚙︎ Settings → <b>👥 Sharing</b> to publish this label and add members.</p>') : ''}
       <div class="section-label">Give it to colleagues</div>
-      ${x.code ? `<div class="share-code"><code id="sm-code">${esc(x.code)}</code><button class="btn small" id="sm-copy">Copy code</button></div>
-        <p class="muted small">They open PaperShelf → Labels → Shared ＋ → <i>Join a shared label</i> and paste this code. Anyone with the code can <b>follow</b> it (read-only); members can also edit it.${x.published ? '' : ' <b>Not published yet</b> – click “Update now”.'}</p>` : '<p class="muted small">This label isn’t published online yet.</p>'}
-      <button class="btn small" id="sm-export">📄 Save as file (.papershelf)</button> <span class="muted small">to send by e-mail – it contains titles, DOIs and public notes only</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${x.code ? `<code class="share-code-small">${esc(x.code)}</code>` : ''}<button class="btn small primary" id="sm-invite">📤 Invite colleagues / code…</button></div>
       <div class="section-label">In my library</div>
       ${state.groups.length ? `<label class="opt"><input type="checkbox" id="sm-g-on" ${x.group_id ? 'checked' : ''}><span>Also give papers that arrive here my label <select id="sm-g">${groupOptions()}</select></span></label>` : ''}
       <p class="muted small">${x.papers} paper${x.papers === 1 ? '' : 's'} shared · updated ${ago(x.last_pull)}${x.last_push ? ` · published ${ago(x.last_push)}` : ''}${x.last_error ? `<br><span class="warn-txt">⚠ ${esc(x.last_error)}</span>` : ''}</p>
@@ -229,8 +279,7 @@ const Shares = (() => {
       try { await api(`/api/shares/${id}/members`, {method: 'POST', body: {name: rm.dataset.mrm, remove: true}}); m.close(); await refresh(); manageDialog(id); }
       catch (err) { toast(err.message, 'error'); }
     });
-    $('#sm-copy', m.el)?.addEventListener('click', () => { navigator.clipboard?.writeText(x.code).then(() => toast('Code copied.', 'ok')).catch(() => {}); });
-    $('#sm-export', m.el).onclick = () => { location.href = `/api/shares/${id}/export`; };
+    $('#sm-invite', m.el).onclick = () => { m.close(); inviteDialog(id); };
     $('#sm-sync', m.el).onclick = async () => { setBusy($('#sm-sync', m.el), true, 'Updating…'); await syncNow(id); m.close(); manageDialog(id); };
     $('#sm-leave', m.el).onclick = async () => {
       const ok = await confirmBox(member ? `Leave “${x.name}”?` : `Stop following “${x.name}”?`,
@@ -244,14 +293,26 @@ const Shares = (() => {
   /* ------------------------------------------------------------ settings section */
   function statusHtml(s) {
     return s.share_gist
-      ? `<p class="up-ok small">✓ Sharing is on, as <b>${esc(s.share_user)}</b>. Your shared labels are kept in a <a href="https://gist.github.com/${esc(s.share_user)}/${esc(s.share_gist)}" target="_blank" rel="noopener">private gist</a> that PaperShelf created for you – only people with a label's code can read it. <button class="linklike" id="share-off">Turn off</button></p>`
-      : `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small primary" id="share-on">Turn on sharing</button><span class="muted small" id="share-on-res">Uses the token above (it needs the “Gists” permission).</span></div>`;
+      ? `<p class="up-ok small">✓ Sharing is on, as <b>${esc(s.share_user)}</b>. Your shared labels are kept in a <a href="https://gist.github.com/${esc(s.share_user)}/${esc(s.share_gist)}" target="_blank" rel="noopener">secret gist</a> that PaperShelf created on your GitHub account – only people with a label's code can read it. <button class="linklike" id="share-off">Turn off</button></p>`
+      : `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small primary" id="share-on">Turn on sharing</button><span class="muted small" id="share-on-res"></span></div>`;
   }
   function settingsHtml(s) {
-    return `<div class="section-label">Shared labels with colleagues <button class="help-q" data-help="sharing" title="Explain this">?</button></div>
-      <p class="muted small">To <b>join</b> a colleague's shared label you need nothing. To <b>share</b> your own, turn sharing on: PaperShelf keeps your shared labels (titles and DOIs only) in a private gist on your GitHub account – nothing to create by hand. <button class="linklike" data-help="sharing">Guide</button></p>
+    const tokenSaved = s.has_share_token || s.has_sync_token;
+    return `<div class="set-intro share"><b>👥 Sharing with colleagues</b> – shared labels (lists of papers) and public notes.
+        <ul><li>Shared: titles, authors, year, journal, DOI of the papers you put in a shared label, the public notes you write there, and your display name.</li>
+          <li>Never shared: PDFs, private notes, highlights, personal labels, the rest of your library.</li>
+          <li>Joining or following a colleague's label needs nothing. To create your own, turn sharing on below.</li></ul></div>
+      <div class="section-label">1 · Your name for colleagues <button class="help-q" data-help="notes" title="Explain this">?</button></div>
+      <input class="input wide" id="set-dispname" maxlength="60" value="${esc(s.display_name || '')}" placeholder="e.g. Mirko Z., MZ or a nickname">
+      <p class="muted small">Shown next to your public notes and on the shared labels you create – only the members of those labels see it. Empty = your GitHub name.</p>
+      <div class="section-label">2 · GitHub token for sharing <button class="help-q" data-help="sharing" title="Explain this">?</button></div>
+      <p class="muted small">A free GitHub account is used as the post office between colleagues. The token needs the <b>Gists: Read and write</b> permission. ${s.has_sync_token && !s.has_share_token ? 'If the token of <i>💻 Sync my computers</i> has that permission too, leave this empty: it is used for both.' : ''} <button class="linklike" data-help="sharing">How to create it</button></p>
+      <input class="input wide" id="set-share-token" type="password" autocomplete="off" placeholder="${s.has_share_token ? '•••••••• token saved – paste a new one to replace it' : tokenSaved ? 'Empty: the token of “Sync my computers” is used' : 'GitHub access token (github_pat_…)'}">
+      <div class="section-label">3 · Turn sharing on</div>
       <div id="share-status">${statusHtml(s)}</div>
-      <label class="opt" style="margin-top:8px"><input type="checkbox" id="set-share-auto" ${s.share_auto !== '' ? 'checked' : ''}><span>Update shared labels automatically<small>When PaperShelf starts and every 15 minutes; your changes are published right away.</small></span></label>`;
+      <label class="opt" style="margin-top:8px"><input type="checkbox" id="set-share-auto" ${s.share_auto !== '' ? 'checked' : ''}><span>Update shared labels automatically<small>When PaperShelf starts and every 15 minutes; your changes are published right away.</small></span></label>
+      <div class="section-label">Then: give a label to a colleague</div>
+      <p class="muted small">Sidebar → Labels → Shared: click your shared label → blue <b>📤 Invite colleagues / code</b> button above the list → <b>Copy code</b> and send it. They paste it in <i>Shared ＋ → Join a shared label</i>.</p>`;
   }
   function settingsBind(m) {
     const box = $('#share-status', m.el);
@@ -259,7 +320,7 @@ const Shares = (() => {
       if (e.target.id === 'share-on') {
         const res = $('#share-on-res', m.el); res.textContent = 'Connecting to GitHub…';
         try {
-          const d = await api('/api/shares/setup', {method: 'POST', body: {token: $('#set-token', m.el)?.value || ''}});
+          const d = await api('/api/shares/setup', {method: 'POST', body: {token: $('#set-share-token', m.el)?.value || ''}});
           state.settings = {...state.settings, ...d.settings}; box.innerHTML = statusHtml(state.settings);
           toast(`Sharing is on (${d.user}).`, 'ok'); syncNow(null, true);
         } catch (err) { res.innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`; }
@@ -273,7 +334,8 @@ const Shares = (() => {
     });
   }
   function settingsValues(m) {
-    return {share_auto: $('#set-share-auto', m.el).checked};
+    return {share_auto: $('#set-share-auto', m.el).checked, share_token: $('#set-share-token', m.el).value,
+      display_name: $('#set-dispname', m.el).value};
   }
 
   /* ------------------------------------------------------------ wiring */
@@ -283,6 +345,7 @@ const Shares = (() => {
       const a = e.target.closest('[data-sact]'); if (!a) return;
       e.stopPropagation();
       if (a.dataset.sact === 'manage') manageDialog(a.dataset.id);
+      if (a.dataset.sact === 'invite') inviteDialog(a.dataset.id);
       if (a.dataset.sact === 'sync') syncNow(a.dataset.id);
     }, true);
     const body = $('#detail-body');
@@ -301,5 +364,5 @@ const Shares = (() => {
   init();
 
   return {renderSidebar, viewSub, bulkOptions, bulk, detailField, addPapers, removePapers, syncNow, newDialog, joinDialog,
-    manageDialog, startMenu, settingsHtml, settingsBind, settingsValues};
+    manageDialog, inviteDialog, startMenu, settingsHtml, settingsBind, settingsValues};
 })();
