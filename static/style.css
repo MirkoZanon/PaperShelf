@@ -810,3 +810,18 @@ details.d-sec[open] > summary::before { content: '▾ '; }
 details.d-sec > summary .muted { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 4px; }
 #d-edit { border-top: 1px solid var(--border-soft); padding-top: 8px; }
 .d-foot-btns { display: flex; gap: 6px; margin-bottom: 8px; }
+
+/* ---------- 2.0.1: header layout, round buttons, PaperShelf menu */
+header #search { margin-left: auto; }
+header .btn.round { width: 36px; height: 36px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.hb-ico { width: 19px; height: 19px; }
+.hb-q { font-size: 16px; font-weight: 700; line-height: 1; }
+.brand-wrap { flex-shrink: 0; }
+button.brand { border: 0; background: none; cursor: pointer; color: var(--text); padding: 4px 8px 4px 4px; border-radius: 10px; font: inherit; font-weight: 700; font-size: 16px; }
+button.brand:hover { background: var(--hover); }
+.brand-car { width: 9px; height: 6px; color: var(--faint); margin-left: 1px; }
+.brand-menu { left: 0; right: auto; min-width: 270px; }
+.brand-menu .bm-head { display: flex; gap: 10px; align-items: center; padding: 6px 10px 8px; }
+.brand-menu .bm-head img { width: 32px; height: 32px; border-radius: 7px; }
+.brand-menu .bm-head small { display: block; color: var(--muted); font-size: 12px; }
+.brand-menu .bm-sep { height: 1px; background: var(--border-soft); margin: 4px 6px; }

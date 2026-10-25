@@ -1000,6 +1000,48 @@ function ftSnippet(p) {
 }
 
 /* ------------------------------------------------------------------ quit */
+/* ------------------------------------------------------------------ the PaperShelf menu (logo) */
+async function brandMenu() {
+  const menu = $('#brand-menu');
+  if (menu.classList.contains('open')) { menu.classList.remove('open'); return; }
+  const upd = Updates.info && Updates.info.available;
+  let installed = true;
+  try { installed = !!(await api('/api/app-status')).installed; } catch (e) { /* ignore */ }
+  const item = (act, label, small = '') => `<button type="button" data-bm="${act}">${label}${small ? `<small>${small}</small>` : ''}</button>`;
+  menu.innerHTML = `<div class="bm-head"><img src="/static/icons/icon-64.png" alt=""><div><b>PaperShelf ${esc(state.version || '')}</b><small>${state.papers.length} papers · ${state.groups.length + (state.shares || []).length} labels</small></div></div>
+    ${item('update', '⟳ Update now', 'Sync, shared labels, new version')}
+    ${upd ? item('install-update', `⬆ Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') : item('check', '⬆ Check for updates')}
+    <div class="bm-sep"></div>
+    ${item('topic', '🔎 Search papers by topic', 'Find papers online by meaning')}
+    ${item('bulk', '＋ Add many papers at once')}
+    ${item('export', '⤓ Export references or notes')}
+    ${item('shares', '🔗 Shared labels', 'Create, join, invite colleagues')}
+    <div class="bm-sep"></div>
+    ${installed ? '' : item('app', '⬇ Install PaperShelf as an app', 'Own icon in the Dock / taskbar')}
+    ${item('settings', '⚙︎ Settings')}
+    ${item('guide', '📘 Guide')}
+    ${item('status', '🩺 System check')}
+    <div class="bm-sep"></div>
+    ${item('quit', '⏻ Quit PaperShelf', 'Stops it on this computer')}`;
+  menu.classList.add('open');
+  menu.onclick = async e => {
+    const b = e.target.closest('[data-bm]'); if (!b) return;
+    menu.classList.remove('open');
+    const a = b.dataset.bm;
+    if (a === 'update') syncNow();
+    if (a === 'install-update' || a === 'check') Updates.open();
+    if (a === 'topic') { if (state.tab !== 'library') setTab('library'); setMode('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
+    if (a === 'bulk') { if (state.tab !== 'library') setTab('library'); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
+    if (a === 'export') openExport();
+    if (a === 'shares') Shares.startMenu();
+    if (a === 'app') { openSettings('general'); }
+    if (a === 'settings') openSettings();
+    if (a === 'guide') Help.open('start');
+    if (a === 'status') Help.open('status');
+    if (a === 'quit') quitApp();
+  };
+}
+
 async function quitApp() {
   const ok = await confirmBox('Quit PaperShelf?', 'PaperShelf stops on this computer. Everything is already saved. Start it again with its icon or with start.command / start.bat.', {ok: 'Quit'});
   if (!ok) return;
@@ -1241,6 +1283,8 @@ function bind() {
     const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (lines.length > 1) { e.preventDefault(); openBulkAdd(lines.join('\n')); }
   });
+  $('#brand-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); brandMenu(); });
+  document.addEventListener('click', e => { if (!e.target.closest('#brand-menu')) $('#brand-menu').classList.remove('open'); });
   $('#more-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.toggle('open'); });
   document.addEventListener('click', () => $('#more-menu').classList.remove('open'));
   $('#more-menu').addEventListener('click', async e => {

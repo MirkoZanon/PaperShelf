@@ -2,6 +2,14 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.0.1 – 2026-10-25
+
+- **PaperShelf menu**: click the logo at the top left for the most used actions – update now, check
+  for a new version, search papers by topic, add many papers, export, shared labels, install as an
+  app, settings, guide, system check and quit.
+- The buttons at the top right stay at the right edge however wide the window is; settings and help
+  are round buttons as big as the update button.
+
 ## 2.0 – 2026-10-25
 
 PaperShelf 2.0 brings together everything added since 1.13:

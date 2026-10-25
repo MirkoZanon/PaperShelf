@@ -16,7 +16,10 @@
 <body>
 <div class="app">
   <header>
-    <div class="brand"><img src="/static/icons/icon-64.png" alt="" width="26" height="26">PaperShelf</div>
+    <div class="menu-wrap brand-wrap">
+      <button class="brand" id="brand-btn" type="button" title="PaperShelf menu"><img src="/static/icons/icon-64.png" alt="" width="26" height="26">PaperShelf<svg class="brand-car" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="menu brand-menu" id="brand-menu"></div>
+    </div>
     <div class="seg tabs" id="tabs"><button data-tab="library" class="on">Library</button><button data-tab="people">Researchers</button></div>
     <form id="add-form" class="tab-library-only" autocomplete="off">
       <input id="add-input" class="input" placeholder="Paste a link or DOI, or type a few words of the title…">
@@ -34,8 +37,8 @@
     <div class="grow tab-people-only"></div>
     <button class="btn small update-btn" id="update-btn" style="display:none">⬆ Update</button>
     <button class="btn icon round" id="sync-btn" title="Update now"><svg class="sync-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 6.3A5.4 5.4 0 0 0 3.4 4.9M2.8 9.7a5.4 5.4 0 0 0 9.8 1.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13.6 2.6v3.9H9.7M2.4 13.4V9.5h3.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <button class="btn icon" data-help="start" title="Guide and help">?</button>
-    <button class="btn icon" id="settings-btn" title="Settings">⚙︎</button>
+    <button class="btn icon round" data-help="start" title="Guide and help"><span class="hb-q">?</span></button>
+    <button class="btn icon round" id="settings-btn" title="Settings"><svg class="hb-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.4 7.4 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 2.6-1.5l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
   </header>
 
   <aside id="people-side" class="tab-people-only"></aside>
