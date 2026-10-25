@@ -677,7 +677,7 @@ def csv_export(papers, group_paths: dict | None = None, style="apa") -> str:
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["Title", "Authors", "Year", "Journal/Source", "Volume", "Issue", "Pages", "DOI", "URL",
-                "Keywords", "Groups", "Status", "Starred", "Times cited", "PDF file", "Notes", "Reference", "Added"])
+                "Keywords", "Labels", "Status", "Starred", "Times cited", "PDF file", "Notes", "Reference", "Added"])
     for p in papers:
         w.writerow([
             p.get("title", ""), "; ".join(fam_ini(a) for a in _authors(p)), p.get("year") or "",

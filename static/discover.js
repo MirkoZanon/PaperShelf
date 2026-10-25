@@ -1,6 +1,6 @@
 'use strict';
 /* Discover: papers you might be missing, based on the citation network of the
-   current group (or the whole library), from OpenAlex. */
+   current label (or the whole library), from OpenAlex. */
 const Discover = (() => {
   let lastKey = null, data = null, loading = false;
   const added = new Map();  // suggestion id -> paper id
@@ -41,7 +41,7 @@ const Discover = (() => {
   function draw() {
     const root = $('#discover-view');
     const nonGroup = !['all', 'group'].includes(state.view.type);
-    let html = `<div class="s-head"><div><b>Suggestions based on ${scopeLabel()}</b>${nonGroup ? ' <span class="muted small">(open a group to get suggestions for that topic)</span>' : ''}</div>
+    let html = `<div class="s-head"><div><b>Suggestions based on ${scopeLabel()}</b>${nonGroup ? ' <span class="muted small">(open a label to get suggestions for that topic)</span>' : ''}</div>
       <span><button class="btn small" id="s-refresh" ${loading ? 'disabled' : ''}>↻ Refresh</button> <button class="help-q" data-help="map" title="Explain this">?</button></span></div>`;
     if (loading) {
       html += `<div class="empty"><div class="spin big-spin"></div><p>Looking for related papers on OpenAlex…</p></div>`;
@@ -50,7 +50,7 @@ const Discover = (() => {
     } else if (data.error) {
       html += `<div class="empty"><div class="big">📡</div><h2>Couldn't get suggestions</h2><p>${esc(data.error)}</p></div>`;
     } else if (!data.scope) {
-      html += `<div class="empty"><div class="big">💡</div><h2>No papers here yet</h2><p>Add some papers to this group first.</p></div>`;
+      html += `<div class="empty"><div class="big">💡</div><h2>No papers here yet</h2><p>Add some papers with this label first.</p></div>`;
     } else {
       if (data.missing_data) {
         html += `<div class="s-note">${data.missing_data} of ${data.scope} papers have no citation data yet, so suggestions are based on ${data.with_data}.

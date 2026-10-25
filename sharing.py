@@ -8,15 +8,21 @@ Never PDFs, notes, highlights or anything else from your library.
 
 Where
 -----
-Each person who publishes lists has a small PUBLIC GitHub repository, by default
-``<username>/papershelf-shared``, with:
+Each person who shares has one SECRET gist on GitHub, created automatically by PaperShelf with the
+same token used for library sync (it needs the "Gists" permission). A secret gist is not listed
+anywhere: only people who have its code can read it. It holds:
 
-    index.json                 the lists published there (name, number of papers, date)
-    collections/<list-id>.json one file per list: its papers and its members
+    index.json            the shared labels kept there (name, number of papers, date)
+    list-<list-id>.json   one file per shared label: its papers and its members
 
-Everybody's PaperShelf reads the files of all the members of a list, merges them with its own copy
-and writes the result back to its own repository. Reading needs no account; publishing needs a
-GitHub token for your own sharing repository.
+Everybody's PaperShelf reads the gists of all the members of a list, merges them with its own copy
+and writes the result back to its own gist. Following a list needs no account; editing it needs the
+token. When someone joins as a member, their PaperShelf leaves a short comment on the inviting
+person's gist with the address of its own gist (GitHub signs comments with the author's account, so
+nobody can pretend to be someone else); that is how the members find each other.
+
+(Version 1.9 used a public repository "<name>/papershelf-shared" instead; lists stored there can still
+be read.)
 
 Merging (why the order of updates never matters)
 ------------------------------------------------
@@ -55,7 +61,11 @@ API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
 NAME_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")       # GitHub user names
 REPO_RE = re.compile(r"^[A-Za-z0-9-]{1,39}/[A-Za-z0-9_.-]{1,100}$")
-ID_RE = re.compile(r"^[a-f0-9]{8,32}$")
+GIST_RE = re.compile(r"^[a-f0-9]{20,40}$")
+SRC_RE = re.compile(r"^gist:[a-f0-9]{20,40}$")
+ID_RE = re.compile(r"^[a-f0-9]{12}$")
+GIST_DESCRIPTION = "PaperShelf shared labels (managed by the PaperShelf app – titles and DOIs only)"
+JOIN_PREFIX = "PaperShelf sharing:"
 META_KEYS = ("doi", "title", "authors", "year", "journal", "arxiv_id", "url", "type")
 
 
@@ -257,7 +267,7 @@ def validate(data) -> dict:
         if not isinstance(m, dict) or not (NAME_RE.match(str(name)) or str(name).startswith("local-")):
             continue
         repo = str(m.get("repo") or "")
-        st["members"][str(name)] = {"repo": repo if REPO_RE.match(repo) else "", "add": _stamp(m.get("add")),
+        st["members"][str(name)] = {"repo": repo if (REPO_RE.match(repo) or SRC_RE.match(repo)) else "", "add": _stamp(m.get("add")),
                                     "rem": _stamp(m.get("rem"))}
     raw_items = data.get("items") if isinstance(data.get("items"), dict) else {}
     for key, e in list(raw_items.items())[:MAX_ITEMS]:
@@ -278,46 +288,90 @@ def summary(st: dict) -> dict:
 
 
 # --------------------------------------------------------------------------- where lists live
-def parse_code(text: str):
-    """What the user typed to join a list -> (owner, repo, list_id or None).
+# A "source" is where a member keeps their copies: "gist:<id>" (current) or "owner/repo" (version 1.9).
+def is_gist(src: str) -> bool:
+    return bool(SRC_RE.match(src or ""))
 
-    Accepted: "username", "username/list-id", "username/repo", "username/repo/list-id",
-    or a github.com / raw.githubusercontent.com link to the repository or to a list file."""
+
+def file_for(src: str, kind: str, list_id: str = "") -> str:
+    if is_gist(src):
+        return "index.json" if kind == "index" else f"list-{list_id}.json"
+    return "index.json" if kind == "index" else f"collections/{list_id}.json"
+
+
+def list_path(list_id: str) -> str:  # version 1.9 layout
+    return f"collections/{list_id}.json"
+
+
+def parse_code(text: str):
+    """What the user typed to join -> (owner, source, list_id or None).
+
+    Accepted: "owner/<gist-id>/<list-id>" (the code shown in PaperShelf), "owner/<gist-id>",
+    a gist.github.com link, and the version-1.9 forms "owner", "owner/<list-id>", github.com links."""
     t = (text or "").strip().strip("/").removesuffix(".json")
     if t.startswith(("http://", "https://")):
         u = urlparse(t)
         parts = [p for p in u.path.split("/") if p]
+        if u.netloc.endswith("gist.github.com") or u.netloc.endswith("gist.githubusercontent.com"):
+            gid = next((p for p in parts if GIST_RE.match(p)), None)
+            if not gid or not parts:
+                raise ShareError("That gist link is incomplete.")
+            lid = (u.fragment or "").removeprefix("list-")
+            return parts[0], "gist:" + gid, lid if ID_RE.match(lid or "") else None
         if u.netloc.endswith("raw.githubusercontent.com") and len(parts) >= 2:
-            owner, repo = parts[0], parts[1]
-            lid = parts[-1] if len(parts) > 3 and ID_RE.match(parts[-1]) else None
-            return owner, repo, lid
+            lid = parts[-1] if ID_RE.match(parts[-1]) else None
+            return parts[0], f"{parts[0]}/{parts[1]}", lid
         if u.netloc.endswith("github.com") and parts:
             owner = parts[0]
             repo = parts[1] if len(parts) > 1 else DEFAULT_REPO_NAME
             lid = parts[-1] if ID_RE.match(parts[-1]) and len(parts) > 2 else None
-            return owner, repo, lid
+            return owner, f"{owner}/{repo}", lid
         raise ShareError("That link is not a GitHub address.")
-    parts = [p for p in re.split(r"[/:\s]+", t) if p]
+    parts = [p for p in re.split(r"[/:\s#]+", t) if p]
     if not parts or not NAME_RE.match(parts[0]):
-        raise ShareError("Type the GitHub user name of the person sharing (e.g. MirkoZanon), or the code they gave you.")
+        raise ShareError("Paste the code your colleague gave you (it looks like  MarioRossi/1a2b3c…/9f8e…).")
     owner = parts[0]
+    if len(parts) >= 2 and GIST_RE.match(parts[1]):
+        lid = parts[2] if len(parts) > 2 and ID_RE.match(parts[2]) else None
+        return owner, "gist:" + parts[1], lid
     if len(parts) == 1:
-        return owner, DEFAULT_REPO_NAME, None
-    if len(parts) == 2:
-        return (owner, DEFAULT_REPO_NAME, parts[1]) if ID_RE.match(parts[1]) else (owner, parts[1], None)
-    return owner, parts[1], parts[2] if ID_RE.match(parts[2]) else None
+        return owner, f"{owner}/{DEFAULT_REPO_NAME}", None
+    if ID_RE.match(parts[1]):
+        return owner, f"{owner}/{DEFAULT_REPO_NAME}", parts[1]
+    return owner, f"{owner}/{parts[1]}", parts[2] if len(parts) > 2 and ID_RE.match(parts[2]) else None
 
 
-def list_path(list_id: str) -> str:
-    return f"collections/{list_id}.json"
+def make_code(owner: str, src: str, list_id: str = "") -> str:
+    if is_gist(src):
+        return f"{owner}/{src[5:]}" + (f"/{list_id}" if list_id else "")
+    return f"{owner}/{list_id}" if list_id else owner
+
+
+def join_comment(member: str, src: str, list_id: str) -> str:
+    return JOIN_PREFIX + " " + json.dumps({"member": member, "src": src, "list": list_id})
+
+
+def parse_join_comment(body: str):
+    body = (body or "").strip()
+    if not body.startswith(JOIN_PREFIX):
+        return None
+    try:
+        d = json.loads(body[len(JOIN_PREFIX):].strip())
+    except ValueError:
+        return None
+    if not (isinstance(d, dict) and NAME_RE.match(str(d.get("member") or "")) and SRC_RE.match(str(d.get("src") or ""))
+            and ID_RE.match(str(d.get("list") or ""))):
+        return None
+    return d
 
 
 class GitHub:
-    """Reads and writes the small JSON files of the sharing repositories."""
+    """Reads and writes the small JSON files of the shared labels (gists; 1.9 repositories read-only)."""
 
     def __init__(self, token: str = "", timeout: int = 20):
         self.token = (token or "").strip()
         self.timeout = timeout
+        self._gists = {}  # gist id -> files, cached for one update round
 
     def _headers(self, auth=True):
         h = {"Accept": "application/vnd.github+json", "User-Agent": "PaperShelf-sharing"}
@@ -331,9 +385,125 @@ class GitHub:
         except requests.exceptions.RequestException as exc:
             raise ShareError(f"Could not reach GitHub ({exc.__class__.__name__}). Check your internet connection.") from exc
 
+    def _json(self, raw, where):
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            raise ShareError(f"The shared file {where} is damaged.")
+
+    # ---- account and gist
+    def whoami(self) -> str:
+        if not self.token:
+            raise ShareError("Paste your GitHub token first (Settings → GitHub sync & sharing).")
+        r = self._req("GET", f"{API}/user", headers=self._headers())
+        if r.status_code == 401:
+            raise ShareError("GitHub doesn't accept this token (wrong or expired).")
+        if r.status_code != 200:
+            raise ShareError(f"GitHub answered {r.status_code}.")
+        return r.json().get("login") or ""
+
+    def find_or_create_gist(self) -> str:
+        """Your shared-labels gist: found among your gists, or created (secret)."""
+        page = 1
+        while page <= 10:
+            r = self._req("GET", f"{API}/gists", headers=self._headers(), params={"per_page": 100, "page": page})
+            if r.status_code in (401, 403, 404):
+                raise ShareError(NEEDS_GISTS)
+            if r.status_code != 200:
+                raise ShareError(f"GitHub answered {r.status_code}.")
+            batch = r.json()
+            for g in batch:
+                if g.get("description") == GIST_DESCRIPTION:
+                    return g["id"]
+            if len(batch) < 100:
+                break
+            page += 1
+        body = {"description": GIST_DESCRIPTION, "public": False, "files": {"index.json": {"content": json.dumps(
+            {"papershelf_shared": FORMAT, "lists": []}, indent=1) + "\n"}}}
+        r = self._req("POST", f"{API}/gists", headers=self._headers(), json=body)
+        if r.status_code in (401, 403, 404, 422):
+            raise ShareError(NEEDS_GISTS)
+        if r.status_code not in (200, 201):
+            raise ShareError(f"GitHub answered {r.status_code} while creating the gist.")
+        return r.json()["id"]
+
+    def _gist_files(self, gid: str, fresh: bool):
+        if gid in self._gists and not fresh:
+            return self._gists[gid]
+        r = self._req("GET", f"{API}/gists/{gid}", headers=self._headers())
+        if r.status_code == 404:
+            self._gists[gid] = None
+            return None
+        if r.status_code != 200:
+            raise ShareError(f"GitHub answered {r.status_code}" + (" (too many requests without a token – try later)" if r.status_code == 403 else ""))
+        files = {}
+        for name, f in (r.json().get("files") or {}).items():
+            if f.get("truncated") and f.get("raw_url"):
+                rr = self._req("GET", f["raw_url"], headers={"User-Agent": "PaperShelf-sharing"})
+                files[name] = rr.text if rr.status_code == 200 else None
+            else:
+                files[name] = f.get("content")
+        self._gists[gid] = files
+        return files
+
+    def read_src(self, owner: str, src: str, kind: str, list_id: str = "", fresh: bool = False):
+        """A shared file (index or list) from a member's gist (or 1.9 repository); None if missing."""
+        name = file_for(src, kind, list_id)
+        if is_gist(src):
+            gid = src[5:]
+            if self.token or fresh:
+                files = self._gist_files(gid, fresh)
+                if files is None or files.get(name) is None:
+                    return None
+                return self._json(files[name], name)
+            r = self._req("GET", f"https://gist.githubusercontent.com/{owner}/{gid}/raw/{name}",
+                          headers={"User-Agent": "PaperShelf-sharing"})
+            if r.status_code == 404:
+                return None
+            if r.status_code != 200:
+                raise ShareError(f"GitHub answered {r.status_code} for {owner}'s shared labels.")
+            return self._json(r.content, name)
+        if not REPO_RE.match(src or ""):
+            return None
+        return self.read(src, name, fresh)
+
+    def publish(self, src: str, files: dict):
+        """Write {filename: data} into your own gist in one go."""
+        if not (self.token and is_gist(src)):
+            raise ShareError("Sharing is not set up (Settings → GitHub sync & sharing → Share labels).")
+        gid = src[5:]
+        body = {"files": {n: {"content": json.dumps(d, indent=1, sort_keys=True, ensure_ascii=False) + "\n"} for n, d in files.items()}}
+        r = self._req("PATCH", f"{API}/gists/{gid}", headers=self._headers(), json=body)
+        if r.status_code in (200, 201):
+            self._gists.pop(gid, None)
+            return True
+        if r.status_code in (401, 403):
+            raise ShareError(NEEDS_GISTS)
+        if r.status_code == 404:
+            raise ShareError("Your shared-labels gist was not found – turn sharing off and on again in Settings → GitHub sync & sharing.")
+        raise ShareError(f"GitHub answered {r.status_code} while publishing.")
+
+    def comment(self, src: str, body: str):
+        if is_gist(src) and self.token:
+            r = self._req("POST", f"{API}/gists/{src[5:]}/comments", headers=self._headers(), json={"body": body})
+            if r.status_code not in (200, 201):
+                raise ShareError(f"GitHub answered {r.status_code} while announcing you to the list.")
+
+    def comments(self, src: str) -> list:
+        if not (is_gist(src) and self.token):
+            return []
+        r = self._req("GET", f"{API}/gists/{src[5:]}/comments", headers=self._headers(), params={"per_page": 100})
+        if r.status_code != 200:
+            return []
+        return [{"id": c.get("id"), "user": (c.get("user") or {}).get("login") or "", "body": c.get("body") or ""}
+                for c in r.json() if isinstance(c, dict)]
+
+    def delete_comment(self, src: str, cid):
+        if is_gist(src) and self.token and cid:
+            self._req("DELETE", f"{API}/gists/{src[5:]}/comments/{cid}", headers=self._headers())
+
+    # ---- version 1.9 repositories (read only now)
     def read(self, repo: str, path: str, fresh: bool = False):
-        """The JSON file, or None if it doesn't exist. `fresh` (or a token) reads through the API
-        (no cache delay); otherwise the public raw address is used (cached by GitHub for ~5 min)."""
         if not REPO_RE.match(repo or ""):
             return None
         if fresh or self.token:
@@ -352,51 +522,9 @@ class GitHub:
             return None
         if r.status_code != 200:
             raise ShareError(f"GitHub answered {r.status_code} for {repo}.")
-        try:
-            return json.loads(r.content)
-        except ValueError:
-            raise ShareError(f"The file {path} in {repo} is not readable.")
+        return self._json(r.content, path)
 
-    def write(self, repo: str, path: str, data: dict, message: str):
-        if not self.token:
-            raise ShareError("Publishing needs a GitHub token for your sharing repository (Settings → Sharing).")
-        url = f"{API}/repos/{repo}/contents/{path}"
-        body = json.dumps(data, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
-        cur = self._req("GET", url, headers=self._headers())
-        sha = cur.json().get("sha") if cur.status_code == 200 else None
-        if cur.status_code == 200:
-            try:
-                if base64.b64decode(cur.json().get("content") or "").decode("utf-8") == body:
-                    return False  # unchanged
-            except (ValueError, UnicodeDecodeError):
-                pass
-        payload = {"message": message, "content": base64.b64encode(body.encode("utf-8")).decode("ascii")}
-        if sha:
-            payload["sha"] = sha
-        r = self._req("PUT", url, headers=self._headers(), json=payload)
-        if r.status_code in (200, 201):
-            return True
-        if r.status_code == 409 or r.status_code == 422 and "sha" in (r.text or ""):
-            raise ShareError("Someone else (another of your computers?) published at the same moment – try again.")
-        if r.status_code in (401, 403):
-            raise ShareError("GitHub refused to publish: the token is wrong, expired, or lacks "
-                             "'Contents: Read and write' on your sharing repository.")
-        if r.status_code == 404:
-            raise ShareError(f"The repository {repo} was not found (or the token can't see it). Create it on GitHub first.")
-        raise ShareError(f"GitHub answered {r.status_code} while publishing.")
 
-    def check(self, repo: str) -> dict:
-        """Does the repository exist, is it public, and may this token write to it?"""
-        if not REPO_RE.match(repo or ""):
-            raise ShareError("Write the repository as  your-name/papershelf-shared")
-        r = self._req("GET", f"{API}/repos/{repo}", headers=self._headers())
-        if r.status_code == 404:
-            raise ShareError(f"{repo} doesn't exist on GitHub (or the token can't see it). Create it first – see the guide.")
-        if r.status_code == 401:
-            raise ShareError("GitHub doesn't accept this token (wrong or expired).")
-        if r.status_code != 200:
-            raise ShareError(f"GitHub answered {r.status_code}.")
-        d = r.json()
-        perms = d.get("permissions") or {}
-        return {"private": bool(d.get("private")), "can_write": bool(perms.get("push") or perms.get("admin")),
-                "owner": (d.get("owner") or {}).get("login") or repo.split("/")[0]}
+NEEDS_GISTS = ("Your GitHub token can't use gists. Edit the token on GitHub (Settings → Developer settings → "
+               "Personal access tokens → Fine-grained tokens → your token → Edit) and under Account permissions set "
+               "“Gists” to Read and write, then click Update – no new token needed. See the guide (Shared labels).")

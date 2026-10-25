@@ -11,11 +11,11 @@ const Help = (() => {
   const SECTIONS = [
     {id: 'start', icon: '👋', title: 'Getting started', html: () => `
       <p>PaperShelf keeps your scientific papers in one place: it fills in the details for you, finds legal free PDFs,
-        lets you read and highlight them, organise them in groups and export reference lists.</p>
+        lets you read and highlight them, organise them with labels and export reference lists.</p>
       <p>It runs <b>on your computer</b>. The browser is only its window: your library is not online and works offline too.</p>
       <h4>Your first five minutes</h4>
       ${step(1, `Paste a <b>DOI</b> or a <b>link</b> to an article (journal, arXiv, PubMed…) in the box at the top and press ${kbd('Enter')} – or just type <b>a few words of the title</b> (or authors and year): a list of matching papers appears, pick one. Title, authors, journal, year, abstract and keywords are filled in automatically.`)}
-      ${step(2, `Create a <b>group</b> with ＋ next to “Groups” and drag papers onto it. A paper can be in many groups. <a href="#" data-help="organising">More</a>`)}
+      ${step(2, `Create a <b>label</b> with ＋ next to “Labels → Personal” and drag papers onto it. A paper can have many labels. <a href="#" data-help="organising">More</a>`)}
       ${step(3, `Open a paper and click <b>⬇ Find &amp; download PDF</b>. If it isn't free, use <b>🔐 Open article &amp; log in with my university</b>. <a href="#" data-help="university">More</a>`)}
       ${step(4, `Click <b>📖 Read &amp; highlight</b> to read the PDF and highlight passages.`)}
       ${step(5, `Click <b>⤓ Export references</b> to get your reference list in APA, Nature, Cell… or to move papers to Zotero.`)}
@@ -40,19 +40,23 @@ const Help = (() => {
         <li><b>PDF files you already have</b>: drag them onto the window (or ⋯ → <i>Import PDF files</i>). The DOI inside each file is used to fill in the details.</li>
         <li><b>From the browser</b>: in ⚙︎ Settings drag the buttons <i>＋ Save to PaperShelf</i> and <i>⬇ Save + PDF</i> to your bookmarks bar; on any article page click one.</li>
         <li><b>By hand</b>: ⋯ → <i>Add manually</i>.</li></ul>
-      ${tip('If you are inside a group when you add a paper, it goes into that group.')}
+      ${tip('If a label is open when you add a paper, the paper gets that label.')}
       <h4>If the details are wrong or missing</h4>
       <p>Open the paper and edit any field directly, or click <b>↻ Update metadata</b> and paste the DOI. Duplicates (same DOI or arXiv ID) are recognised: adding a paper twice just opens the existing one.</p>`},
 
-    {id: 'organising', icon: '🗂', title: 'Groups, keywords & search', html: () => `
-      <h4>Groups work like tags</h4>
-      <ul><li>A paper can belong to <b>any number of groups</b>; selecting a group lists every paper tagged with it.</li>
-        <li>Create a group with ＋; hover a group for ＋ (subgroup), ✎ (rename), 🗑 (delete). Drag a group onto another to nest it.</li>
-        <li><b>Dragging a paper onto a group adds it</b> – it is never removed from its other groups. Select several papers (${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click) to drag or assign them together.</li>
-        <li>“include subgroups” shows the papers of all subgroups too.</li>
-        <li>Deleting a group never deletes papers.</li></ul>
+    {id: 'organising', icon: '🏷', title: 'Labels, keywords & search', html: () => `
+      <h4>Labels</h4>
+      <p>Labels work like tags: a paper can have <b>any number of labels</b>, and clicking a label lists every paper that has it. There are two kinds, in the sidebar under <b>Labels</b>:</p>
+      <ul><li><b>Personal</b> – your own topics and projects. They can be nested (sub-labels) and are used by the map, Discover and the statistics.</li>
+        <li><b>Shared</b> – labels you share with colleagues: their papers reach everybody's library. They are kept apart so that “from Mario” doesn't mix with your scientific topics. <a href="#" data-help="sharing">More</a></li></ul>
+      <ul><li>Create a personal label with ＋; hover it for ＋ (sub-label), ✎ (rename), 🗑 (delete). Drag a label onto another to nest it.</li>
+        <li><b>Dragging a paper onto a label adds it</b> – it never removes its other labels. Select several papers (${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click) to drag or label them together.</li>
+        <li>“include sub-labels” shows the papers of all sub-labels too. Deleting a label never deletes papers.</li></ul>
+      <h4>The library menu</h4>
+      <p><i>All papers</i>, <i>To read</i> and <i>Reading</i> are always shown; <i>Starred</i>, <i>Read</i>, <i>Without labels</i> and <i>Without PDF</i> are under <b>More</b>.</p>
       <h4>Keywords</h4>
-      <p>Filled in automatically, editable in each paper. Click a keyword in the sidebar to filter; <i>Make group from keyword</i> turns the filter into a group.</p>
+      <p>Filled in automatically, editable in each paper. The sidebar shows the most frequent keywords of the papers in view (bigger = more frequent); <b>Show all</b> and the filter box find the others, and ▾ folds the section away. Click a keyword to filter; <i>Make label from keyword</i> turns the filter into a label.</p>
+      <p>With many papers, keywords tend to multiply (“fMRI”, “functional MRI”, “fmri”…). Click <b>✎</b> next to <i>Keywords</i> to <b>merge</b> variants into one, <b>rename</b> or <b>delete</b> keywords in the whole library at once.</p>
       <h4>Status, stars, notes</h4>
       <p>Mark papers <i>To read / Reading / Read</i>, star the important ones, write notes in the details panel.</p>
       <h4>Search and shortcuts</h4>
@@ -94,26 +98,26 @@ const Help = (() => {
       <h4>Citation styles</h4>
       <p>APA 7, Nature, Science, Cell Press (Cell, Neuron, Current Biology, Cell Reports, iScience), Royal Society (Proc B), J Neurosci, eLife, PNAS, PLOS/Vancouver. Choose the default in ⚙︎ Settings or in any paper's “Reference” box. <b>❝ Copy citation</b> copies one reference with italics.</p>
       <h4>Export</h4>
-      <p><b>⤓ Export references</b>: the selected papers, the current group or everything, as</p>
+      <p><b>⤓ Export references</b>: the selected papers, the current label or everything, as</p>
       <ul><li><b>.txt</b> – reference list to paste · <b>.rtf</b> – for Word/Pages with italics and hanging indent</li>
-        <li><b>.ris</b> – for Zotero, EndNote, Mendeley (keeps keywords and notes, links the PDFs, can add your groups as tags)</li>
+        <li><b>.ris</b> – for Zotero, EndNote, Mendeley (keeps keywords and notes, links the PDFs, can add your labels as tags)</li>
         <li><b>.bib</b> – LaTeX/Overleaf · <b>.json</b> (CSL) · <b>.csv</b> – spreadsheet</li></ul>
       <h4>Moving papers to Zotero</h4>
-      ${step(1, 'Export as <b>RIS</b> (tick “Add my groups as tags”).')}
+      ${step(1, 'Export as <b>RIS</b> (tick “Add my labels as tags”).')}
       ${step(2, 'In Zotero: <b>File → Import…</b> → choose the file → Next.')}
-      ${step(3, 'The papers arrive in a new collection with their PDFs linked and your groups as tags.')}
+      ${step(3, 'The papers arrive in a new collection with their PDFs linked and your labels as tags.')}
       ${tip('Numbered styles (Nature, Cell, Science…) are numbered in the exported list; in a manuscript Zotero handles the in-text numbering.')}`},
 
     {id: 'map', icon: '🕸', title: 'Citation map & Discover', html: () => `
       <h4>Map</h4>
       <p>Click <b>🕸 Map</b> above the list: the papers of the current view become a network. Arrows go from the citing paper to the cited one; grey dashed dots are papers you don't have that several of yours cite – click them to add them.</p>
-      <p>Scroll to zoom, drag to move, click a paper to open it. Colour by group, status or year.</p>
+      <p>Scroll to zoom, drag to move, click a paper to open it. Colour by label, status or year.</p>
       <h4>Three kinds of links</h4>
       <ul><li><b>Citations</b> – who cites whom (data from OpenAlex).</li>
         <li><b>Keywords</b> – the most common keywords become ◆ nodes and each paper is linked to its keywords, so papers on the same topics cluster together. Or choose <i>Papers linked by shared keywords</i> (thicker line = more keywords in common). Click a keyword ◆ to show only its papers.</li>
-        <li><b>Groups</b> – your groups become ◆ nodes (a dashed line joins a subgroup to its parent) and each paper is linked to the groups it's in: papers in several groups sit between them. Click a group ◆ to open it.</li></ul>
+        <li><b>Labels</b> – your personal labels become ◆ nodes (a dashed line joins a sub-label to its parent) and each paper is linked to its labels: papers with several labels sit between them. Click a label ◆ to open it. Shared labels are not used here.</li></ul>
       <h4>Discover</h4>
-      <p><b>💡 Discover</b> suggests papers for the current group (or the whole library): works often cited by your papers, recent papers that cite yours, and related works. One click adds them.</p>
+      <p><b>💡 Discover</b> suggests papers for the current label (or the whole library): works often cited by your papers, recent papers that cite yours, and related works. One click adds them.</p>
       <h4>Citation data</h4>
       <p>Both use citation data from OpenAlex, a free scholarly database (needs internet). New papers get it automatically; for older ones click <b>Get citation data</b>.</p>
       ${tip('If you see “OpenAlex’s free daily allowance is used up”, add a free OpenAlex key – see <a href="#" data-help="keys">Optional keys</a>.')}`},
@@ -164,19 +168,20 @@ const Help = (() => {
 
     {id: 'sync', icon: '⟳', title: 'Sync between computers (GitHub)', html: () => `
       <p>Keep the same library on several computers (Mac and/or Windows). Your library is copied to a <b>private</b> repository on your GitHub account; each computer sends and receives changes when you press <b>⟳</b>.</p>
-      <p class="muted">Synced: papers, details, groups, notes, highlights, reading status – and PDFs if you choose. Never synced: settings, keys, researcher profiles.</p>
+      <p class="muted">Synced: papers, details, personal labels, notes, highlights, reading status – and PDFs if you choose. Never synced: settings, keys, researcher profiles.</p>
       <h4>Once, on GitHub (5 minutes)</h4>
       ${step(1, 'Create a free account on <a href="https://github.com/signup" target="_blank" rel="noopener">github.com</a> if you don\'t have one.')}
       ${step(2, 'Go to <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a>. Name: <code>papershelf-library</code>. Choose <b>Private</b>. Leave “Add a README” <b>unticked</b>. Click <b>Create repository</b> and copy its address (e.g. <code>https://github.com/your-name/papershelf-library</code>).')}
-      ${step(3, `Create an access token – a password that works only for this repository: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">open the token page</a> (or GitHub → your photo → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token).
+      ${step(3, `Create an access token – a password for PaperShelf only: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">open the token page</a> (or GitHub → your photo → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token).
         <ul><li>Name: <code>PaperShelf</code> · Expiration: up to 1 year (note it in your calendar)</li>
         <li>Repository access: <b>Only select repositories</b> → <code>papershelf-library</code></li>
         <li>Permissions → Repository permissions → <b>Contents</b>: <b>Read and write</b></li>
+        <li>To also share labels with colleagues: Permissions → Account permissions → <b>Gists</b>: <b>Read and write</b></li>
         <li>Click <b>Generate token</b> and copy it (starts with <code>github_pat_</code>; it's shown only once – if lost, make a new one).</li></ul>`)}
       <h4>On each computer</h4>
       ${step(4, isMac() ? 'Install Git (once): open the <b>Terminal</b> app, type <code>xcode-select --install</code>, press Enter and accept. If it says it\'s already installed, you\'re done.'
         : 'Install Git (once) from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a> with the default options, then restart PaperShelf.')}
-      ${step(5, 'Open <b>⚙︎ Settings → Sync with GitHub</b>, paste the address and the token, click <b>Test connection</b>, then <b>Save</b>. The first sync starts by itself.')}
+      ${step(5, 'Open <b>⚙︎ Settings → GitHub sync &amp; sharing</b>, paste the token and the repository address, click <b>Test connection</b>, then <b>Save</b>. The first sync starts by itself.')}
       ${step(6, 'On the other computer install PaperShelf and repeat steps 4–5 with the same address (same or new token). After the sync, the library appears there.')}
       <div class="h-live" id="h-sync-live"><button class="btn small" id="h-sync-test">Test my current settings</button> <span id="h-sync-res" class="muted small"></span></div>
       <h4>Every day</h4>
@@ -195,40 +200,39 @@ const Help = (() => {
         <tr><td>No internet connection</td><td>Nothing is lost – sync later.</td></tr>
         <tr><td>⟳ is red</td><td>Hover it to read the last error.</td></tr></table>`},
 
-    {id: 'sharing', icon: '🔗', title: 'Sharing lists with colleagues', html: () => `
-      <p>A <b>shared list</b> is a list of papers you keep in common with one or more colleagues – a journal club, a lab reading list, “papers for Mario”. Only the <b>bibliographic details</b> travel (title, authors, year, journal, DOI): never PDFs, notes, highlights or anything else from your library.</p>
-      <h4>Shared lists are not groups</h4>
-      <p>They have their own section in the sidebar (<b>Shared lists</b>), separate from your groups. A paper can be in your scientific groups <i>and</i> in shared lists; the map, keywords and statistics use only your groups. If you like, a list can also drop the papers it brings into one of your groups (list ⚙︎ → <i>Also put papers that arrive…</i>).</p>
+    {id: 'sharing', icon: '🔗', title: 'Shared labels with colleagues', html: () => `
+      <p>A <b>shared label</b> is a label you keep in common with one or more colleagues – a journal club, a lab reading list, “papers for Mario”. Only the <b>bibliographic details</b> of its papers travel (title, authors, year, journal, DOI): never PDFs, notes, highlights or anything else from your library.</p>
+      <h4>Shared vs personal labels</h4>
+      <p>In the sidebar, <b>Labels</b> has two parts: <i>Personal</i> (your topics) and <i>Shared</i>. A paper can have both. The map, Discover and statistics use only personal labels. If you like, the papers that arrive with a shared label can also get one of your personal labels (shared label ⚙︎ → <i>Also give papers that arrive here my label…</i>).</p>
       <h4>What happens to the papers</h4>
-      <ul><li>Papers that arrive through a list are <b>added to your library</b> with the list’s label 🔗 (or simply labelled, if you already had them).</li>
-        <li>If someone removes a paper from the list, your copy only <b>loses the label</b> – it stays in your library until you delete it yourself.</li>
-        <li>If you delete a paper that is in a list, PaperShelf asks whether to take it out of the list for everybody too (their copies stay, without the label) or to keep it in the list for the others.</li></ul>
+      <ul><li>Papers that arrive with a shared label are <b>added to your library</b> (or simply labelled, if you already had them).</li>
+        <li>If someone removes a paper from the shared label, your copy only <b>loses the label</b> – it stays in your library until you delete it yourself.</li>
+        <li>If you delete a shared paper, PaperShelf asks whether to remove the shared label for everybody too (their copies stay, without the label) or to keep it for the others.</li></ul>
       <h4>Several people, always in sync</h4>
-      <p>Every member’s PaperShelf reads the copies of all the other members and merges them. Changes travel along any chain: if you share with Anna, and Anna adds Luca, Luca’s papers reach you through Anna’s copy even before you have ever read Luca’s. The merge doesn’t depend on the order or timing of the updates (each change carries a counter, not the clock time), so nothing is lost or brought back by mistake. Updates run when PaperShelf starts, every 15 minutes, and right after you change something; <b>⟳ Update now</b> forces one.</p>
+      <p>Every member’s PaperShelf reads the copies of all the other members and merges them. Changes travel along any chain: if you share with Anna and Anna adds Luca, Luca’s papers reach you through Anna even before you have read Luca’s copy. The merge doesn’t depend on the order or timing of the updates (each change carries a counter, not the clock time), so nothing is lost or brought back by mistake. Updates run when PaperShelf starts, every 15 minutes and right after you change something; <b>⟳ Update now</b> forces one.</p>
 
-      <h4>1 · Set up once (only to publish lists – 5 minutes)</h4>
-      <p class="muted">Not needed to join someone else’s list.</p>
-      ${step(1, 'On GitHub: <a href="https://github.com/new" target="_blank" rel="noopener">github.com/new</a> → name <code>papershelf-shared</code> → <b>Public</b> → tick <i>Add a README file</i> → <b>Create repository</b>. It will only ever contain titles and DOIs.')}
-      ${step(2, 'Create a token: <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> → name <i>PaperShelf sharing</i> → Repository access: <b>Only select repositories</b> → <code>papershelf-shared</code> → Permissions → Repository permissions → <b>Contents: Read and write</b> → <b>Generate token</b> and copy it.')}
-      ${step(3, 'In PaperShelf: ⚙︎ Settings → <b>Sharing lists with colleagues</b> → write <code>your-github-name/papershelf-shared</code>, paste the token → <b>Test</b> → <b>Save</b>.')}
-      ${tip('If you use PaperShelf on several computers, enter the same repository and token on each: your lists are restored automatically.')}
+      <h4>1 · Turn sharing on (once, 2 minutes)</h4>
+      <p class="muted">Only to create or edit shared labels. To follow a colleague’s label you need nothing.</p>
+      ${step(1, 'Your GitHub token needs the <b>Gists</b> permission. If you already use library sync, just edit that token: GitHub → your photo → Settings → Developer settings → Personal access tokens → <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">Fine-grained tokens</a> → your PaperShelf token → <b>Edit</b> → Account permissions → <b>Gists: Read and write</b> → <b>Update</b>. Otherwise create a token with that permission (see <a href="#" data-help="sync">Sync</a>, step 3).')}
+      ${step(2, 'In PaperShelf: ⚙︎ Settings → <b>GitHub sync &amp; sharing</b> → paste the token (if it isn’t there yet) → <b>Turn on sharing</b>.')}
+      <p>That’s all: PaperShelf creates a <b>secret gist</b> on your account to keep your shared labels – a small online notebook that isn’t listed anywhere; only people with a code can read it. No repository to create. On your other computers, turning sharing on with the same token finds the same gist and restores your shared labels.</p>
 
-      <h4>2 · Share a list</h4>
-      ${step(1, 'Sidebar → <b>Shared lists ＋</b> → <i>New shared list</i>: start from a group, from the selected papers, or empty. Later, <b>drag papers onto the list</b> (or select them → <i>Share…</i>, or use “Shared lists” in a paper’s details).')}
-      ${step(2, 'In the list’s ⚙︎ add your colleagues as <b>members</b> (their GitHub names) – members can add and remove papers too.')}
-      ${step(3, 'Give them the <b>code</b> shown there (e.g. <code>YourName/3f2a9c1e0b7d</code>).')}
+      <h4>2 · Share</h4>
+      ${step(1, 'Sidebar → Labels → <b>Shared ＋</b> → <i>New shared label</i>: start from one of your labels, from the selected papers, or empty. Later, <b>drag papers onto it</b> (or select them → <i>Share…</i>, or use “Shared labels” in a paper’s details).')}
+      ${step(2, 'In its ⚙︎ add your colleagues as <b>members</b> (their GitHub names) – members can add and remove papers too.')}
+      ${step(3, 'Give them the <b>code</b> shown there (e.g. <code>YourName/1a2b…/9f8e…</code>).')}
 
-      <h4>3 · Join a list</h4>
-      ${step(1, 'Sidebar → <b>Shared lists ＋</b> → <i>Join a list</i> → paste the code (or just the colleague’s GitHub name to see all their lists) → <b>Join</b>.')}
-      ${step(2, 'If they added you as a member (and you set up step 1), you can edit the list too; otherwise you <b>follow</b> it 📥: you receive everything, read-only. Removing a paper from a list you follow hides it only for you.')}
+      <h4>3 · Join</h4>
+      ${step(1, 'Sidebar → Labels → <b>Shared ＋</b> → <i>Join a shared label</i> → paste the code → <b>Join</b>.')}
+      ${step(2, 'If they added you as a member (and you turned sharing on), you can edit it too: your PaperShelf tells theirs where your copy is with a short comment on their gist, signed by GitHub with your account. Otherwise you <b>follow</b> it 📥: you receive everything, read-only. Removing a paper from a label you follow removes it only for you.')}
 
       <h4>Without GitHub</h4>
-      <p>In a list’s ⚙︎ click <b>Save as file</b> and send the <code>.papershelf</code> file by e-mail or chat. The recipient opens it with <i>Shared lists ＋ → Open a list file</i>. If the list is also published online, their copy keeps updating by itself.</p>
+      <p>In a shared label’s ⚙︎ click <b>Save as file</b> and send the <code>.papershelf</code> file by e-mail or chat. The recipient opens it with <i>Shared ＋ → Open a label file</i>. If the label is also online, their copy keeps updating by itself.</p>
 
       <h4>Privacy</h4>
-      <ul><li>Your sharing repository is public: anyone who finds it can see the titles in your lists – don’t share lists you want to keep confidential.</li>
+      <ul><li>Your shared labels live in a secret gist: anyone who has a code can read the titles in it, nobody else can find it.</li>
         <li>Your library, PDFs, notes, highlights and your private sync repository are never involved.</li>
-        <li>PaperShelf only reads the repositories of the people listed as members of a list (and the one you joined from).</li></ul>`},
+        <li>PaperShelf only reads the gists of the members of the labels you joined.</li></ul>`},
 
     {id: 'updates', icon: '⬆️', title: 'Installing & updating the app', html: () => `
       <h4>Two separate folders</h4>
@@ -240,7 +244,7 @@ const Help = (() => {
       <h4>Updating with the button</h4>
       ${step(1, 'If automatic installation is off, or a version is published while PaperShelf is open, a <b>⬆ Update</b> button appears at the top right (or open ⚙︎ Settings → <i>Updates</i> → <i>Check for updates…</i>).')}
       ${step(2, 'Read what’s new and click <b>Install update and restart</b>. PaperShelf downloads the new version from GitHub, keeps a backup of the current one and restarts by itself; the page reloads after a few seconds.')}
-      ${step(3, 'That’s it – your papers, PDFs, groups, notes and researcher profiles are exactly as before.')}
+      ${step(3, 'That’s it – your papers, PDFs, labels, notes and researcher profiles are exactly as before.')}
       <p>The check is an anonymous request to GitHub (like opening the project page): nothing about you or your library is sent. Both the check and the automatic installation can be turned off in the Updates window.</p>
       <h4>If something goes wrong</h4>
       <ul><li><b>No internet / GitHub blocked</b>: download the zip from the project's <i>Releases</i> page yourself and use <b>Install from a zip file…</b> in the Updates window.</li>
@@ -356,7 +360,7 @@ const Help = (() => {
     const m = modal(`<h3>👋 Welcome to PaperShelf</h3>
       <p class="muted">Your personal library of scientific papers – it runs on this computer, so it's private and works offline.</p>
       ${step(1, 'Paste a <b>DOI, link or title</b> in the box at the top and press Enter.')}
-      ${step(2, 'Organise papers in <b>groups</b> (they work like tags).')}
+      ${step(2, 'Organise papers with <b>labels</b> (they work like tags).')}
       ${step(3, '<b>Find PDFs</b> (free ones automatically, others through your university), read and highlight them.')}
       ${step(4, '<b>Export</b> reference lists in your journal\'s style, or move them to Zotero.')}
       <p class="muted small">Help is always one click away: the <b>?</b> button at the top, and the <b>?</b> next to anything that needs explaining.</p>

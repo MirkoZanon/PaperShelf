@@ -2,7 +2,7 @@
 
 A personal, private library for scientific papers. Paste a DOI, a link or a title and PaperShelf
 fills in the details, finds legal free PDFs (or helps you get them through your university), lets you
-read and highlight them, organise them in groups, see how they cite each other, discover related
+read and highlight them, organise them with labels, see how they cite each other, discover related
 papers, build researcher profiles, and export reference lists in the main journal styles or to Zotero.
 
 It runs **on your own computer** (Mac or Windows). The browser is only its window: your library is
@@ -86,7 +86,7 @@ copy updates itself with `git pull` at every start.
 
 1. Paste a DOI or a link to an article in the box at the top → `Enter` – or type a few words of the
    title (or authors and year) and pick the paper from the list of matches that appears.
-2. Create a group with **＋** next to *Groups* and drag papers onto it (groups work like tags).
+2. Create a label with **＋** next to *Labels → Personal* and drag papers onto it (labels work like tags).
 3. Open a paper → **⬇ Find & download PDF**, or **🔐 Open article & log in with my university**.
 4. **📖 Read & highlight** the PDF.
 5. **⤓ Export references** in your journal's style, or as RIS for Zotero.
@@ -100,7 +100,7 @@ Everything is saved immediately: closing the window, the browser or the computer
 | | Location | Contents |
 |---|---|---|
 | **The app** | the folder you unzipped, e.g. `Documents/PaperShelf-app` | program files only |
-| **Your library** | `~/PaperShelf` (Mac: `/Users/you/PaperShelf`, Windows: `C:\Users\you\PaperShelf`) | `library.db` (papers, groups, notes, highlights, profiles, settings), `PDFs/` |
+| **Your library** | `~/PaperShelf` (Mac: `/Users/you/PaperShelf`, Windows: `C:\Users\you\PaperShelf`) | `library.db` (papers, labels, notes, highlights, profiles, settings), `PDFs/` |
 
 - Replacing or updating the app never touches your library.
 - **Back up** the library folder (Time Machine on Mac, File History on Windows). GitHub sync is also
@@ -117,9 +117,12 @@ whole copied references; a few words of a title show a list of likely papers to 
 Crossref search); many at once (one per line); PDF files dragged onto the window (the DOI inside
 is used); browser buttons that save the page you are reading. Duplicates are recognised.
 
-**Organising** – groups and subgroups that work like tags (a paper can be in many; dragging adds,
-never moves); automatic keywords with a clickable keyword cloud; reading status, stars, notes; search
-in titles, authors, journals, keywords, abstracts and notes.
+**Organising** – **labels** that work like tags (a paper can have many; dragging adds, never moves):
+*Personal* labels (nested, used by the map and statistics) and *Shared* labels (see below). Automatic
+keywords: the sidebar shows the most frequent ones with a filter and *Show all*, and a keyword manager
+merges variants (“fMRI” / “fmri”), renames or deletes keywords across the library. Reading status,
+stars, notes; a compact library menu (*All papers*, *To read*, *Reading*, the rest under *More*);
+search in titles, authors, journals, keywords, abstracts and notes.
 
 **PDFs** – legal free copies from arXiv, Unpaywall, OpenAlex, Semantic Scholar, CORE (university
 repositories), Europe PMC / PubMed Central and publisher pages. For subscription papers:
@@ -130,9 +133,9 @@ PDF, and PaperShelf attaches it automatically from your Downloads folder. Option
 **Reader** – read PDFs inside the app, highlight in five colours, add notes, copy highlights to your
 notes, or save them into the PDF file (visible in Preview, Acrobat, Zotero).
 
-**Map** – the papers of a group as a network linked by **citations** (with the important papers you
+**Map** – the papers of a label as a network linked by **citations** (with the important papers you
 don't have yet), by **keywords** (keywords as nodes, or papers linked by shared keywords) or by your
-**groups** (groups as nodes, subgroups joined to their parents). **Discover** – suggestions: works often cited by your papers, recent papers citing
+**labels** (your personal labels as nodes, sub-labels joined to their parents). **Discover** – suggestions: works often cited by your papers, recent papers citing
 yours, related works.
 
 **Researchers** – profile of any scientist in two views. *Overview*: summary (publications, first /
@@ -152,25 +155,27 @@ official impact factor. When a year's table is missing, the closest previous yea
 otherwise the cell stays empty. If scimagojr.com refuses the automatic download, download the yearly
 files there (*Download data*) and import them all at once (the year is read from the file name).
 
-**Shared lists** – share lists of papers with colleagues (journal club, lab reading list…): only
-titles, authors, year, journal and DOI travel, never PDFs or notes. Shared lists are separate from your
-groups. Papers you receive are added to your library with the list's label and stay yours even if the
-list later drops them (only the label goes). Lists with several members stay in sync among everybody,
-also along chains of people, in any order; they update by themselves. Publishing needs a small public
-GitHub repository; joining or following needs nothing. Lists can also be sent as `.papershelf` files.
-Guide in the app: **? → Sharing lists with colleagues**.
+**Shared labels** – share labels with colleagues (journal club, lab reading list…): only titles,
+authors, year, journal and DOI travel, never PDFs or notes. Shared labels are kept apart from your
+personal ones. Papers you receive are added to your library with the shared label and stay yours even
+if the label later drops them (only the label goes). Labels with several members stay in sync among
+everybody, also along chains of people, in any order; they update by themselves. To share, turn
+sharing on once with your GitHub token (it needs the *Gists* permission): PaperShelf keeps your shared
+labels in a secret gist it creates for you – nothing to set up by hand. Joining or following needs
+nothing. Shared labels can also be sent as `.papershelf` files. Guide in the app: **? → Shared labels**.
 
 **Citation styles** – APA 7, Nature, Science, Cell Press (Cell, Neuron, Current Biology, Cell Reports,
 iScience), Royal Society (Proc B), J Neurosci, eLife, PNAS, PLOS / Vancouver.
 
 **Export** – reference lists (.txt, Word/Pages .rtf), RIS (Zotero/EndNote/Mendeley, with PDFs linked
-and groups as tags), BibTeX, CSL-JSON, CSV. In Zotero: *File → Import…*.
+and labels as tags), BibTeX, CSL-JSON, CSV. In Zotero: *File → Import…*.
 
 ---
 
 ## 5. Optional settings
 
-All in ⚙︎ Settings, stored only on this computer. PaperShelf works without them.
+All in ⚙︎ Settings (tabs *General*, *PDFs & access*, *GitHub sync & sharing*, *Data sources*, *Updates*),
+stored only on this computer. PaperShelf works without them.
 
 | Setting | What for | Where to get it |
 |---|---|---|
@@ -178,15 +183,14 @@ All in ⚙︎ Settings, stored only on this computer. PaperShelf works without t
 | OpenAlex key | 10× more daily lookups for map, suggestions, profiles | free account on openalex.org → settings/api |
 | CORE key | free copies from university repositories | core.ac.uk/services/api |
 | Library access address | 🏛 button opening articles through your library | your library website ("off-campus access", "EZproxy") |
-| GitHub repository + token | sync between computers | section 6 |
-| Sharing repository + token | publish shared lists (joining needs nothing) | public repo `your-name/papershelf-shared` – guide in the app (**? → Sharing lists**) |
+| GitHub token | library sync between computers and/or sharing labels | section 6 (one token for both) |
 
 ---
 
 ## 6. Sync between computers (GitHub)
 
 Keeps the same library on several computers (Mac and/or Windows) through a **private** repository on
-your GitHub account. Synced: papers, details, groups, notes, highlights, status – and PDFs if you
+your GitHub account. Synced: papers, details, personal labels, notes, highlights, status – and PDFs if you
 choose. Never synced: settings, keys, researcher profiles. (The same guide, with a live connection
 test, is in the app: **? → Sync between computers**.)
 
@@ -203,6 +207,7 @@ test, is in the app: **? → Sync between computers**.)
    - Name `PaperShelf`; expiration up to 1 year (note it in your calendar).
    - Repository access: **Only select repositories** → `papershelf-library`.
    - Permissions → Repository permissions → **Contents: Read and write**.
+   - To also share labels: Permissions → Account permissions → **Gists: Read and write**.
    - **Generate token** and copy it (starts with `github_pat_`; shown only once – if lost, make a new one).
 
 ### On each computer
@@ -210,7 +215,7 @@ test, is in the app: **? → Sync between computers**.)
 4. Install Git (once):
    - Mac: Terminal → `xcode-select --install` → accept (if "already installed", you're done).
    - Windows: <https://git-scm.com/download/win>, default options; then restart PaperShelf.
-5. ⚙︎ Settings → **Sync with GitHub**: paste address and token → **Test connection** → **Save**.
+5. ⚙︎ Settings → **GitHub sync & sharing**: paste token and address → **Test connection** → **Save**.
    The first sync starts by itself.
 6. On the other computer: install PaperShelf, repeat steps 4–5 with the same address.
 
@@ -277,8 +282,8 @@ needed and restarts; the page reloads by itself. Your library is never touched.
   Unpaywall, Europe PMC, SCImago tables) and legal open-access sources are used. Google Scholar is never
   queried automatically – only the public page you choose to import. No "shadow libraries".
 - Subscription PDFs are for personal use: keep a synced repository private and don't share them.
-- Shared lists contain only bibliographic details (title, authors, year, journal, DOI) and live in your
-  public `papershelf-shared` repository: don't share lists you want to keep confidential. PaperShelf
+- Shared labels contain only bibliographic details (title, authors, year, journal, DOI) and live in a
+  secret gist on your GitHub account: anyone with a label's code can read its titles. PaperShelf
   only reads the sharing repositories of the members of the lists you joined.
 - Researcher profiles hold public professional data, kept locally; ask before publishing someone
   else's publication page.
@@ -323,11 +328,11 @@ journals.py       journal metrics (SCImago tables, OpenAlex, manual impact facto
 watcher.py        attaches PDFs downloaded in the browser to the right paper
 updater.py        in-app updates (GitHub releases → download, backup, replace, restart)
 launcher.py       app window (Chrome/Edge --app) and the PaperShelf icon (Mac .app, Windows shortcut)
-sharing.py        shared lists: order-independent merge (Lamport-stamped add/remove sets), GitHub files
+sharing.py        shared labels: order-independent merge (Lamport-stamped add/remove sets), secret gists
 VERSION           the app version (single source of truth)
 update.json       the GitHub repository the updater checks ("owner/name")
 static/           interface: app.js, graph.js, discover.js, reader.js, people.js, help.js, update.js,
-                  suggest.js (title search under the Add box), shares.js (shared lists), style.css, icons/
+                  suggest.js (title search under the Add box), shares.js (shared labels), style.css, icons/
 static/vendor/pdfjs   PDF.js 4.10 (Apache-2.0), bundled for offline reading
 start.command / start.bat   launchers (create .venv, install requirements, update via git if cloned)
 .github/workflows/release.yml   creates a GitHub release when VERSION changes

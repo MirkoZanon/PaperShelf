@@ -3,7 +3,7 @@
    - citations: arrows from the citing paper to the cited one; optional grey "ghost" nodes are
      papers you don't have that several of these papers cite;
    - keywords: keywords as hub nodes, or papers linked when they share keywords;
-   - groups: your groups as hub nodes (subgroups linked to their parent), papers linked to their groups. */
+   - labels: your personal labels as hub nodes (sub-labels linked to their parent), papers linked to their labels. */
 const Graph = (() => {
   const PALETTE = ['#4e79a7', '#f28e2b', '#e15759', '#59a14f', '#b07aa1', '#76b7b2', '#edc948', '#ff9da7', '#9c755f', '#3d9970'];
   const STATUS_COLORS = {to_read: '#9aa0a6', reading: '#e3a008', read: '#2e9d5b'};
@@ -20,11 +20,11 @@ const Graph = (() => {
     root.innerHTML = `
       <div class="map-bar">
         <span class="muted small">Links:</span>
-        <div class="seg small-seg" id="map-edges"><button data-e="cites" class="on" title="Arrow = cites">Citations</button><button data-e="keywords" title="Papers connected through their keywords">Keywords</button><button data-e="groups" title="Papers connected to your groups (labels)">Groups</button></div>
+        <div class="seg small-seg" id="map-edges"><button data-e="cites" class="on" title="Arrow = cites">Citations</button><button data-e="keywords" title="Papers connected through their keywords">Keywords</button><button data-e="groups" title="Papers connected to your personal labels">Labels</button></div>
         <label class="check map-opt" data-for="cites" title="Grey dots: papers you don't have that at least two of these papers cite"><input type="checkbox" id="map-ext" checked> key papers you don't have</label>
         <select id="map-kwstyle" class="map-opt" data-for="keywords" title="How keywords are shown"><option value="hubs">Keywords as nodes</option><option value="pairs">Papers linked by shared keywords</option></select>
         <select id="map-minshared" class="map-opt" data-for="pairs" title="How many keywords two papers must share to be linked"><option value="0">Auto</option><option value="1">≥ 1 shared</option><option value="2">≥ 2 shared</option><option value="3">≥ 3 shared</option></select>
-        <select id="map-color" title="Node color"><option value="group">Color by group</option><option value="status">Color by reading status</option><option value="year">Color by year</option></select>
+        <select id="map-color" title="Node color"><option value="group">Color by label</option><option value="status">Color by reading status</option><option value="year">Color by year</option></select>
         <div class="grow"></div>
         <span id="map-info" class="muted small"></span>
         <button class="btn small" id="map-fetch" style="display:none"></button>
@@ -282,10 +282,10 @@ const Graph = (() => {
     else {
       const groups = state.view.type === 'group' ? childrenOf(state.view.id) : state.groups.filter(g => g.parent_id == null);
       items = groups.slice(0, 10).map((g, i) => [PALETTE[i % PALETTE.length], g.name]);
-      items.push(['#9aa0a6', state.view.type === 'group' ? 'directly in this group' : 'no group']);
+      items.push(['#9aa0a6', state.view.type === 'group' ? 'only this label' : 'no label']);
     }
     if (st.showExt && st.edgeMode === 'cites') items.push(['ghost', 'not in your library']);
-    if (st.edgeMode === 'groups') items.push(['hub', 'group (size = papers; dashed = subgroup of)']);
+    if (st.edgeMode === 'groups') items.push(['hub', 'label (size = papers; dashed = sub-label of)']);
     if (st.edgeMode === 'keywords' && st.kwStyle === 'hubs') items.push(['hub', 'keyword (size = papers)']);
     el.innerHTML = items.map(([c, l]) => `<div><span class="dot ${c === 'ghost' ? 'ghost' : c === 'hub' ? 'hubdot' : ''}" style="${c === 'ghost' || c === 'hub' ? '' : `background:${c}`}"></span>${esc(l)}</div>`).join('');
   }
@@ -383,7 +383,7 @@ const Graph = (() => {
     let html;
     if (n.hub) {
       html = n.hub.kind === 'group'
-        ? `<b>Group: ${esc(n.hub.path || n.hub.label)}</b><div class="muted">${n.hub.count} paper${n.hub.count === 1 ? '' : 's'} here directly · click to open the group</div>`
+        ? `<b>Label: ${esc(n.hub.path || n.hub.label)}</b><div class="muted">${n.hub.count} paper${n.hub.count === 1 ? '' : 's'} · click to open the label</div>`
         : `<b>Keyword: ${esc(n.hub.label)}</b><div class="muted">${n.hub.count} papers · click to show only these papers</div>`;
     } else if (n.ext) {
       const w = st.extInfo[n.ext.id];
@@ -394,7 +394,7 @@ const Graph = (() => {
       const inLib = st.edges.filter(e => e.t === n && !e.undirected).length;
       html = `<b>${esc(p.title)}</b><div>${esc([shortAuthors(p), p.journal, p.year].filter(Boolean).join(' · '))}</div>
         <div class="muted">${st.edgeMode === 'cites' ? `Cited by ${inLib} paper${inLib === 1 ? '' : 's'} here · ${(p.cited_by_count ?? 0).toLocaleString()} overall`
-          : st.edgeMode === 'groups' ? (p.group_ids.length ? `In: ${p.group_ids.map(g => esc(groupPath(g))).join('; ')}` : 'Not in any group')
+          : st.edgeMode === 'groups' ? (p.group_ids.length ? `Labels: ${p.group_ids.map(g => esc(groupPath(g))).join('; ')}` : 'No labels')
           : `${n.deg} connection${n.deg === 1 ? '' : 's'}${p.keywords?.length ? ' · ' + esc(p.keywords.slice(0, 6).join(', ')) : ''}`}</div>`;
     }
     el.innerHTML = html; el.style.display = 'block';
@@ -447,7 +447,7 @@ const Graph = (() => {
     const m = modal(`<h3>${esc(w.title)}</h3><p class="muted">${esc([w.authors, w.venue, w.year].filter(Boolean).join(' · '))}</p>
       <p>Cited by <b>${n.ext.count}</b> of the papers on this map${w.cited_by_count ? ` and ${w.cited_by_count.toLocaleString()} times overall` : ''}. It's not in your library yet.</p>
       <div class="modal-actions"><button class="btn" data-close>Close</button><a class="btn" href="${esc(link)}" target="_blank" rel="noopener">🔗 Open</a>
-      <button class="btn primary" id="ext-add">＋ Add to library${currentGroupId() ? ' (this group)' : ''}</button></div>`);
+      <button class="btn primary" id="ext-add">＋ Add to library${currentGroupId() ? ' (with this label)' : ''}</button></div>`);
     $('#ext-add', m.el).onclick = async () => {
       setBusy($('#ext-add', m.el), true, 'Adding…');
       try {
@@ -477,12 +477,12 @@ const Graph = (() => {
     legend();
     const links = st.edges.length;
     const hubs = st.nodes.filter(n => n.hub).length;
-    $('#map-info').textContent = `${papers.length} paper${papers.length === 1 ? '' : 's'}${hubs ? ` · ${hubs} ${st.edgeMode === 'groups' ? 'group' : 'keyword'}${hubs === 1 ? '' : 's'}` : ''} · ${links} link${links === 1 ? '' : 's'}`;
+    $('#map-info').textContent = `${papers.length} paper${papers.length === 1 ? '' : 's'}${hubs ? ` · ${hubs} ${st.edgeMode === 'groups' ? 'label' : 'keyword'}${hubs === 1 ? '' : 's'}` : ''} · ${links} link${links === 1 ? '' : 's'}`;
     const withData = papers.filter(p => p.openalex_id).length;
     if (!papers.length) msg.innerHTML = 'No papers in this view.';
     else if (st.edgeMode === 'cites' && !withData) msg.innerHTML = `No citation data yet for these papers.<br><span class="muted small">PaperShelf gets it from OpenAlex, a free scholarly database (needs internet).</span>`;
-    else if (st.edgeMode === 'cites' && !links) msg.innerHTML = `These papers don't cite each other.<br><span class="muted small">Try “Keywords” or “Groups”, or a larger group.</span>`;
-    else if (st.edgeMode === 'groups' && !links) msg.innerHTML = `None of these papers is in a group yet.<br><span class="muted small">Create groups with ＋ in the sidebar and drag papers onto them.</span>`;
+    else if (st.edgeMode === 'cites' && !links) msg.innerHTML = `These papers don't cite each other.<br><span class="muted small">Try “Keywords” or “Labels”, or a larger selection.</span>`;
+    else if (st.edgeMode === 'groups' && !links) msg.innerHTML = `None of these papers has a personal label yet.<br><span class="muted small">Create labels with Labels → Personal ＋ in the sidebar and drag papers onto them.</span>`;
     else if (st.edgeMode === 'keywords' && !links) msg.innerHTML = `These papers share no keywords.<br><span class="muted small">Keywords are filled in automatically when papers are added; you can also type your own in a paper's details.</span>`;
     else msg.innerHTML = '';
     msg.style.display = msg.innerHTML ? '' : 'none';

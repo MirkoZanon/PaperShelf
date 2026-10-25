@@ -221,12 +221,12 @@ def get_settings(db=None, secrets=True) -> dict:
          "auto_import": "", "remove_downloads": "", "watch_dir": str(Path.home() / "Downloads"), "openalex_key": "",
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
          "update_auto": "1", "just_updated": "", "own_window": "1",
-         "share_repo": "", "share_token": "", "share_auto": "1", "install_id": ""}
+         "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": ""}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
                                                 "update_check", "update_cache", "update_auto", "just_updated", "own_window",
-                                                "share_repo", "share_token", "share_auto"):
+                                                "share_repo", "share_token", "share_auto", "share_user", "share_gist"):
             s[row["key"]] = row["value"]
     try:
         s["proxies"] = json.loads(s["proxies"] or "[]")
@@ -583,6 +583,77 @@ def search_online():
     for c in cands:
         c["in_library"] = have.get((c.get("doi") or "").lower())
     return jsonify(results=cands, query=q)
+
+
+def _kw_norm(k: str) -> str:
+    """Variants of the same keyword share this form: case, accents, hyphens and simple plurals ignored."""
+    import unicodedata
+    k = unicodedata.normalize("NFKD", (k or "").lower())
+    k = re.sub(r"[^a-z0-9]+", " ", k).strip()
+    words = [w[:-1] if len(w) > 4 and w.endswith("s") and not w.endswith("ss") else w for w in k.split()]
+    return " ".join(words)
+
+
+@app.get("/api/keywords")
+def list_keywords():
+    """All keywords of the library with their counts, and groups of likely variants to merge."""
+    db = get_db()
+    counts, forms = Counter(), {}
+    for (raw,) in db.execute("SELECT keywords FROM papers"):
+        try:
+            kws = json.loads(raw or "[]")
+        except ValueError:
+            continue
+        seen = set()
+        for k in kws:
+            k = " ".join(str(k).split())
+            if not k or k.lower() in seen:
+                continue
+            seen.add(k.lower())
+            counts[k] += 1
+    by_norm = {}
+    for k, n in counts.items():
+        by_norm.setdefault(_kw_norm(k), []).append(k)
+    variants = [sorted(v, key=lambda x: -counts[x]) for v in by_norm.values() if len(v) > 1]
+    return jsonify(keywords=[{"keyword": k, "count": n} for k, n in counts.most_common()],
+                   variants=sorted(variants, key=lambda v: -sum(counts[x] for x in v)))
+
+
+@app.post("/api/keywords")
+def edit_keywords():
+    """Rename, merge or delete keywords in the whole library."""
+    b = request.get_json(silent=True) or {}
+    action = b.get("action")
+    targets = {" ".join(str(k).split()).lower() for k in b.get("keywords") or [] if str(k).strip()}
+    to = " ".join(str(b.get("to") or "").split())
+    if action not in ("rename", "merge", "delete") or not targets:
+        return error("Choose the keywords first.")
+    if action in ("rename", "merge") and not to:
+        return error("Type the new keyword.")
+    db = get_db()
+    changed = 0
+    ts = now()
+    for r in db.execute("SELECT id, keywords FROM papers").fetchall():
+        try:
+            kws = json.loads(r["keywords"] or "[]")
+        except ValueError:
+            continue
+        if not any(" ".join(str(k).split()).lower() in targets for k in kws):
+            continue
+        out, seen = [], set()
+        for k in kws:
+            k2 = to if " ".join(str(k).split()).lower() in targets else k
+            if action == "delete" and k2 is to and not to:
+                continue
+            if action == "delete" and " ".join(str(k).split()).lower() in targets:
+                continue
+            if k2.lower() not in seen:
+                seen.add(k2.lower())
+                out.append(k2)
+        db.execute("UPDATE papers SET keywords=?, updated_at=? WHERE id=?", (json.dumps(out, ensure_ascii=False), ts, r["id"]))
+        changed += 1
+    db.commit()
+    return jsonify(ok=True, papers=changed)
 
 
 @app.put("/api/papers/<int:pid>")
@@ -964,10 +1035,10 @@ def suggestions():
 def create_group():
     body = request.get_json(silent=True) or {}
     db = get_db()
-    name = " ".join((body.get("name") or "").split()) or "New group"
+    name = " ".join((body.get("name") or "").split()) or "New label"
     parent = _int(body.get("parent_id"))
     if parent and not group_exists(db, parent):
-        return error("Parent group not found", 404)
+        return error("Parent label not found", 404)
     pos = db.execute("SELECT COALESCE(MAX(position), 0) + 1 FROM collections WHERE parent_id IS ?",
                      (parent,)).fetchone()[0]
     uid = new_uid()
@@ -982,7 +1053,7 @@ def update_group(gid):
     body = request.get_json(silent=True) or {}
     db = get_db()
     if not group_exists(db, gid):
-        return error("Group not found", 404)
+        return error("Label not found", 404)
     if "name" in body:
         name = " ".join((body.get("name") or "").split())
         if name:
@@ -990,9 +1061,9 @@ def update_group(gid):
     if "parent_id" in body:
         parent = _int(body["parent_id"])
         if parent in group_descendants(db, gid):
-            return error("A group can't be moved inside itself.")
+            return error("A label can't be moved inside itself.")
         if parent and not group_exists(db, parent):
-            return error("Parent group not found", 404)
+            return error("Parent label not found", 404)
         db.execute("UPDATE collections SET parent_id=? WHERE id=?", (parent, gid))
     db.execute("UPDATE collections SET updated_at=? WHERE id=?", (now(), gid))
     db.commit()
@@ -1021,7 +1092,7 @@ def assign_papers(gid):
     body = request.get_json(silent=True) or {}
     db = get_db()
     if not group_exists(db, gid):
-        return error("Group not found", 404)
+        return error("Label not found", 404)
     ids = [int(i) for i in body.get("paper_ids") or []]
     for pid in ids:
         if body.get("action") == "remove":
@@ -1611,7 +1682,7 @@ def diagnostics():
     ident = share_identity(db)
     nsh = db.execute("SELECT COUNT(*) FROM shares").fetchone()[0]
     bad = [r["last_error"] for r in db.execute("SELECT last_error FROM shares WHERE last_error != ''")]
-    add("Shared lists", not bad, (f"{nsh} list(s)" + (f", publishing to github.com/{ident['repo']}" if ident["can_publish"] else
+    add("Shared labels", not bad, (f"{nsh} shared label(s)" + (f", shared through the gist of {ident['user']}" if ident["can_publish"] else
         ", not publishing (only following)") + (f" – {bad[0]}" if bad else "")) if nsh or ident["repo"] else "not used (optional)", "sharing")
     gs = syncmod.git_status()
     add("Git (for GitHub sync)", gs["ok"], gs["version"] or gs["error"], "sync")
@@ -1852,16 +1923,17 @@ def _share_repo_value(v):
 
 
 def share_identity(db) -> dict:
+    """Who you are for sharing: your GitHub name and your shared-labels gist (set up in Settings)."""
     s = get_settings(db)
     if not s.get("install_id"):
         set_setting(db, "install_id", uuid.uuid4().hex[:10])
         db.commit()
         s["install_id"] = get_settings(db)["install_id"]
-    repo = s.get("share_repo") or ""
-    user = repo.split("/")[0] if sharing.REPO_RE.match(repo) else ""
-    return {"user": user, "repo": repo if user else "", "token": s.get("share_token") or "",
-            "local": "local-" + s["install_id"], "can_publish": bool(user and s.get("share_token"))}
-
+    token = s.get("share_token") or s.get("sync_token") or ""
+    user, gist = s.get("share_user") or "", s.get("share_gist") or ""
+    src = f"gist:{gist}" if gist else ""
+    return {"user": user, "src": src, "repo": src, "token": token, "local": "local-" + s["install_id"],
+            "can_publish": bool(user and gist and token)}
 
 def _load_share(db, sid):
     row = db.execute("SELECT * FROM shares WHERE id=?", (sid,)).fetchone()
@@ -1983,20 +2055,32 @@ def share_forget_papers(db, ids, unshare=True) -> set:
     return touched
 
 
+def _origin(row):
+    """(owner, source) of the place a list was joined from."""
+    o = row["origin"] or ""
+    if "|" in o:
+        owner, src = o.split("|", 1)
+        return owner, src
+    return (o.split("/")[0], o) if o else ("", "")
+
+
 def share_summary_one(db, row, st, ident) -> dict:
     sm = sharing.summary(st)
     author = _my_author(st, ident)
     local = db.execute("SELECT COUNT(*) FROM paper_shares WHERE share_id=?", (row["id"],)).fetchone()[0]
-    owner = ident["user"] if author and ident["user"] else (row["origin"].split("/")[0] if row["origin"] else "")
-    if not owner:
-        owner = next((n for n, rp in sm["members"].items() if rp), "")
-    return {**sm, "members": [{"name": n, "repo": rp} for n, rp in sorted(sm["members"].items())],
+    if author and ident["can_publish"]:
+        code = sharing.make_code(ident["user"], ident["src"], row["id"])
+    else:
+        owner, src = _origin(row)
+        if not owner:
+            owner, src = next(((n, rp) for n, rp in sm["members"].items() if rp), ("", ""))
+        code = sharing.make_code(owner, src, row["id"]) if owner and src else ""
+    return {**sm, "members": [{"name": n, "joined": bool(rp), "you": n in (ident["user"], ident["local"])}
+                              for n, rp in sorted(sm["members"].items())],
             "role": "member" if author else "follower", "can_publish": ident["can_publish"], "local_papers": local,
             "group_id": row["group_id"], "origin": row["origin"], "last_pull": row["last_pull"],
-            "last_push": row["last_push"], "last_error": row["last_error"],
-            "code": f"{owner}/{row['id']}" if owner and not owner.startswith("local-") else "",
+            "last_push": row["last_push"], "last_error": row["last_error"], "code": code,
             "published": bool(row["published_hash"])}
-
 
 def shares_summary(db) -> list:
     ident = share_identity(db)
@@ -2009,10 +2093,10 @@ def shares_summary(db) -> list:
     return sorted(out, key=lambda x: x["name"].lower())
 
 
-def _publish_index(db, gh, ident, drop=()):
-    """index.json in your sharing repository: the lists you are a member of (kept across your computers)."""
+def _index_entries(db, gh, ident, drop=()):
+    """index.json of your gist: the shared labels you are a member of (kept across your computers)."""
     try:
-        old = gh.read(ident["repo"], "index.json", fresh=True) or {}
+        old = gh.read_src(ident["user"], ident["src"], "index", fresh=True) or {}
     except sharing.ShareError:
         old = {}
     lists = {x.get("id"): x for x in (old.get("lists") or []) if isinstance(x, dict) and x.get("id") not in drop}
@@ -2026,38 +2110,58 @@ def _publish_index(db, gh, ident, drop=()):
                                 "papers": sm["papers"], "members": sorted(sm["members"]), "updated_at": sm["updated_at"]}
         elif row["id"] in lists:
             lists.pop(row["id"])  # you left it
-    data = {"papershelf_shared": sharing.FORMAT, "owner": ident["user"],
+    return {"papershelf_shared": sharing.FORMAT, "owner": ident["user"],
             "lists": sorted(lists.values(), key=lambda x: (x.get("name") or "").lower())}
-    gh.write(ident["repo"], "index.json", data, "Update list index")
 
 
-def sync_share(db, sid, ident=None, gh=None) -> dict:
+def _publish(db, gh, ident, sid, st, drop=()):
+    files = {} if sid in drop else {sharing.file_for(ident["src"], "list", sid): st}
+    if sid in drop:
+        files[sharing.file_for(ident["src"], "list", sid)] = st  # the copy that says you left
+    files["index.json"] = _index_entries(db, gh, ident, drop)
+    gh.publish(ident["src"], files)
+
+def _apply_join_comments(st, sid, ident, joins):
+    """Members who joined left a signed comment on your gist with the address of their own gist."""
+    author = _my_author(st, ident)
+    mem = sharing.members(st)
+    for j in joins:
+        if j["list"] == sid and j["member"] in mem and mem[j["member"]] != j["src"] and author:
+            sharing.set_member(st, author, j["member"], j["src"])
+            j["used"] = True
+
+
+def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     """Read every member's copy of the list, merge, update the library and publish your copy."""
     ident = ident or share_identity(db)
     gh = gh or sharing.GitHub(ident["token"])
     row, st = _load_share(db, sid)
     if not st:
-        raise sharing.ShareError("Shared list not found.")
+        raise sharing.ShareError("Shared label not found.")
     errors = []
-    sources = {rp for n, rp in sharing.members(st).items() if rp}
-    if row["origin"]:
-        sources.add(row["origin"])
-    sources.discard("")
-    for repo in sorted(sources):
+    sources = {(n, rp) for n, rp in sharing.members(st).items() if rp}
+    o_owner, o_src = _origin(row)
+    if o_src:
+        sources.add((o_owner, o_src))
+    for owner, src in sorted(sources):
         try:
-            data = gh.read(repo, sharing.list_path(sid), fresh=repo == ident["repo"])
+            data = gh.read_src(owner, src, "list", sid, fresh=src == ident["src"])
             if data is None:
-                if repo != ident["repo"]:
-                    errors.append(f"{repo.split('/')[0]} hasn't published this list yet")
+                if src != ident["src"]:
+                    errors.append(f"{owner} hasn't published this label yet")
                 continue
             st = sharing.merge(st, sharing.validate(data))
         except sharing.ShareError as exc:
-            errors.append(f"{repo.split('/')[0]}: {exc}")
+            errors.append(f"{owner}: {exc}")
+    _apply_join_comments(st, sid, ident, joins)
     mem = sharing.members(st)
-    if ident["can_publish"] and ident["local"] in mem and ident["user"] not in mem:
-        sharing.set_member(st, ident["user"], ident["user"], ident["repo"])  # you started publishing
-    elif ident["can_publish"] and ident["user"] in mem and mem[ident["user"]] != ident["repo"]:
-        sharing.set_member(st, ident["user"], ident["user"], ident["repo"])
+    announce = False
+    if ident["can_publish"]:
+        if ident["local"] in mem and ident["user"] not in mem:
+            sharing.set_member(st, ident["user"], ident["user"], ident["src"])  # you started publishing
+        elif ident["user"] in mem and mem[ident["user"]] != ident["src"]:
+            sharing.set_member(st, ident["user"], ident["user"], ident["src"])  # you just joined as a member
+            announce = True
     stats = materialize_share(db, sid, st, row["group_id"])
     fields = {"last_pull": now(), "last_error": "; ".join(errors)[:500]}
     published = False
@@ -2067,44 +2171,53 @@ def sync_share(db, sid, ident=None, gh=None) -> dict:
                                                        sort_keys=True)).hex
         if h != row["published_hash"]:
             try:
-                gh.write(ident["repo"], sharing.list_path(sid), st, f"Update list: {st['name']['v']}")
-                _publish_index(db, gh, ident)
+                _publish(db, gh, ident, sid, st)
                 fields.update(published_hash=h, last_push=now())
                 published = True
             except sharing.ShareError as exc:
                 fields["last_error"] = (fields["last_error"] + "; " if fields["last_error"] else "") + f"publishing: {exc}"
+        if announce:  # tell the others where your copy is
+            for name, src in sharing.members(st).items():
+                if name != ident["user"] and sharing.is_gist(src):
+                    try:
+                        gh.comment(src, sharing.join_comment(ident["user"], ident["src"], sid))
+                    except sharing.ShareError as exc:
+                        errors.append(str(exc))
+            if o_src and sharing.is_gist(o_src) and o_owner != ident["user"] and o_src not in sharing.members(st).values():
+                try:
+                    gh.comment(o_src, sharing.join_comment(ident["user"], ident["src"], sid))
+                except sharing.ShareError:
+                    pass
     _save_share(db, sid, st, **fields)
     db.commit()
     return {**stats, "published": published, "errors": errors}
 
-
 def restore_my_shares(db, ident, gh) -> int:
-    """On another of your computers: rejoin the lists listed in your own sharing repository."""
-    if not ident["repo"]:
+    """On another of your computers: rejoin the shared labels kept in your own gist."""
+    if not ident["can_publish"]:
         return 0
-    idx = gh.read(ident["repo"], "index.json", fresh=True) or {}
+    idx = gh.read_src(ident["user"], ident["src"], "index", fresh=True) or {}
     n = 0
     have = {r["id"] for r in db.execute("SELECT id FROM shares")}
     for x in idx.get("lists") or []:
         lid = str((x or {}).get("id") or "")
         if not sharing.ID_RE.match(lid) or lid in have:
             continue
-        data = gh.read(ident["repo"], sharing.list_path(lid), fresh=True)
+        data = gh.read_src(ident["user"], ident["src"], "list", lid, fresh=True)
         if not data:
             continue
         st = sharing.validate(data)
         if ident["user"] not in sharing.members(st):
             continue
         db.execute("INSERT INTO shares (id, state, origin, added_at) VALUES (?, ?, ?, ?)",
-                   (lid, json.dumps(st), ident["repo"], now()))
+                   (lid, json.dumps(st), f"{ident['user']}|{ident['src']}", now()))
         n += 1
     db.commit()
     return n
 
-
 def sync_all_shares(db, only=None) -> dict:
     if not share_lock.acquire(timeout=120):
-        raise sharing.ShareError("Shared lists are already being updated.")
+        raise sharing.ShareError("Shared labels are already being updated.")
     try:
         ident = share_identity(db)
         gh = sharing.GitHub(ident["token"])
@@ -2114,19 +2227,30 @@ def sync_all_shares(db, only=None) -> dict:
                 restored = restore_my_shares(db, ident, gh)
             except sharing.ShareError:
                 restored = 0
+        joins = []
+        if ident["can_publish"]:
+            for c in gh.comments(ident["src"]):
+                j = sharing.parse_join_comment(c["body"])
+                if j and j["member"] == c["user"]:  # GitHub signs comments: nobody can join in someone else's name
+                    joins.append({**j, "cid": c["id"]})
         res = {}
         ids = [only] if only else [r["id"] for r in db.execute("SELECT id FROM shares")]
         for sid in ids:
             try:
-                res[sid] = sync_share(db, sid, ident, gh)
+                res[sid] = sync_share(db, sid, ident, gh, joins)
             except sharing.ShareError as exc:
                 db.execute("UPDATE shares SET last_error=? WHERE id=?", (str(exc)[:500], sid))
                 db.commit()
                 res[sid] = {"error": str(exc)}
+        for j in joins:
+            if j.get("used") or j["list"] not in {r[0] for r in db.execute("SELECT id FROM shares")}:
+                try:
+                    gh.delete_comment(ident["src"], j["cid"])
+                except sharing.ShareError:
+                    pass
         return {"lists": res, "restored": restored}
     finally:
         share_lock.release()
-
 
 def publish_soon(sid):
     """After a change you made: merge and publish in the background."""
@@ -2167,7 +2291,7 @@ def share_loop():
 def _share_or_404(db, sid):
     row, st = _load_share(db, sid)
     if not st:
-        return None, None, (jsonify(error="Shared list not found."), 404)
+        return None, None, (jsonify(error="Shared label not found."), 404)
     return row, st, None
 
 
@@ -2175,7 +2299,7 @@ def _share_or_404(db, sid):
 def list_shares():
     db = get_db()
     ident = share_identity(db)
-    return jsonify(shares=shares_summary(db), identity={"user": ident["user"], "repo": ident["repo"],
+    return jsonify(shares=shares_summary(db), identity={"user": ident["user"], "gist": ident["src"],
                                                          "can_publish": ident["can_publish"]})
 
 
@@ -2187,7 +2311,7 @@ def create_share():
     ident = share_identity(db)
     name = (b.get("name") or "").strip()
     if not name:
-        return error("Give the list a name.")
+        return error("Give the shared label a name.")
     author = ident["user"] if ident["can_publish"] else ident["local"]
     st = sharing.new_state(name, author, ident["repo"] if ident["can_publish"] else "")
     if b.get("description"):
@@ -2219,7 +2343,7 @@ def update_share(sid):
     ident = share_identity(db)
     author = _my_author(st, ident)
     if ("name" in b or "description" in b) and not author:
-        return error("Only members can rename this list. You are following it.")
+        return error("Only members can rename this shared label. You are following it.")
     if "name" in b and (b["name"] or "").strip() and b["name"].strip() != st["name"]["v"]:
         sharing.set_name(st, author, b["name"])
     if "description" in b and (b["description"] or "") != st["description"]["v"]:
@@ -2247,16 +2371,13 @@ def leave_share(sid):
     if author and ident["can_publish"]:
         sharing.set_member(st, author, author, remove=True)
         try:
-            gh = sharing.GitHub(ident["token"])
-            gh.write(ident["repo"], sharing.list_path(sid), st, f"Leave list: {st['name']['v']}")
-            _publish_index(db, gh, ident, drop={sid})
+            _publish(db, sharing.GitHub(ident["token"]), ident, sid, st, drop={sid})
         except sharing.ShareError as exc:
             app.logger.warning("could not publish leaving: %s", exc)
     db.execute("DELETE FROM shares WHERE id=?", (sid,))
     db.execute("DELETE FROM share_dismissed WHERE share_id=?", (sid,))
     db.commit()
     return jsonify(ok=True)
-
 
 @app.post("/api/shares/<sid>/papers")
 def share_papers(sid):
@@ -2271,8 +2392,8 @@ def share_papers(sid):
     ids = [int(i) for i in b.get("paper_ids") or []]
     remove = b.get("action") == "remove"
     if not remove and not author:
-        return error("You follow this list but are not a member, so you can't add papers. Ask its owner to add "
-                     "you as a member (they need your GitHub name).")
+        return error("You follow this shared label but are not a member, so you can't add papers. Ask a member to add "
+                     "your GitHub name, then join again with the code.")
     for p in load_papers(db, ids):
         if remove:
             r = db.execute("SELECT item_key FROM paper_shares WHERE paper_id=? AND share_id=?", (p["id"], sid)).fetchone()
@@ -2309,22 +2430,19 @@ def share_members(sid):
     if not author:
         return error("Only members can add or remove members.")
     if not ident["can_publish"]:
-        return error("To share with other people, first set up your sharing repository in Settings → Sharing.")
-    name = (b.get("name") or "").strip().lstrip("@")
-    repo = _share_repo_value(b.get("repo") or name)
-    name = (repo or "").split("/")[0]
-    if not repo or not sharing.NAME_RE.match(name):
+        return error("To share with other people, first turn on sharing in Settings → GitHub sync & sharing.")
+    name = re.sub(r"^https?://github\.com/", "", (b.get("name") or "").strip()).strip("/@ ")
+    if not sharing.NAME_RE.match(name):
         return error("Type the GitHub user name of the person (e.g. MarioRossi).")
     if b.get("remove"):
         sharing.set_member(st, author, name, remove=True)
     else:
-        sharing.set_member(st, author, name, repo)
+        sharing.set_member(st, author, name)  # their address arrives when they join
     _save_share(db, sid, st)
     db.commit()
     publish_soon(sid)
     row, st = _load_share(db, sid)
     return jsonify(share=share_summary_one(db, row, st, ident))
-
 
 @app.post("/api/shares/sync")
 def shares_sync():
@@ -2357,35 +2475,39 @@ def _add_share_state(db, st, origin="") -> tuple[str, dict]:
 
 @app.post("/api/shares/join")
 def join_share():
-    """Join with what the other person gave you: their GitHub name (then choose a list) or name/list-id."""
+    """Join with the code the other person gave you (owner/gist/label), or their gist link to choose a label."""
     b = request.get_json(silent=True) or {}
     db = get_db()
     ident = share_identity(db)
     gh = sharing.GitHub(ident["token"])
     try:
-        owner, repo_name, lid = sharing.parse_code(b.get("code") or "")
-        repo = f"{owner}/{repo_name}"
+        owner, src, lid = sharing.parse_code(b.get("code") or "")
         lid = b.get("id") or lid
         if not lid:
-            idx = gh.read(repo, "index.json", fresh=True)
+            idx = gh.read_src(owner, src, "index", fresh=True)
             if not idx:
-                return error(f"{owner} has no PaperShelf shared lists (looked in github.com/{repo}).", 404)
+                return error(f"No shared labels found there. Ask {owner} for the code shown in the label's ⚙︎.", 404)
             have = {r[0] for r in db.execute("SELECT id FROM shares")}
             lists = [dict(x, joined=x.get("id") in have) for x in idx.get("lists") or [] if isinstance(x, dict)]
-            return jsonify(choose=lists, owner=owner, repo=repo)
-        data = gh.read(repo, sharing.list_path(lid), fresh=True)
+            return jsonify(choose=lists, owner=owner)
+        data = gh.read_src(owner, src, "list", lid, fresh=True)
         if not data:
-            return error("That list was not found. Check the code, or wait a minute if it was just created.", 404)
+            return error("That shared label was not found. Check the code, or wait a minute if it was just created.", 404)
         st = sharing.validate(data)
-        sid, stats = _add_share_state(db, st, origin=repo)
+        sid, stats = _add_share_state(db, st, origin=f"{owner}|{src}")
     except sharing.ShareError as exc:
         return error(str(exc), 422)
     if b.get("group_id") and group_exists(db, _int(b["group_id"])):
         db.execute("UPDATE shares SET group_id=? WHERE id=?", (_int(b["group_id"]), sid))
         db.commit()
     row, st = _load_share(db, sid)
+    if ident["can_publish"] and ident["user"] in sharing.members(st):
+        try:  # you are a member: publish your copy and tell the others where it is
+            sync_all_shares(db, only=sid)
+        except sharing.ShareError:
+            pass
+        row, st = _load_share(db, sid)
     return jsonify(share=share_summary_one(db, row, st, ident), stats=stats)
-
 
 @app.get("/api/shares/<sid>/export")
 def export_share(sid):
@@ -2416,25 +2538,32 @@ def import_share():
     return jsonify(share=share_summary_one(db, row, st, share_identity(db)), stats=stats)
 
 
-@app.post("/api/shares/test")
-def share_test():
+@app.post("/api/shares/setup")
+def share_setup():
+    """Turn sharing on: find (or create) your secret shared-labels gist with your GitHub token."""
     b = request.get_json(silent=True) or {}
     db = get_db()
+    if b.get("off"):
+        for k in ("share_user", "share_gist"):
+            set_setting(db, k, "")
+        db.commit()
+        return jsonify(ok=True, settings=get_settings(db, secrets=False))
     s = get_settings(db)
-    repo = _share_repo_value(b.get("share_repo") if b.get("share_repo") is not None else s.get("share_repo"))
-    token = (b.get("share_token") or "").strip() or s.get("share_token")
-    if not repo:
-        return error("Write your sharing repository as  your-github-name/papershelf-shared")
+    token = (b.get("token") or "").strip() or s.get("share_token") or s.get("sync_token")
+    if not token:
+        return error("Paste your GitHub token first.")
+    gh = sharing.GitHub(token)
     try:
-        info = sharing.GitHub(token).check(repo)
+        user = gh.whoami()
+        gist = gh.find_or_create_gist()
     except sharing.ShareError as exc:
         return error(str(exc), 502)
-    if info["private"]:
-        return error("This repository is private: others couldn't read your lists. Make it public "
-                     "(GitHub → the repository → Settings → Change visibility) – it only ever contains titles and DOIs.", 422)
-    if not info["can_write"]:
-        return error("The token can read but not write this repository. Give it 'Contents: Read and write'.", 422)
-    return jsonify(ok=True, repo=repo)
+    if (b.get("token") or "").strip() and not s.get("sync_token"):
+        set_setting(db, "sync_token", token.strip())
+    set_setting(db, "share_user", user)
+    set_setting(db, "share_gist", gist)
+    db.commit()
+    return jsonify(ok=True, user=user, gist=gist, settings=get_settings(db, secrets=False))
 
 
 def _port_in_use(port: int) -> bool:

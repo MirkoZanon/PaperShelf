@@ -33,10 +33,11 @@ function loadPrefs() {
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
     if (p.tab === 'people') state.tab = 'people';
+    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false;
   } catch (e) { /* storage unavailable */ }
 }
 function savePrefs() {
-  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab})); }
+  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false})); }
   catch (e) { /* ignore */ }
 }
 
@@ -99,7 +100,7 @@ function confirmBox(title, message, {ok = 'OK', danger = false, checkbox = '', c
   return new Promise(resolve => {
     const m = modal(`<h3>${esc(title)}</h3><p class="muted">${esc(message)}</p>
       ${checkbox ? `<label class="opt"><input type="checkbox" id="cb-extra"><span>${esc(checkbox)}</span></label>` : ''}
-      ${checkbox2 ? `<label class="opt"><input type="checkbox" id="cb-extra2" ${checked2 ? 'checked' : ''}><span>${esc(checkbox2)}<small>If unticked, the paper stays in the list for everybody and won't come back to your library.</small></span></label>` : ''}
+      ${checkbox2 ? `<label class="opt"><input type="checkbox" id="cb-extra2" ${checked2 ? 'checked' : ''}><span>${esc(checkbox2)}<small>If unticked, the paper stays shared for everybody else and won't come back to your library.</small></span></label>` : ''}
       <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cb-ok">${esc(ok)}</button></div>`);
     let result = false;
     m.onclose = () => resolve(result);
@@ -167,7 +168,7 @@ function groupOptions(pid = null, depth = 0) {
 function currentGroupId() { return state.view.type === 'group' ? state.view.id : null; }
 
 async function createGroup(parentId = null, name = null) {
-  name = name ?? await askText(parentId ? `New subgroup in “${groupPath(parentId)}”` : 'New group', {placeholder: 'e.g. Thesis – Chapter 2', ok: 'Create'});
+  name = name ?? await askText(parentId ? `New sub-label in “${groupPath(parentId)}”` : 'New label', {placeholder: 'e.g. Thesis – Chapter 2', ok: 'Create'});
   if (!name) return null;
   try {
     const d = await api('/api/groups', {method: 'POST', body: {name, parent_id: parentId}});
@@ -179,7 +180,7 @@ async function createGroup(parentId = null, name = null) {
 }
 async function renameGroup(gid) {
   const g = state.groups.find(x => x.id === gid); if (!g) return;
-  const name = await askText('Rename group', {value: g.name, ok: 'Rename'});
+  const name = await askText('Rename label', {value: g.name, ok: 'Rename'});
   if (!name || name === g.name) return;
   try { const d = await api(`/api/groups/${gid}`, {method: 'PUT', body: {name}}); Object.assign(g, d.group); renderAll(); }
   catch (err) { toast(err.message, 'error'); }
@@ -187,8 +188,8 @@ async function renameGroup(gid) {
 async function deleteGroup(gid) {
   const sub = descendants(gid).size - 1;
   const ok = await confirmBox(`Delete “${groupPath(gid)}”?`,
-    `${sub ? `Its ${sub} subgroup${sub > 1 ? 's' : ''} will be deleted too. ` : ''}The papers stay in your library – only the grouping is removed.`,
-    {ok: 'Delete group', danger: true});
+    `${sub ? `Its ${sub} sub-label${sub > 1 ? 's' : ''} will be deleted too. ` : ''}The papers stay in your library – only the label is removed.`,
+    {ok: 'Delete label', danger: true});
   if (!ok) return;
   try {
     await api(`/api/groups/${gid}`, {method: 'DELETE'});
@@ -249,19 +250,25 @@ function setView(view) {
 /* ------------------------------------------------------------------ sidebar */
 function renderSidebar() {
   const P = state.papers;
-  const nav = [
-    ['all', 'All papers', '📚', P.length], ['starred', 'Starred', '★', P.filter(p => p.starred).length],
+  const main = [
+    ['all', 'All papers', '📚', P.length],
     ['status:to_read', 'To read', '○', P.filter(p => p.status === 'to_read').length],
     ['status:reading', 'Reading', '◐', P.filter(p => p.status === 'reading').length],
+  ];
+  const more = [
+    ['starred', 'Starred', '★', P.filter(p => p.starred).length],
     ['status:read', 'Read', '●', P.filter(p => p.status === 'read').length],
-    ['unfiled', 'Unfiled', '▫︎', P.filter(p => !p.group_ids.length).length],
+    ['unfiled', 'Without labels', '▫︎', P.filter(p => !p.group_ids.length).length],
     ['nopdf', 'Without PDF', '⌀', P.filter(p => !p.pdf_exists).length],
   ];
   const key = viewKey();
-  $('#nav').innerHTML = nav.map(([k, label, ico, n]) =>
-    `<div class="nav-item ${key === k ? 'active' : ''}" data-view="${k}"><span class="ico">${ico}</span><span class="label">${label}</span><span class="count">${n}</span></div>`).join('');
+  const open = state.navMore || more.some(([k]) => k === key);
+  const item = ([k, label, ico, n]) => `<div class="nav-item ${key === k ? 'active' : ''}" data-view="${k}"><span class="ico">${ico}</span><span class="label">${label}</span><span class="count">${n}</span></div>`;
+  $('#nav').innerHTML = main.map(item).join('')
+    + `<div class="nav-item nav-more" data-navmore><span class="ico">${open ? '▾' : '▸'}</span><span class="label">${open ? 'Less' : 'More'}</span>${open ? '' : '<span class="count">starred, read…</span>'}</div>`
+    + (open ? `<div class="nav-sub">${more.map(item).join('')}</div>` : '');
   $('#tree').innerHTML = state.groups.length ? renderTree(null, 0)
-    : `<div class="empty-hint">No groups yet. Click ＋ to create one, then drag papers onto it. Hover a group to add subgroups.</div>`;
+    : `<div class="empty-hint">No labels yet. Click ＋ to create one, then drag papers onto it. A paper can have many labels; hover a label to add sub-labels.</div>`;
   if (typeof Shares !== 'undefined') Shares.renderSidebar();
   renderKeywords();
 }
@@ -271,13 +278,14 @@ function renderTree(pid, depth) {
     const active = state.view.type === 'group' && state.view.id === g.id;
     return `<div class="nav-item group-item ${active ? 'active' : ''}" data-group="${g.id}" draggable="true" style="padding-left:${8 + depth * 16}px">
         <span class="caret ${kids.length ? '' : 'invisible'}" data-toggle="${g.id}">${collapsed ? '▸' : '▾'}</span>
-        <span class="ico">${kids.length ? '🗂' : '📁'}</span>
+        <span class="ico">${kids.length ? '🏷️' : '🏷'}</span>
         <span class="label" title="${esc(groupPath(g.id))}">${esc(g.name)}</span>
         <span class="count">${groupCount(g.id)}</span>
-        <span class="g-actions"><button title="Add subgroup" data-gact="sub" data-id="${g.id}">＋</button><button title="Rename" data-gact="rename" data-id="${g.id}">✎</button><button title="Delete group" data-gact="delete" data-id="${g.id}">🗑</button></span>
+        <span class="g-actions"><button title="Add sub-label" data-gact="sub" data-id="${g.id}">＋</button><button title="Rename" data-gact="rename" data-id="${g.id}">✎</button><button title="Delete label" data-gact="delete" data-id="${g.id}">🗑</button></span>
       </div>${kids.length && !collapsed ? renderTree(g.id, depth + 1) : ''}`;
   }).join('');
 }
+const KW_SHOW = 15;
 function renderKeywords() {
   const counts = new Map();
   for (const p of filteredPapers({ignoreKeyword: true}))
@@ -286,10 +294,23 @@ function renderKeywords() {
       if (!counts.has(key)) counts.set(key, {label: k, n: 0});
       counts.get(key).n++;
     }
-  const top = [...counts.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0])).slice(0, 40);
-  $('#kwcloud').innerHTML = top.length
-    ? top.map(([key, {label, n}]) => `<button class="kw ${state.keyword === key ? 'active' : ''}" data-kw="${esc(key)}">${esc(label)}<span>${n}</span></button>`).join('')
-    : '<div class="empty-hint">Keywords of the papers in this view appear here – click one to filter.</div>';
+  const all = [...counts.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0]));
+  const head = $('#kw-head');
+  if (head) head.innerHTML = `<span class="sec-toggle" data-kwtoggle>${state.kwOpen !== false ? '▾' : '▸'} Keywords${all.length ? ` <span class="sec-n">${all.length}</span>` : ''}</span><button id="kw-manage" title="Rename, merge or delete keywords">✎</button>`;
+  const box = $('#kwcloud');
+  if (state.kwOpen === false) { box.innerHTML = ''; return; }
+  if (!all.length) { box.innerHTML = '<div class="empty-hint">Keywords of the papers in this view appear here – click one to filter.</div>'; return; }
+  const q = (state.kwFilter || '').toLowerCase();
+  let shown = q ? all.filter(([k]) => k.includes(q)) : all;
+  const total = shown.length;
+  if (!state.kwAll) shown = shown.slice(0, KW_SHOW);
+  else shown = shown.slice(0, 300);
+  const active = state.keyword && !shown.some(([k]) => k === state.keyword) ? all.filter(([k]) => k === state.keyword) : [];
+  const max = all[0][1].n;
+  box.innerHTML = (all.length > KW_SHOW ? `<input class="kw-filter" id="kw-filter" type="search" placeholder="Filter ${all.length} keywords…" value="${esc(state.kwFilter || '')}">` : '')
+    + [...active, ...shown].map(([key, {label, n}]) => `<button class="kw ${state.keyword === key ? 'active' : ''} ${n / max > .5 ? 'big' : ''}" data-kw="${esc(key)}">${esc(label)}<span>${n}</span></button>`).join('')
+    + (total > KW_SHOW ? `<button class="linklike kw-more" data-kwall>${state.kwAll ? 'Show fewer' : `Show all ${total}`}</button>` : '')
+    + (q && !total ? '<div class="empty-hint">No keyword matches.</div>' : '');
 }
 
 /* ------------------------------------------------------------------ list */
@@ -330,13 +351,13 @@ function renderList() {
   $('#view-title').textContent = viewTitle();
   const total = filteredPapers({ignoreKeyword: true}).length;
   $('#view-sub').textContent = state.view.type === 'group' && state.includeSub && childrenOf(state.view.id).length
-    ? 'Showing papers in this group and its subgroups' : '';
+    ? 'Showing papers with this label and its sub-labels' : '';
   if (state.view.type === 'share' && typeof Shares !== 'undefined') $('#view-sub').innerHTML = Shares.viewSub(state.view.id);
   const chips = [];
   if (state.keyword) {
     const label = list[0]?.keywords.find(k => k.toLowerCase() === state.keyword) || state.keyword;
     chips.push(`<span class="fchip">Keyword: ${esc(label)} <button data-clear="kw" title="Clear">×</button></span>
-      <button class="btn small" id="kw-to-group" title="Create a group containing these papers">Make group from keyword</button>`);
+      <button class="btn small" id="kw-to-group" title="Create a label for these papers">Make label from keyword</button>`);
   }
   if (state.search) chips.push(`<span class="fchip">Search: ${esc(state.search)} <button data-clear="search" title="Clear">×</button></span>`);
   $('#filters').innerHTML = chips.join('');
@@ -348,9 +369,9 @@ function renderList() {
   all.indeterminate = n > 0 && !all.checked;
   $('#bulk').classList.toggle('show', n > 0);
   $('#bulk-remove').style.display = state.view.type === 'group' || state.view.type === 'share' ? '' : 'none';
-  $('#bulk-remove').textContent = state.view.type === 'share' ? 'Remove from this shared list' : 'Remove from this group';
+  $('#bulk-remove').textContent = 'Remove this label';
   if (typeof Shares !== 'undefined') $('#bulk-share').innerHTML = Shares.bulkOptions();
-  $('#bulk-group').innerHTML = `<option value="">Add to group…</option>${groupOptions()}<option value="__new">＋ New group…</option>`;
+  $('#bulk-group').innerHTML = `<option value="">Add label…</option>${groupOptions()}<option value="__new">＋ New label…</option>`;
   $('#incl-sub-wrap').style.display = state.view.type === 'group' && childrenOf(state.view.id).length ? '' : 'none';
   $('#incl-sub').checked = state.includeSub;
   $('#list').innerHTML = list.length ? list.map(rowHtml).join('') : emptyHtml();
@@ -419,7 +440,7 @@ function renderDetail() {
     <label class="fld"><span>DOI</span><input data-f="doi" value="${esc(p.doi)}" placeholder="10.xxxx/…"></label>
     <label class="fld"><span>URL</span><input data-f="url" value="${esc(p.url)}"></label>
     <div class="fld"><span>Keywords</span><div class="kw-edit">${p.keywords.map((k, i) => `<span class="chip">${esc(k)}<button data-kwdel="${i}" title="Remove">×</button></span>`).join('')}<input id="kw-input" placeholder="Add keyword + Enter"></div></div>
-    <div class="fld"><span>Groups</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No groups yet – create one in the sidebar.</span>'}</div></div>
+    <div class="fld"><span>Labels</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No labels yet – create one in the sidebar (Labels → Personal ＋).</span>'}</div></div>
     ${typeof Shares !== 'undefined' ? Shares.detailField(p) : ''}
     <div class="fld"><span class="fld-row">Reference <select id="cite-style" title="Citation style (also used for exports)">${state.styles.map(s => `<option value="${s.id}" ${s.id === state.settings.default_style ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></span><div class="cite-box" id="cite-box"><span class="muted">…</span></div></div>
     ${citationSection(p)}
@@ -507,7 +528,7 @@ async function copyCitation(id) {
 async function refreshMeta(id) {
   const p = paperById(id);
   const input = await askText('Update metadata', {
-    label: 'Looks up the details again. Leave as is to re-check, or paste a DOI, link or title to replace them. Your notes, status, groups and keywords are kept.',
+    label: 'Looks up the details again. Leave as is to re-check, or paste a DOI, link or title to replace them. Your notes, status, labels and keywords are kept.',
     value: p.doi || p.arxiv_id || p.url || p.title, ok: 'Look up'});
   if (input === null) return;
   const t = toast('Looking up details…', 'info', 0);
@@ -523,9 +544,9 @@ async function deletePapers(ids) {
   const editable = new Set((state.shares || []).filter(x => x.role === 'member').map(x => x.id));
   const inShared = ids.filter(id => (paperById(id)?.share_ids || []).some(sid => editable.has(sid))).length;
   const res = await confirmBox(one ? 'Delete this paper?' : `Delete ${ids.length} papers?`,
-    one ? `“${truncate(one.title, 120)}” will be removed from your library.` : 'They will be removed from your library and from all groups.',
+    one ? `“${truncate(one.title, 120)}” will be removed from your library.` : 'They will be removed from your library and from all labels.',
     {ok: 'Delete', danger: true, checkbox: withPdf ? `Also move ${withPdf > 1 ? `the ${withPdf} PDF files` : 'the PDF file'} to the Trash` : '',
-     checkbox2: inShared ? `Also remove ${inShared > 1 ? 'them' : 'it'} from the shared lists – the others keep their copy, without the list's label` : '', checked2: true});
+     checkbox2: inShared ? `Also remove the shared label${inShared > 1 ? 's' : ''} for everybody – the others keep their copy, without the label` : '', checked2: true});
   if (!res) return;
   try {
     await api('/api/papers/delete', {method: 'POST', body: {ids, delete_files: res.checked, unshare: inShared ? res.checked2 : true}});
@@ -608,7 +629,7 @@ function openExport() {
     <div class="section-label">Format</div>
     <label class="opt"><input type="radio" name="fmt" value="txt" checked><span>Reference list – text (.txt)<small>Ready to paste anywhere</small></span></label>
     <label class="opt"><input type="radio" name="fmt" value="rtf"><span>Reference list – Word / Pages (.rtf)<small>With italics, bold, hanging indent and double spacing</small></span></label>
-    <label class="opt"><input type="radio" name="fmt" value="ris"><span>For Zotero / EndNote / Mendeley (.ris) – recommended<small>Keeps keywords and notes, links your PDF files; groups can become tags</small></span></label>
+    <label class="opt"><input type="radio" name="fmt" value="ris"><span>For Zotero / EndNote / Mendeley (.ris) – recommended<small>Keeps keywords and notes, links your PDF files; labels can become tags</small></span></label>
     <label class="opt"><input type="radio" name="fmt" value="bibtex"><span>BibTeX (.bib)<small>LaTeX / Overleaf</small></span></label>
     <label class="opt"><input type="radio" name="fmt" value="csljson"><span>CSL-JSON (.json)<small>Most precise import into Zotero (no tags)</small></span></label>
     <label class="opt"><input type="radio" name="fmt" value="csv"><span>Spreadsheet (.csv)<small>All fields, opens in Excel or Numbers</small></span></label>
@@ -617,7 +638,7 @@ function openExport() {
       <select class="input wide" id="exp-style">${styleOpts}</select>
       <label class="opt" style="margin-top:8px"><input type="checkbox" id="exp-order"><span>Keep the order shown on screen<small>Otherwise sorted alphabetically by first author. Numbered styles get numbers 1, 2, 3…</small></span></label>
     </div>
-    <label class="opt" id="exp-tags-box" style="display:none"><input type="checkbox" id="exp-tags" checked><span>Add my groups as tags<small>e.g. “PaperShelf/Thesis/Chapter 1”, so you can find them in Zotero</small></span></label>
+    <label class="opt" id="exp-tags-box" style="display:none"><input type="checkbox" id="exp-tags" checked><span>Add my labels as tags<small>e.g. “PaperShelf/Thesis/Chapter 1”, so you can find them in Zotero</small></span></label>
     <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="exp-go">⤓ Download</button></div>`, {wide: true});
   const sync = () => {
     const fmt = $('input[name=fmt]:checked', m.el).value;
@@ -649,25 +670,37 @@ function openExport() {
 function openSettings() {
   const s = state.settings; const o = location.origin;
   const bm = pdf => `javascript:(function(){window.open('${o}/quickadd?url='+encodeURIComponent(location.href)${pdf ? "+'&pdf=1'" : ''},'_blank');})();`;
+  const TABS = [['general', 'General'], ['pdfs', 'PDFs & access'], ['github', 'GitHub sync & sharing'], ['data', 'Data sources'], ['updates', 'Updates']];
+  let tab = 'general'; try { tab = localStorage.getItem('papershelf-settings-tab') || 'general'; } catch (e) { /* ignore */ }
+  if (!TABS.some(t => t[0] === tab)) tab = 'general';
   const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="start">📘 Guide</button> <button class="btn small" data-help="status">🩺 System check</button> <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit</button></h3>
+    <div class="stabs">${TABS.map(([id, label]) => `<button data-stab="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>
+    <div class="stab-panels">
+
+    <div class="stab-panel" data-panel="general">
     <div class="section-label">App icon &amp; window <button class="help-q" data-help="start" title="Explain this">?</button></div>
     <p class="muted small">Create a PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
     <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
-
+    <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
+    <select class="input wide" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
+    <div class="section-label">Folder for downloaded PDFs</div>
+    <div style="display:flex;gap:6px"><input class="input" id="set-dir" style="flex:1" value="${esc(s.pdf_dir)}"><button class="btn" id="open-dir">Open</button></div>
+    <div class="section-label">Browser buttons <button class="help-q" data-help="adding" title="Explain this">?</button></div>
+    <p class="muted small" style="margin-bottom:4px">Show the bookmarks bar (⇧⌘B on Mac, Ctrl+Shift+B on Windows), then <b>drag</b> these buttons onto it. On any article page click one to save it here (PaperShelf must be running).</p>
+    <a class="bookmarklet" href="${esc(bm(false))}" onclick="return false">＋ Save to PaperShelf</a>
+    <a class="bookmarklet" href="${esc(bm(true))}" onclick="return false">⬇ Save + PDF</a>
     <div class="section-label">Privacy <button class="help-q" data-help="privacy" title="Explain this">?</button></div>
-    <p class="muted small">PaperShelf runs only on this computer and answers only to it. Your library, notes, profiles and settings are stored only here (and in your own private GitHub repository if you turn on sync). Online services receive only what a lookup needs – a DOI, a title, a name or ORCID iD you search for – never your e-mail or other personal data, except the optional Unpaywall address below.</p>
+    <p class="muted small">PaperShelf runs only on this computer and answers only to it. Your library, notes, profiles and settings are stored only here – in <code>${esc(state.dataDir)}</code> – and in your own private GitHub repository if you turn on sync. Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search for), never your e-mail or other personal data, except the optional Unpaywall address.</p>
+    </div>
+
+    <div class="stab-panel" data-panel="pdfs">
     <div class="section-label">E-mail for Unpaywall (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
     <input class="input wide" id="set-email" type="email" value="${esc(s.email)}" placeholder="leave empty to skip Unpaywall">
     <p class="muted small">Unpaywall (the largest index of legal free PDFs) requires an e-mail address with each request; it's sent only to Unpaywall and only when you look for a PDF. Leave empty to skip it – the other free sources are still searched.</p>
     <div class="section-label">CORE API key (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
     <input class="input wide" id="set-core" type="password" autocomplete="off" placeholder="${s.has_core_key ? '•••••••• key saved – paste a new one to replace it' : 'Free key from core.ac.uk/services/api'}">
     <p class="muted small">CORE collects papers from university repositories worldwide – often the authors' own legal copies. With a free key, “Find PDF” searches it too.</p>
-    <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
-    <select class="input wide" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
-    <div class="section-label">Folder for downloaded PDFs</div>
-    <div style="display:flex;gap:6px"><input class="input" id="set-dir" style="flex:1" value="${esc(s.pdf_dir)}"><button class="btn" id="open-dir">Open</button></div>
-
     <div class="section-label">University / library access <button class="help-q" data-help="university" title="Explain this">?</button></div>
     <p class="muted small">For papers you can read through your university. PaperShelf opens the article through your library's access page in your browser; you log in there as usual (single sign-on, two-factor…) and download the PDF – PaperShelf notices it in your Downloads folder and attaches it to the right paper. Your password is never stored.</p>
     <div id="proxy-rows">${(s.proxies || []).map(proxyRow).join('')}</div>
@@ -679,35 +712,46 @@ function openSettings() {
     <label class="opt"><input type="checkbox" id="set-auto-import" ${s.auto_import === '1' ? 'checked' : ''}><span>Always attach PDFs I download<small>Any new PDF in the folder below whose DOI matches a paper in your library is attached automatically (not only after “Get via library”).</small></span></label>
     <label class="opt"><input type="checkbox" id="set-remove-dl" ${s.remove_downloads === '1' ? 'checked' : ''}><span>Move the downloaded file to the Trash once attached<small>A copy is kept in your PDF folder.</small></span></label>
     <div style="display:flex;gap:6px;align-items:center"><span class="muted small" style="white-space:nowrap">Downloads folder</span><input class="input" id="set-watch" style="flex:1" value="${esc(s.watch_dir)}"></div>
-    <p class="muted small">On a Mac, the first time macOS may ask to let “Terminal” access the Downloads folder: click Allow.</p>
+    <p class="muted small">On a Mac, the first time macOS may ask to let PaperShelf (or “Terminal”) access the Downloads folder: click Allow.</p>
+    </div>
 
+    <div class="stab-panel" data-panel="github">
+    <div class="section-label">Your GitHub token <button class="help-q" data-help="sync" title="Explain this">?</button></div>
+    <p class="muted small">One token for everything GitHub: library sync and shared labels. Both are optional. <button class="linklike" data-help="sync">How to create the token</button></p>
+    <input class="input wide" id="set-token" type="password" placeholder="${s.has_sync_token ? '•••••••• token saved – paste a new one to replace it' : 'GitHub access token (github_pat_…)'}" autocomplete="off">
+    <div class="section-label">Library sync between your computers <button class="help-q" data-help="sync" title="Explain this">?</button></div>
+    <p class="muted small">Keep the same library on several computers (Mac or Windows) through a <b>private</b> GitHub repository. ${s.last_sync ? `Last sync: ${esc(new Date(s.last_sync).toLocaleString())}.` : ''} ${s.last_sync_error ? `<span style="color:var(--danger)">Last error: ${esc(s.last_sync_error)}</span>` : ''}</p>
+    <input class="input wide" id="set-repo" value="${esc(s.sync_repo)}" placeholder="https://github.com/your-name/papershelf-library  (leave empty if you don't sync)">
+    <label class="opt" style="margin-top:8px"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>Convenient, but uses space: GitHub works best under ~1 GB (≈ 400–500 papers). Off = only the list, labels, notes and highlights sync; free PDFs can be re-downloaded on the other computer with “Find PDFs”.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>When PaperShelf starts and every 20 minutes while it runs</small></span></label>
+    <div class="sync-actions"><button class="btn small" data-help="sync">📘 Step-by-step guide</button><button class="btn small" id="sync-test">Test connection</button><span id="sync-test-res" class="muted small"></span></div>
+    ${typeof Shares !== 'undefined' ? Shares.settingsHtml(s) : ''}
+    </div>
+
+    <div class="stab-panel" data-panel="data">
     <div class="section-label">OpenAlex API key (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
     <input class="input wide" id="set-oakey" type="password" autocomplete="off" placeholder="${s.has_openalex_key ? '•••••••• key saved – paste a new one to replace it' : 'Free key from openalex.org/settings/api'}">
-    <p class="muted small">Citation data, suggestions and researcher profiles come from OpenAlex. Without a key there is a small free daily allowance; a free key gives ten times more.</p>
-
+    <p class="muted small">Citation data, suggestions, title search and researcher profiles come from OpenAlex. Without a key there is a small free daily allowance; a free key gives ten times more.</p>
     <div class="section-label">Journal rankings (SCImago) <button class="help-q" data-help="journal-metrics" title="Explain this">?</button></div>
     <p class="muted small">Used for the IF columns and quartiles in the Researchers tab. Normally downloaded automatically; if scimagojr.com refuses, open <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">scimagojr.com</a>, choose a year, click “Download data”, and import the files here – several at once is fine (the year is read from the file name, e.g. <i>scimagojr 2024.csv</i>).</p>
     <div style="display:flex;gap:6px;align-items:center"><button class="btn small" id="sjr-file-btn">Import tables…</button><input type="file" id="sjr-file" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-loaded"></span></div>
+    </div>
 
-    <div class="section-label">Sync with GitHub <button class="help-q" data-help="sync" title="Explain this">?</button></div>
-    <p class="muted small">Keep the same library on several computers (Mac or Windows) through a <b>private</b> GitHub repository. ${s.last_sync ? `Last sync: ${esc(new Date(s.last_sync).toLocaleString())}.` : ''} ${s.last_sync_error ? `<span style="color:var(--danger)">Last error: ${esc(s.last_sync_error)}</span>` : ''}</p>
-    <input class="input wide" id="set-repo" value="${esc(s.sync_repo)}" placeholder="https://github.com/your-name/papershelf-library">
-    <input class="input wide" id="set-token" type="password" style="margin-top:6px" placeholder="${s.has_sync_token ? '•••••••• token saved – paste a new one to replace it' : 'GitHub access token (github_pat_…)'}" autocomplete="off">
-    <label class="opt" style="margin-top:8px"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>Convenient, but uses space: GitHub works best under ~1 GB (≈ 400–500 papers). Off = only the list, groups, notes and highlights sync; free PDFs can be re-downloaded on the other computer with “Find PDFs”.</small></span></label>
-    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>When PaperShelf starts and every 20 minutes while it runs</small></span></label>
-    <div class="sync-actions"><button class="btn small" data-help="sync">📘 Step-by-step guide (5 minutes, once)</button><button class="btn small" id="sync-test">Test connection</button><span id="sync-test-res" class="muted small"></span></div>
-
-    <div class="section-label">Updates <button class="help-q" data-help="updates" title="Explain this">?</button></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">Version ${esc(state.version || '')}${Updates.info && Updates.info.available ? ` – <b>${esc(Updates.info.latest)} available</b>` : ''}</span><button class="btn small" id="set-updates">Check for updates…</button></div>
-
-    ${typeof Shares !== 'undefined' ? Shares.settingsHtml(s) : ''}
-
-    <div class="section-label">Browser buttons <button class="help-q" data-help="adding" title="Explain this">?</button></div>
-    <p class="muted small" style="margin-bottom:4px">Show the bookmarks bar (⇧⌘B on Mac, Ctrl+Shift+B on Windows), then <b>drag</b> these buttons onto it. On any article page click one to save it here.</p>
-    <a class="bookmarklet" href="${esc(bm(false))}" onclick="return false">＋ Save to PaperShelf</a>
-    <a class="bookmarklet" href="${esc(bm(true))}" onclick="return false">⬇ Save + PDF</a>
-    <p class="muted small">PaperShelf must be running for the buttons to work. Your library lives in <code>${esc(state.dataDir)}</code>.</p>
+    <div class="stab-panel" data-panel="updates">
+    <div class="section-label">PaperShelf ${esc(state.version || '')} <button class="help-q" data-help="updates" title="Explain this">?</button></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">${Updates.info && Updates.info.available ? `<b>${esc(Updates.info.latest)} is available.</b>` : 'New versions come from github.com/MirkoZanon/PaperShelf.'}</span><button class="btn small" id="set-updates">Check for updates…</button></div>
+    <label class="opt" style="margin-top:10px"><input type="checkbox" id="set-upd-check" ${s.update_check !== '' ? 'checked' : ''}><span>Check for updates automatically<small>When PaperShelf starts and twice a day – an anonymous request to GitHub.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-upd-auto" ${s.update_auto !== '' ? 'checked' : ''}><span>Install updates automatically<small>A new version is installed when PaperShelf starts, before it opens (a backup of the old one is kept). Off: the ⬆ Update button appears and you choose when.</small></span></label>
+    </div>
+    </div>
     <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="set-save">Save</button></div>`, {wide: true});
+  const showTab = id => {
+    $$('[data-stab]', m.el).forEach(b => b.classList.toggle('on', b.dataset.stab === id));
+    $$('.stab-panel', m.el).forEach(p => { p.hidden = p.dataset.panel !== id; });
+    try { localStorage.setItem('papershelf-settings-tab', id); } catch (e) { /* ignore */ }
+  };
+  showTab(tab);
+  $('.stabs', m.el).addEventListener('click', e => { const b = e.target.closest('[data-stab]'); if (b) showTab(b.dataset.stab); });
   $('#set-shortcut', m.el).onclick = async () => {
     const b = $('#set-shortcut', m.el); setBusy(b, true, 'Creating…');
     try { const d = await api('/api/shortcut', {method: 'POST', body: {desktop: true}}); $('#set-shortcut-res', m.el).innerHTML = `<span style="color:var(--ok)">✓ Done.</span> ${esc(d.hint)}`; }
@@ -754,15 +798,71 @@ function openSettings() {
         proxies: $$('.proxy-row', m.el).map(r => ({id: r.dataset.id, name: $('.px-name', r).value, template: $('.px-tpl', r).value.trim()})).filter(x => x.template),
         auto_import: $('#set-auto-import', m.el).checked, remove_downloads: $('#set-remove-dl', m.el).checked,
         watch_dir: $('#set-watch', m.el).value, openalex_key: $('#set-oakey', m.el).value, core_key: $('#set-core', m.el).value,
+        update_check: $('#set-upd-check', m.el).checked, update_auto: $('#set-upd-auto', m.el).checked,
         ...(typeof Shares !== 'undefined' ? Shares.settingsValues(m) : {})}});
       const firstSync = !state.settings.sync_repo && d.settings.sync_repo;
-      const shareNow = !state.settings.has_share_token && d.settings.has_share_token && d.settings.share_repo;
       state.settings = d.settings; updateSyncButton(); m.close(); toast('Settings saved.', 'ok');
-      if (shareNow && typeof Shares !== 'undefined') Shares.syncNow(null, true);
       if (state.openId) loadCitation(state.openId);
       if (firstSync) syncNow();
     } catch (err) { toast(err.message, 'error'); }
   };
+}
+
+/* ------------------------------------------------------------------ keyword manager */
+async function manageKeywords() {
+  let data;
+  try { data = await api('/api/keywords'); } catch (err) { toast(err.message, 'error'); return; }
+  const sel = new Set();
+  const m = modal(`<h3>Keywords <span class="grow"></span><button class="btn small" data-help="organising">📘 Guide</button></h3>
+    <p class="muted small">${data.keywords.length} keywords in your library. Tidy them up: <b>merge</b> variants of the same idea, <b>rename</b> or <b>delete</b>. Changes apply to every paper.</p>
+    ${data.variants.length ? `<div class="kwm-variants"><div class="section-label">Probably the same keyword (${data.variants.length})</div>
+      ${data.variants.slice(0, 30).map((v, i) => `<div class="kwm-var"><span>${v.map(esc).join(' · ')}</span><button class="btn small" data-mergev="${i}">Merge into “${esc(v[0])}”</button></div>`).join('')}
+      ${data.variants.length > 1 ? `<button class="btn small" id="kwm-all">Merge all ${data.variants.length} suggestions</button>` : ''}</div>` : ''}
+    <input class="input wide" id="kwm-q" type="search" placeholder="Search keywords…" style="margin-top:8px">
+    <div class="kwm-list" id="kwm-list"></div>
+    <div class="kwm-actions"><span class="muted small" id="kwm-n">Select keywords to change them</span><span class="grow"></span>
+      <input class="input" id="kwm-to" placeholder="New name / merge into…" style="width:220px">
+      <button class="btn small" id="kwm-apply" disabled>Rename / merge</button><button class="btn small danger" id="kwm-del" disabled>Delete</button></div>
+    <div class="modal-actions"><button class="btn" data-close>Close</button></div>`, {wide: true});
+  const list = () => {
+    const q = $('#kwm-q', m.el).value.toLowerCase();
+    const rows = data.keywords.filter(k => !q || k.keyword.toLowerCase().includes(q)).slice(0, 400);
+    $('#kwm-list', m.el).innerHTML = rows.map(k => `<label class="kwm-row"><input type="checkbox" data-kwsel="${esc(k.keyword)}" ${sel.has(k.keyword) ? 'checked' : ''}><span>${esc(k.keyword)}</span><span class="muted small">${k.count}</span></label>`).join('')
+      || '<div class="muted small" style="padding:8px">No keyword matches.</div>';
+    $('#kwm-n', m.el).textContent = sel.size ? `${sel.size} selected` : 'Select keywords to change them';
+    $('#kwm-apply', m.el).disabled = $('#kwm-del', m.el).disabled = !sel.size;
+    $('#kwm-apply', m.el).textContent = sel.size > 1 ? 'Merge' : 'Rename';
+  };
+  const run = async (action, keywords, to = '') => {
+    try {
+      const d = await api('/api/keywords', {method: 'POST', body: {action, keywords, to}});
+      toast(`${action === 'delete' ? 'Deleted' : action === 'merge' ? 'Merged' : 'Renamed'} – ${d.papers} paper${d.papers === 1 ? '' : 's'} updated.`, 'ok');
+      await loadLibrary(); m.close(); manageKeywords();
+    } catch (err) { toast(err.message, 'error'); }
+  };
+  list();
+  $('#kwm-q', m.el).addEventListener('input', list);
+  $('#kwm-list', m.el).addEventListener('change', e => {
+    const k = e.target.dataset.kwsel; if (k == null) return;
+    e.target.checked ? sel.add(k) : sel.delete(k);
+    if (!$('#kwm-to', m.el).value && sel.size) $('#kwm-to', m.el).value = [...sel][0];
+    list();
+  });
+  $('#kwm-apply', m.el).onclick = () => { const to = $('#kwm-to', m.el).value.trim(); if (!to) { $('#kwm-to', m.el).focus(); return; } run(sel.size > 1 ? 'merge' : 'rename', [...sel], to); };
+  $('#kwm-del', m.el).onclick = async () => {
+    const ok = await confirmBox(`Delete ${sel.size} keyword${sel.size > 1 ? 's' : ''}?`, 'They are removed from every paper. The papers themselves stay.', {ok: 'Delete', danger: true});
+    if (ok) run('delete', [...sel]);
+  };
+  m.el.addEventListener('click', async e => {
+    const b = e.target.closest('[data-mergev]');
+    if (b) { const v = data.variants[+b.dataset.mergev]; run('merge', v, v[0]); }
+    if (e.target.id === 'kwm-all') {
+      const ok = await confirmBox(`Merge ${data.variants.length} groups of variants?`, 'Each group becomes its most used spelling.', {ok: 'Merge all'});
+      if (!ok) return;
+      for (const v of data.variants) { try { await api('/api/keywords', {method: 'POST', body: {action: 'merge', keywords: v, to: v[0]}}); } catch (err) { /* continue */ } }
+      toast('Variants merged.', 'ok'); await loadLibrary(); m.close(); manageKeywords();
+    }
+  });
 }
 
 /* ------------------------------------------------------------------ quit */
@@ -998,7 +1098,7 @@ function bind() {
     if (c?.dataset.clear === 'search') { state.search = ''; $('#search').value = ''; renderList(); renderKeywords(); }
     if (e.target.id === 'kw-to-group') {
       const ids = state.visible.slice(); const label = paperById(ids[0])?.keywords.find(k => k.toLowerCase() === state.keyword) || state.keyword;
-      const name = await askText('New group from keyword', {value: label, ok: 'Create', label: `Creates a group${currentGroupId() ? ' inside the current one' : ''} with the ${ids.length} papers shown.`});
+      const name = await askText('New label from keyword', {value: label, ok: 'Create', label: `Creates a label${currentGroupId() ? ' inside the current one' : ''} for the ${ids.length} papers shown.`});
       if (!name) return;
       const g = await createGroup(currentGroupId(), name);
       if (g) await assign(g.id, ids);
@@ -1013,12 +1113,21 @@ function bind() {
     if (act) { const id = +act.dataset.id; ({sub: () => createGroup(id), rename: () => renameGroup(id), delete: () => deleteGroup(id)})[act.dataset.gact](); return; }
     const kw = e.target.closest('[data-kw]');
     if (kw) { state.keyword = state.keyword === kw.dataset.kw ? null : kw.dataset.kw; state.selected.clear(); renderList(); renderKeywords(); return; }
+    if (e.target.closest('[data-navmore]')) { state.navMore = !state.navMore; savePrefs(); renderSidebar(); return; }
+    if (e.target.closest('[data-kwtoggle]')) { state.kwOpen = state.kwOpen === false; savePrefs(); renderKeywords(); return; }
+    if (e.target.closest('[data-kwall]')) { state.kwAll = !state.kwAll; renderKeywords(); return; }
+    if (e.target.closest('#kw-manage')) { manageKeywords(); return; }
     const nav = e.target.closest('[data-view]');
     if (nav) { const [type, value] = nav.dataset.view.split(':'); setView(value ? {type, value} : {type}); return; }
     const grp = e.target.closest('[data-group]');
     if (grp) setView({type: 'group', id: +grp.dataset.group});
     const sh = e.target.closest('[data-share]');
     if (sh && !e.target.closest('button')) setView({type: 'share', id: sh.dataset.share});
+  });
+  $('#sidebar').addEventListener('input', e => {
+    if (e.target.id !== 'kw-filter') return;
+    state.kwFilter = e.target.value; const pos = e.target.selectionStart;
+    renderKeywords(); const f = $('#kw-filter'); if (f) { f.focus(); f.setSelectionRange(pos, pos); }
   });
   $('#sidebar').addEventListener('dblclick', e => { const grp = e.target.closest('[data-group]'); if (grp && !e.target.closest('button')) renameGroup(+grp.dataset.group); });
   $('#new-group').addEventListener('click', e => { e.stopPropagation(); createGroup(null); });

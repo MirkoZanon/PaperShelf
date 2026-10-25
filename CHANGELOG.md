@@ -2,6 +2,21 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.10 – 2026-10-25
+
+- **Labels**: groups are now called *labels*, in two kinds under *Labels* in the sidebar: *Personal*
+  (your topics, used by the map and statistics) and *Shared* (shared with colleagues).
+- **Sharing without creating anything on GitHub**: turn sharing on in Settings with your GitHub token
+  (it needs the *Gists* permission – the library-sync token can simply be edited). PaperShelf keeps
+  your shared labels in a secret gist it creates for you. Members announce themselves automatically.
+- **Settings in tabs**: General, PDFs & access, GitHub sync & sharing, Data sources, Updates. One
+  GitHub token for sync and sharing.
+- **Compact library menu**: All papers, To read, Reading; Starred, Read, Without labels and Without PDF
+  under *More*.
+- **Keywords that scale**: the sidebar shows the most frequent ones with a filter and *Show all*, and
+  can be folded. New keyword manager (✎): merge variants such as “fMRI” / “fmri”, rename or delete
+  keywords in the whole library.
+
 ## 1.9 – 2026-10-25
 
 - **Shared lists**: share lists of papers with colleagues – titles, authors, year, journal and DOI
