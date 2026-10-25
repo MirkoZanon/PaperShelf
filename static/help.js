@@ -215,7 +215,7 @@ const Help = (() => {
         <tr><td>⟳ is red</td><td>Hover it to read the last error.</td></tr></table>`},
 
     {id: 'sharing', icon: '🔗', title: 'Shared labels with colleagues', html: () => `
-      <p>A <b>shared label</b> is a label you keep in common with one or more colleagues – a journal club, a lab reading list, “papers for Mario”. Only the <b>bibliographic details</b> of its papers travel (title, authors, year, journal, DOI): never PDFs, notes, highlights or anything else from your library.</p>
+      <p>A <b>shared label</b> is a label you keep in common with one or more colleagues – a journal club, a lab reading list, “papers for Mario”. Only the <b>bibliographic details</b> of its papers travel (title, authors, year, journal, DOI) and the <b>public notes</b> members write on them: never PDFs, private notes, highlights or anything else from your library.</p>
       <h4>Shared vs personal labels</h4>
       <p>In the sidebar, <b>Labels</b> has two parts: <i>Personal</i> (your topics) and <i>Shared</i>. A paper can have both. The map, Discover and statistics use only personal labels. If you like, the papers that arrive with a shared label can also get one of your personal labels (shared label ⚙︎ → <i>Also give papers that arrive here my label…</i>).</p>
       <h4>What happens to the papers</h4>
@@ -245,8 +245,26 @@ const Help = (() => {
 
       <h4>Privacy</h4>
       <ul><li>Your shared labels live in a secret gist: anyone who has a code can read the titles in it, nobody else can find it.</li>
-        <li>Your library, PDFs, notes, highlights and your private sync repository are never involved.</li>
+        <li>Your library, PDFs, private notes, highlights and your private sync repository are never involved. Public notes travel only inside the label they were written in, with the name you chose in ⚙︎ Settings → General.</li>
         <li>PaperShelf only reads the gists of the members of the labels you joined.</li></ul>`},
+
+    {id: 'notes', icon: '📝', title: 'Notes – private and public', html: () => `
+      <p>Every paper has its own small <b>chat of notes</b>. The 📝 button on each row of the list shows how many notes a paper has, without opening it: <span class="note-btn priv" style="display:inline-flex">📝<b>2</b></span> private only, <span class="note-btn pub" style="display:inline-flex">📝<b>3</b></span> with public notes, <span class="note-btn both" style="display:inline-flex">📝<b>5</b></span> both. Click it (or <i>Open notes</i> in the paper's details) to read and write.</p>
+      <h4>Two kinds of notes</h4>
+      <ul><li><b>🔒 Private</b> – the default. Only in your library (and in your own private sync, if you use it). Nobody else ever sees them.</li>
+        <li><b>🌐 Public</b> – only for papers in a <a href="#" data-help="sharing">shared label</a>. Choose <i>Public in “label”</i> under the text box: every member of that label sees the note, with your name, at their next update (every 15 minutes, or ⟳ Update now).</li></ul>
+      <h4>Who can change what</h4>
+      <ul><li>You can <b>edit</b> ✎ or <b>delete</b> 🗑 your own notes at any time. Editing or deleting a public note changes it for everybody.</li>
+        <li>Nobody can change someone else's note: each member's own copy decides about that member's notes, so a changed copy elsewhere is ignored.</li>
+        <li>You can <b>hide</b> 🙈 someone else's note on your computer only; the others still see it. Hidden notes can be shown again (“Show hidden”).</li>
+        <li>People who only follow a label (read-only) see its public notes but can't write public notes.</li></ul>
+      <h4>Your name</h4>
+      <p>The first time you write a public note or create a shared label, PaperShelf asks the name to show next to it: your name, initials or a nickname. Change it in ⚙︎ Settings → General → <i>Your name in shared notes &amp; labels</i>. Shared labels also remember who created them (⚙︎ of the label).</p>
+      <h4>Styles and colours</h4>
+      <p>Use the buttons above the text box, or type Markdown: <code>**bold**</code>, <code>*italic*</code>, <code>~~strike~~</code>, <code>==highlight==</code>, <code>{red}coloured{/}</code> (red, orange, green, blue, purple, grey), <code>## heading</code>, <code>- list</code>, <code>- [ ] to do</code>, <code>&gt; quote</code>, <code>\`code\`</code>, <code>[text](https://…)</code>. 👁 Preview shows the result; ${kbd('⌘/Ctrl')} + ${kbd('Enter')} saves.</p>
+      <h4>Exporting notes</h4>
+      <p>Select one or more papers → <b>📝 Export notes</b> (or ⤓ Export in the notes window, or <i>Export notes with their references…</i> in Export references). You get one file with each paper's reference in your chosen style followed by its notes, who wrote them and when – as Markdown, plain text or a web page.</p>
+      ${tip('Highlights from the PDF reader can be copied into a private note: open the paper → Highlights → <i>copy them into a private note</i>.')}`},
 
     {id: 'updates', icon: '⬆️', title: 'Installing & updating the app', html: () => `
       <h4>Two separate folders</h4>
@@ -284,7 +302,7 @@ const Help = (() => {
 
     {id: 'privacy', icon: '🛡', title: 'Privacy & legal', html: () => `
       <ul><li>PaperShelf runs on your computer and answers only to it; requests from other websites or computers are refused.</li>
-        <li>Library, notes, highlights, profiles and settings are stored only in your library folder – and in your own private GitHub repository if you turn on sync.</li>
+        <li>Library, private notes, highlights, profiles and settings are stored only in your library folder – and in your own private GitHub repository if you turn on sync. Public notes go only to the members of the shared label you wrote them in.</li>
         <li>Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search). Your e-mail is never sent, except to Unpaywall if you enter it. E-mail search of researchers is disabled.</li>
         <li>University logins happen on your university's or the publisher's page; PaperShelf never sees credentials.</li>
         <li>Only official interfaces and legal open-access sources are used. Google Scholar is never queried automatically – only the page you choose to import.</li>

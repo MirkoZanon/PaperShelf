@@ -131,6 +131,14 @@ repositories), Europe PMC / PubMed Central and publisher pages. For subscription
 PDF, and PaperShelf attaches it automatically from your Downloads folder. Optional library proxy
 (EZproxy / OpenAthens) button.
 
+**Notes** – each paper has a small chat of notes, opened from the 📝 button on its row (the button
+shows at a glance how many notes it has: amber private, blue public). Notes are **🔒 private** by
+default (only your library); on papers of a shared label you can also write **🌐 public** notes that
+all the members see, with your name (chosen in Settings). Only the author can edit or delete a note;
+others' notes can be hidden on your own computer. Markdown with bold, italic, highlights, colours,
+lists, to-dos, quotes and links; *📝 Export notes* saves the notes of the selected papers, each under
+its reference, as Markdown, text or web page.
+
 **Reader** – read PDFs inside the app, highlight in five colours, add notes, copy highlights to your
 notes, or save them into the PDF file (visible in Preview, Acrobat, Zotero).
 
@@ -162,7 +170,8 @@ years* lets your browser download exactly the years needed, and PaperShelf impor
 from your Downloads folder. The publication table can be sorted by any column.
 
 **Shared labels** – share labels with colleagues (journal club, lab reading list…): only titles,
-authors, year, journal and DOI travel, never PDFs or notes. Shared labels are kept apart from your
+authors, year, journal and DOI travel – plus the public notes members write in the label – never
+PDFs, private notes or highlights. Each label remembers who created it. Shared labels are kept apart from your
 personal ones. Papers you receive are added to your library with the shared label and stay yours even
 if the label later drops them (only the label goes). Labels with several members stay in sync among
 everybody, also along chains of people, in any order; they update by themselves. To share, turn
@@ -277,8 +286,9 @@ needed and restarts; the page reloads by itself. Your library is never touched.
 ## 8. Privacy & legal
 
 - PaperShelf answers only to this computer; requests from other websites or computers are refused.
-- Library, notes, highlights, profiles and settings are stored only in your library folder (and your
-  own private GitHub repository if you turn on sync).
+- Library, private notes, highlights, profiles and settings are stored only in your library folder (and
+  your own private GitHub repository if you turn on sync). Public notes go only to the members of the
+  shared label they are written in, with the display name you choose.
 - Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search).
   Your e-mail is never sent anywhere except to Unpaywall, if you enter it. E-mail search of
   researchers is disabled.

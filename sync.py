@@ -29,7 +29,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-JSON_COLS = {"authors", "keywords", "refs", "related"}
+JSON_COLS = {"authors", "keywords", "refs", "related", "note_list"}
 SKIP_COLS = {"id", "pdf_path"}
 MAX_PDF_BYTES = 95 * 1024 * 1024  # GitHub refuses files over 100 MB
 

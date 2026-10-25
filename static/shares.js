@@ -23,7 +23,7 @@ const Shares = (() => {
       const active = state.view.type === 'share' && state.view.id === x.id;
       const n = state.papers.filter(p => (p.share_ids || []).includes(x.id)).length;
       return `<div class="nav-item share-item ${x.role === 'member' ? 'editable' : ''} ${active ? 'active' : ''}" data-share="${esc(x.id)}"
-          title="${x.role === 'member' ? 'Shared label – drag papers here to share them' : 'You follow this shared label (read-only)'}${x.last_error ? '\n⚠ ' + esc(x.last_error) : ''}">
+          title="${x.role === 'member' ? 'Shared label – drag papers here to share them' : 'You follow this shared label (read-only)'}${x.creator && x.creator.by ? '\nCreated by ' + esc(x.creator.name || x.creator.by) : ''}${x.last_error ? '\n⚠ ' + esc(x.last_error) : ''}">
           <span class="ico">${x.role === 'member' ? '🔗' : '📥'}</span><span class="label">${esc(x.name)}</span>
           ${x.last_error ? '<span class="warn-dot" title="Last update had a problem">!</span>' : ''}<span class="count">${n}</span>
           <span class="g-actions"><button title="Members, code, options" data-sact="manage" data-id="${esc(x.id)}">⚙︎</button></span></div>`;
@@ -128,6 +128,7 @@ const Shares = (() => {
     $('#sh-create', m.el).onclick = async () => {
       const name = $('#sh-name', m.el).value.trim(); if (!name) { $('#sh-name', m.el).focus(); return; }
       const src = $('input[name=sh-src]:checked', m.el)?.value;
+      if (publishReady() && typeof Notes !== 'undefined' && !(await Notes.ensureName('the shared labels you create'))) return;
       const body = {name, description: $('#sh-desc', m.el).value};
       if (src === 'sel') body.paper_ids = paperIds;
       if (src === 'group') body.from_group = +$('#sh-group', m.el).value;
@@ -191,6 +192,7 @@ const Shares = (() => {
       ${member ? `<label class="fld"><span>Name</span><input class="input wide" id="sm-name" value="${esc(x.name)}"></label>
         <label class="fld"><span>Description</span><input class="input wide" id="sm-desc" value="${esc(x.description || '')}" placeholder="optional"></label>`
         : `<p class="muted">${x.description ? esc(x.description) + '<br>' : ''}You <b>follow</b> this shared label: you receive its papers and updates, but can't change it. To add papers too, ask a member to add your GitHub name${me() ? ` (<b>${esc(me())}</b>)` : ''}, then join again with the code.</p>`}
+      ${x.creator && x.creator.by ? `<p class="muted small">Created by <b>${esc(x.creator.name || x.creator.by)}</b>${x.creator.name && !x.creator.by.startsWith('local-') && x.creator.name !== x.creator.by ? ` (${esc(x.creator.by)})` : ''}${x.creator.at ? ` on ${esc(new Date(x.creator.at).toLocaleDateString())}` : ''}${x.notes ? ` · ${x.notes} public note${x.notes === 1 ? '' : 's'}` : ''}</p>` : ''}
       <div class="section-label">Members</div>
       <div class="share-members">${x.members.map(mb => `<span class="chip" title="${mb.joined ? 'Has joined' : 'Invited – will be connected when they join with the code'}">${esc(mb.name.startsWith('local-') ? 'this computer (not published)' : mb.name)}${mb.you ? ' (you)' : mb.joined ? '' : ' · invited'}${member && !mb.you && !mb.name.startsWith('local-') ? `<button data-mrm="${esc(mb.name)}" title="Remove member">×</button>` : ''}</span>`).join('')}</div>
       ${member ? (x.can_publish ? `<div style="display:flex;gap:6px;margin-top:6px"><input class="input" id="sm-new" style="flex:1" placeholder="Colleague's GitHub name, e.g. MarioRossi"><button class="btn" id="sm-add">Add member</button></div>
@@ -199,7 +201,7 @@ const Shares = (() => {
       <div class="section-label">Give it to colleagues</div>
       ${x.code ? `<div class="share-code"><code id="sm-code">${esc(x.code)}</code><button class="btn small" id="sm-copy">Copy code</button></div>
         <p class="muted small">They open PaperShelf → Labels → Shared ＋ → <i>Join a shared label</i> and paste this code. Anyone with the code can <b>follow</b> it (read-only); members can also edit it.${x.published ? '' : ' <b>Not published yet</b> – click “Update now”.'}</p>` : '<p class="muted small">This label isn’t published online yet.</p>'}
-      <button class="btn small" id="sm-export">📄 Save as file (.papershelf)</button> <span class="muted small">to send by e-mail – it contains titles and DOIs only</span>
+      <button class="btn small" id="sm-export">📄 Save as file (.papershelf)</button> <span class="muted small">to send by e-mail – it contains titles, DOIs and public notes only</span>
       <div class="section-label">In my library</div>
       ${state.groups.length ? `<label class="opt"><input type="checkbox" id="sm-g-on" ${x.group_id ? 'checked' : ''}><span>Also give papers that arrive here my label <select id="sm-g">${groupOptions()}</select></span></label>` : ''}
       <p class="muted small">${x.papers} paper${x.papers === 1 ? '' : 's'} shared · updated ${ago(x.last_pull)}${x.last_push ? ` · published ${ago(x.last_push)}` : ''}${x.last_error ? `<br><span class="warn-txt">⚠ ${esc(x.last_error)}</span>` : ''}</p>

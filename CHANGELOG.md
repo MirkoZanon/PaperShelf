@@ -2,6 +2,25 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.14 – 2026-10-25
+
+- **Notes, reworked**: every paper has its own chat of notes. A 📝 button on each row shows whether a
+  paper has notes and how many (amber = private, blue = public) – click it to read and write without
+  opening the paper.
+- **Private and public notes**: notes are private by default (only in your library). On papers of a
+  shared label you can choose *Public in “label”*: every member sees the note with your name, and it
+  stays in sync like the label itself. Only the author can edit or delete a note (for everybody);
+  anyone can hide someone else's note on their own computer.
+- **Your display name** (Settings → General): name, initials or nickname shown next to your public
+  notes and on the shared labels you create – asked the first time. Shared labels now show who
+  created them.
+- **Markdown with colours**: bold, italic, strike-through, ==highlights==, coloured text, headings,
+  lists, to-do boxes, quotes, code and links, with a toolbar and preview.
+- **Export notes**: select papers → *📝 Export notes* – one file with each reference (in your
+  citation style) followed by its notes, who wrote them and when, as Markdown, text or web page.
+- Your old notes are kept: each becomes the first private note of its paper. Highlights can be copied
+  into a private note.
+
 ## 1.13 – 2026-10-25
 
 - **Search inside your PDFs**: the library search box also finds words written in the PDFs (indexed on

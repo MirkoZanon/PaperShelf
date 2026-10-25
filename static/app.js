@@ -334,7 +334,7 @@ function rowHtml(p) {
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
     <div><div class="row-title">${esc(p.title || 'Untitled')}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${ftSnippet(p)}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
-    <div class="row-side"><span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span>${p.pdf_exists ? '<span class="pdf-badge" title="PDF saved">PDF</span>' : ''}${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}</div>
+    <div class="row-side"><span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span>${p.pdf_exists ? '<span class="pdf-badge" title="PDF saved">PDF</span>' : ''}${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}${Notes.badge(p)}</div>
   </div>`;
 }
 function emptyHtml() {
@@ -449,8 +449,8 @@ function renderDetail() {
     ${typeof Shares !== 'undefined' ? Shares.detailField(p) : ''}
     <div class="fld"><span class="fld-row">Reference <select id="cite-style" title="Citation style (also used for exports)">${state.styles.map(s => `<option value="${s.id}" ${s.id === state.settings.default_style ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></span><div class="cite-box" id="cite-box"><span class="muted">…</span></div></div>
     ${citationSection(p)}
-    ${p.annotation_count ? `<div class="fld"><span>Highlights</span><div class="hl-summary">🖍 ${p.annotation_count} highlight${p.annotation_count > 1 ? 's' : ''} in the PDF · <button class="linklike" data-act="read">open reader</button> · <button class="linklike" data-act="hl-notes">copy them into my notes</button></div></div>` : ''}
-    <label class="fld"><span>My notes</span><textarea data-f="notes" rows="5" placeholder="Ideas, quotes, why this paper matters…">${esc(p.notes)}</textarea></label>
+    ${p.annotation_count ? `<div class="fld"><span>Highlights</span><div class="hl-summary">🖍 ${p.annotation_count} highlight${p.annotation_count > 1 ? 's' : ''} in the PDF · <button class="linklike" data-act="read">open reader</button> · <button class="linklike" data-act="hl-notes">copy them into a private note</button></div></div>` : ''}
+    ${Notes.detailField(p)}
     <details class="fld" ${p.abstract ? 'open' : ''}><summary>Abstract</summary><textarea data-f="abstract" rows="9">${esc(p.abstract)}</textarea></details>
     <div class="d-foot">Added ${esc(new Date(p.added_at).toLocaleString())}${p.pdf_exists ? `<br>PDF: ${esc(p.pdf_path)} · <button class="linklike" data-act="detach">unlink PDF</button>` : ''}</div>`;
   loadCitation(p.id);
@@ -643,6 +643,7 @@ function openExport() {
       <select class="input wide" id="exp-style">${styleOpts}</select>
       <label class="opt" style="margin-top:8px"><input type="checkbox" id="exp-order"><span>Keep the order shown on screen<small>Otherwise sorted alphabetically by first author. Numbered styles get numbers 1, 2, 3…</small></span></label>
     </div>
+    <p class="muted small" style="margin-top:10px">📝 Want the notes too? <button class="linklike" id="exp-notes">Export notes with their references…</button></p>
     <label class="opt" id="exp-tags-box" style="display:none"><input type="checkbox" id="exp-tags" checked><span>Add my labels as tags<small>e.g. “PaperShelf/Thesis/Chapter 1”, so you can find them in Zotero</small></span></label>
     <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="exp-go">⤓ Download</button></div>`, {wide: true});
   const sync = () => {
@@ -651,6 +652,10 @@ function openExport() {
     $('#exp-tags-box', m.el).style.display = ['ris', 'bibtex'].includes(fmt) ? '' : 'none';
   };
   $$('input[name=fmt]', m.el).forEach(r => r.addEventListener('change', sync)); sync();
+  $('#exp-notes', m.el).onclick = () => {
+    const scope = $('input[name=scope]:checked', m.el).value;
+    m.close(); Notes.exportDialog(scope === 'sel' ? sel : scope === 'view' ? vis : state.papers.map(p => p.id));
+  };
   $('#exp-go', m.el).onclick = async () => {
     const scope = $('input[name=scope]:checked', m.el).value; const fmt = $('input[name=fmt]:checked', m.el).value;
     const ids = scope === 'sel' ? sel : scope === 'view' ? vis : state.papers.map(p => p.id);
@@ -687,6 +692,9 @@ function openSettings() {
     <p class="muted small">Create a PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
     <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
+    <div class="section-label">Your name in shared notes &amp; labels <button class="help-q" data-help="notes" title="Explain this">?</button></div>
+    <input class="input wide" id="set-dispname" maxlength="60" value="${esc(s.display_name || '')}" placeholder="e.g. Mirko Z., MZ or a nickname">
+    <p class="muted small">Shown next to your public notes and on the shared labels you create – only the members of those labels see it. Leave empty to use your GitHub name. Private notes never leave your computers.</p>
     <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
     <select class="input wide" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
     <div class="section-label">Folder for downloaded PDFs</div>
@@ -798,7 +806,7 @@ function openSettings() {
   $('#set-save', m.el).onclick = async () => {
     try {
       const d = await api('/api/settings', {method: 'PUT', body: {
-        email: $('#set-email', m.el).value, pdf_dir: $('#set-dir', m.el).value, default_style: $('#set-style', m.el).value,
+        email: $('#set-email', m.el).value, pdf_dir: $('#set-dir', m.el).value, default_style: $('#set-style', m.el).value, display_name: $('#set-dispname', m.el).value,
         sync_repo: $('#set-repo', m.el).value, sync_token: $('#set-token', m.el).value,
         sync_pdfs: $('#set-sync-pdfs', m.el).checked, sync_auto: $('#set-sync-auto', m.el).checked,
         proxies: $$('.proxy-row', m.el).map(r => ({id: r.dataset.id, name: $('.px-name', r).value, template: $('.px-tpl', r).value.trim()})).filter(x => x.template),
@@ -1052,9 +1060,9 @@ async function highlightsToNotes(id) {
   try {
     const d = await api(`/api/papers/${id}/annotations`); const p = paperById(id);
     if (!d.annotations.length) { toast('No highlights yet.'); return; }
-    const block = '\n\nHighlights:\n' + d.annotations.map(a => `• p.${a.page}: “${a.text.trim()}”${a.note ? `\n  → ${a.note}` : ''}`).join('\n');
-    await savePaper(id, {notes: (p.notes || '').replace(/\n*Highlights:\n[\s\S]*$/, '') + block});
-    toast('Highlights copied into your notes.', 'ok');
+    const block = '### Highlights\n' + d.annotations.map(a => `- **p. ${a.page}**: ==${a.text.trim().replace(/\s+/g, ' ')}==${a.note ? ` → ${a.note}` : ''}`).join('\n');
+    await Notes.addPrivate(id, block);
+    toast('Highlights copied into a private note.', 'ok', 6000);
   } catch (err) { toast(err.message, 'error'); }
 }
 
@@ -1210,6 +1218,7 @@ function bind() {
     const row = e.target.closest('.row'); if (!row) return;
     const id = +row.dataset.id; const p = paperById(id);
     if (e.target.closest('.star')) { savePaper(id, {starred: !p.starred}); return; }
+    if (e.target.closest('[data-notes]')) { Notes.open(id); return; }
     const chip = e.target.closest('[data-kw]');
     if (chip) { state.keyword = chip.dataset.kw; renderList(); renderKeywords(); return; }
     const gchip = e.target.closest('[data-goto]');
@@ -1250,6 +1259,7 @@ function bind() {
   });
   $('#bulk-pdf').addEventListener('click', () => bulkFindPdf([...state.selected]));
   $('#bulk-delete').addEventListener('click', () => deletePapers([...state.selected]));
+  $('#bulk-notes').addEventListener('click', () => Notes.exportDialog([...state.selected]));
   $('#export-btn').addEventListener('click', openExport);
   $('#settings-btn').addEventListener('click', openSettings);
   $('#sync-btn').addEventListener('click', syncNow);
@@ -1301,6 +1311,7 @@ function bind() {
     if (act === 'institution') openForLogin(id);
     if (act === 'getcites') { setBusy(a, true, 'Fetching…'); await fetchCitations([id]); setBusy(a, false); }
     if (act === 'hl-notes') highlightsToNotes(id);
+    if (act === 'notes') Notes.open(id);
     if (act === 'detach') { const ok = await confirmBox('Unlink the PDF?', 'The file stays in your PDF folder; it just won’t be linked to this paper anymore.', {ok: 'Unlink'}); if (ok) savePaper(id, {pdf_path: ''}); }
   });
 

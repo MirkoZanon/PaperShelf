@@ -39,6 +39,7 @@ import pdffinder
 import people
 import report
 import sharing
+import notes as notesmod
 import sync as syncmod
 import launcher
 import updater
@@ -118,6 +119,7 @@ CREATE TABLE IF NOT EXISTS paper_shares (
     share_id TEXT NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
     item_key TEXT NOT NULL, PRIMARY KEY (paper_id, share_id)
 );
+CREATE TABLE IF NOT EXISTS note_hidden (share_id TEXT NOT NULL, note_id TEXT NOT NULL, PRIMARY KEY (share_id, note_id));
 CREATE TABLE IF NOT EXISTS share_dismissed (share_id TEXT NOT NULL, item_key TEXT NOT NULL, lamport INTEGER NOT NULL,
     PRIMARY KEY (share_id, item_key));
 CREATE TABLE IF NOT EXISTS people (
@@ -130,7 +132,7 @@ CREATE TABLE IF NOT EXISTS people (
 NEW_PAPER_COLUMNS = {
     "uid": "TEXT", "journal_abbr": "TEXT NOT NULL DEFAULT ''", "openalex_id": "TEXT NOT NULL DEFAULT ''",
     "refs": "TEXT NOT NULL DEFAULT '[]'", "related": "TEXT NOT NULL DEFAULT '[]'", "cited_by_count": "INTEGER",
-    "citations_at": "TEXT NOT NULL DEFAULT ''",
+    "citations_at": "TEXT NOT NULL DEFAULT ''", "note_list": "TEXT NOT NULL DEFAULT '[]'",
 }
 NEW_GROUP_COLUMNS = {"uid": "TEXT", "updated_at": "TEXT NOT NULL DEFAULT ''"}
 NEW_PEOPLE_COLUMNS = {"scholar": "TEXT NOT NULL DEFAULT ''", "roles_extra": "TEXT NOT NULL DEFAULT '{}'"}
@@ -166,6 +168,10 @@ def init_db():
             continue
         for (rid,) in db.execute(f"SELECT id FROM {table} WHERE uid IS NULL OR uid = ''").fetchall():
             db.execute(f"UPDATE {table} SET uid=? WHERE id=?", (uuid.uuid4().hex, rid))
+    # notes became a list of separate notes (version 1.14): the old single text becomes the first note
+    for r in db.execute("SELECT id, notes, added_at, updated_at FROM papers WHERE notes != '' AND (note_list = '[]' OR note_list = '')").fetchall():
+        db.execute("UPDATE papers SET note_list=? WHERE id=?", (json.dumps([{"id": uuid.uuid4().hex[:16], "body": r["notes"],
+                   "created": r["added_at"], "at": r["updated_at"]}], ensure_ascii=False), r["id"]))
     db.executescript("""
         CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_papers_uid ON papers(uid);
@@ -224,12 +230,13 @@ def get_settings(db=None, secrets=True) -> dict:
          "auto_import": "", "remove_downloads": "", "watch_dir": str(Path.home() / "Downloads"), "openalex_key": "",
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
          "update_auto": "1", "just_updated": "", "own_window": "1",
-         "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": ""}
+         "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
+         "display_name": ""}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
                                                 "update_check", "update_cache", "update_auto", "just_updated", "own_window",
-                                                "share_repo", "share_token", "share_auto", "share_user", "share_gist"):
+                                                "share_repo", "share_token", "share_auto", "share_user", "share_gist", "display_name"):
             s[row["key"]] = row["value"]
     try:
         s["proxies"] = json.loads(s["proxies"] or "[]")
@@ -276,7 +283,7 @@ def share_map(db, paper_id=None) -> dict:
 
 def row_to_paper(row, gmap, acounts=None, smap=None) -> dict:
     p = dict(row)
-    for f in JSON_FIELDS + ["refs", "related"]:
+    for f in JSON_FIELDS + ["refs", "related", "note_list"]:
         try:
             p[f] = json.loads(p.get(f) or "[]")
         except ValueError:
@@ -292,7 +299,16 @@ def row_to_paper(row, gmap, acounts=None, smap=None) -> dict:
 
 def load_paper(db, pid):
     row = db.execute("SELECT * FROM papers WHERE id=?", (pid,)).fetchone()
-    return row_to_paper(row, group_map(db, pid), annotation_counts(db), share_map(db, pid)) if row else None
+    if not row:
+        return None
+    p = row_to_paper(row, group_map(db, pid), annotation_counts(db), share_map(db, pid))
+    _add_note_counts([p], public_note_counts(db) if p["share_ids"] else {})
+    return p
+
+
+def _add_note_counts(papers, pub):
+    for p in papers:
+        p["note_counts"] = {"private": len(p.get("note_list") or []), "public": pub.get(p["id"], 0)}
 
 
 def load_papers(db, ids) -> list[dict]:
@@ -302,6 +318,7 @@ def load_papers(db, ids) -> list[dict]:
         chunk = ids[i:i + 500]
         q = f"SELECT * FROM papers WHERE id IN ({','.join('?' * len(chunk))})"
         out += [row_to_paper(r, gmap, ac, sm) for r in db.execute(q, chunk)]
+    _add_note_counts(out, public_note_counts(db) if sm else {})
     order = {pid: n for n, pid in enumerate(ids)}
     return sorted(out, key=lambda p: order.get(p["id"], 0))
 
@@ -379,6 +396,10 @@ def insert_paper(db, meta, group_id=None):
             _int(meta.get("year")), 1 if meta.get("starred") else 0, ts, ts]
         cur = db.execute(f"INSERT INTO papers ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", values)
         pid, duplicate = cur.lastrowid, False
+        if vals["notes"].strip():
+            lst = []
+            notesmod.add(lst, vals["notes"])
+            db.execute("UPDATE papers SET note_list=? WHERE id=?", (json.dumps(lst, ensure_ascii=False), pid))
         store_citation_data(db, pid, meta)
     if group_exists(db, group_id):
         db.execute("INSERT OR IGNORE INTO paper_collections VALUES (?, ?)", (pid, group_id))
@@ -397,6 +418,8 @@ def insert_paper(db, meta, group_id=None):
 def apply_changes(db, pid, body: dict):
     sets, vals, touched = [], [], False
     for f in TEXT_FIELDS:
+        if f == "notes":
+            continue  # notes are separate notes now (see /api/papers/<id>/notes)
         if f in body:
             v = str(body[f] or "")
             v = v if f in ("abstract", "notes") else " ".join(v.split()) if f == "title" else v.strip()
@@ -540,9 +563,11 @@ def view_pdf(pid):
 def library():
     db = get_db()
     gmap, ac, sm = group_map(db), annotation_counts(db), share_map(db)
+    pub = public_note_counts(db)
     papers = []
     for r in db.execute("SELECT * FROM papers ORDER BY added_at DESC, id DESC"):
         p = row_to_paper(r, gmap, ac, sm)
+        _add_note_counts([p], pub)
         p.pop("related", None)  # only needed on the server
         papers.append(p)
     groups = [dict(r) for r in db.execute(
@@ -1817,6 +1842,8 @@ def write_settings():
         set_setting(db, "core_key", body["core_key"].strip())
     if body.get("clear_core_key"):
         set_setting(db, "core_key", "")
+    if "display_name" in body:
+        set_setting(db, "display_name", " ".join(str(body.get("display_name") or "").split())[:60])
     if "share_repo" in body:
         repo = _share_repo_value(body.get("share_repo"))
         if repo is None:
@@ -2373,7 +2400,8 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     row, st = _load_share(db, sid)
     if not st:
         raise sharing.ShareError("Shared label not found.")
-    errors = []
+    me = _my_author(st, ident)
+    errors, authority = [], [(me, json.loads(json.dumps(st)))] if me else []  # your own copy decides about your notes
     sources = {(n, rp) for n, rp in sharing.members(st).items() if rp}
     o_owner, o_src = _origin(row)
     if o_src:
@@ -2385,9 +2413,14 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
                 if src != ident["src"]:
                     errors.append(f"{owner} hasn't published this label yet")
                 continue
-            st = sharing.merge(st, sharing.validate(data))
+            data = sharing.validate(data)
+            st = sharing.merge(st, data)
+            if src != ident["src"] and owner:
+                authority.append((owner, data))
         except sharing.ShareError as exc:
             errors.append(f"{owner}: {exc}")
+    for owner, data in authority:  # each member's own copy decides about that member's notes
+        sharing.trust_author_copy(st, owner, data)
     _apply_join_comments(st, sid, ident, joins)
     mem = sharing.members(st)
     announce = False
@@ -2523,6 +2556,229 @@ def share_loop():
         STOP.wait(15 * 60)
 
 
+# --------------------------------------------------------------------------- #
+# Notes: private (your library) and public (papers of a shared label)
+# --------------------------------------------------------------------------- #
+def _hidden_notes(db, sid=None) -> set:
+    rows = db.execute("SELECT share_id, note_id FROM note_hidden" + (" WHERE share_id=?" if sid else ""), (sid,) if sid else ())
+    return {(r[0], r[1]) for r in rows}
+
+
+def public_note_counts(db) -> dict:
+    """{paper_id: number of public notes you see} over all your shared labels."""
+    hidden, states, out = _hidden_notes(db), {}, {}
+    for pid, sid, key in db.execute("SELECT paper_id, share_id, item_key FROM paper_shares").fetchall():
+        if sid not in states:
+            row = db.execute("SELECT state FROM shares WHERE id=?", (sid,)).fetchone()
+            try:
+                states[sid] = json.loads(row[0]) if row else {}
+            except ValueError:
+                states[sid] = {}
+        e = (states[sid].get("items") or {}).get(key)
+        if e and e.get("notes"):
+            n = sum(1 for x in sharing.notes_of(e) if (sid, x["id"]) not in hidden)
+            if n:
+                out[pid] = out.get(pid, 0) + n
+    return out
+
+
+def _display_name(db, ident=None) -> str:
+    ident = ident or share_identity(db)
+    return get_settings(db).get("display_name") or ident["user"] or ""
+
+
+def _paper_public(db, pid, ident) -> list:
+    out = []
+    for r in db.execute("SELECT share_id, item_key FROM paper_shares WHERE paper_id=?", (pid,)).fetchall():
+        row, st = _load_share(db, r["share_id"])
+        if not st:
+            continue
+        e = st["items"].get(r["item_key"])
+        if not e:
+            continue
+        author = _my_author(st, ident)
+        hidden = _hidden_notes(db, r["share_id"])
+        me = {ident["user"], ident["local"]} - {""}
+        out.append({"share_id": r["share_id"], "share_name": (st.get("name") or {}).get("v") or "", "can_write": bool(author),
+                    "notes": [{**{k: n.get(k) for k in ("id", "by", "name", "body", "created", "at")},
+                               "mine": n.get("by") in me, "hidden": (r["share_id"], n["id"]) in hidden}
+                              for n in sharing.notes_of(e)]})
+    return sorted(out, key=lambda x: x["share_name"].lower())
+
+
+def _private_notes(db, pid) -> list:
+    row = db.execute("SELECT note_list FROM papers WHERE id=?", (pid,)).fetchone()
+    return notesmod.load(row[0]) if row else []
+
+
+def _set_private(db, pid, lst):
+    db.execute("UPDATE papers SET note_list=?, notes=?, updated_at=? WHERE id=?",
+               (json.dumps(lst, ensure_ascii=False), notesmod.plain(lst), now(), pid))
+
+
+def _notes_payload(db, pid):
+    ident = share_identity(db)
+    pub = _paper_public(db, pid, ident)
+    return jsonify(private=_private_notes(db, pid), public=pub, display_name=_display_name(db, ident),
+                   name_set=bool(get_settings(db).get("display_name")),
+                   counts={"private": len(_private_notes(db, pid)),
+                           "public": sum(1 for g in pub for n in g["notes"] if not n["hidden"])})
+
+
+def _public_target(db, pid, sid):
+    """(state, item key, author) of a paper in a shared label, or an error response."""
+    row, st = _load_share(db, sid)
+    if not st:
+        return None, None, None, error("Shared label not found.", 404)
+    r = db.execute("SELECT item_key FROM paper_shares WHERE paper_id=? AND share_id=?", (pid, sid)).fetchone()
+    if not r or r["item_key"] not in st["items"]:
+        return None, None, None, error("This paper is not in that shared label.")
+    return st, r["item_key"], _my_author(st, share_identity(db)), None
+
+
+@app.get("/api/papers/<int:pid>/notes")
+def paper_notes(pid):
+    db = get_db()
+    if not load_paper(db, pid):
+        return error("Paper not found", 404)
+    return _notes_payload(db, pid)
+
+
+@app.post("/api/papers/<int:pid>/notes")
+def paper_note_add(pid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    if not load_paper(db, pid):
+        return error("Paper not found", 404)
+    body = str(b.get("body") or "").strip("\n")
+    if not body.strip():
+        return error("The note is empty.")
+    sid = b.get("share_id") or ""
+    if not sid:
+        lst = _private_notes(db, pid)
+        if len(lst) >= notesmod.MAX_NOTES:
+            return error("Too many notes on this paper.")
+        notesmod.add(lst, body)
+        _set_private(db, pid, lst)
+        db.commit()
+        return _notes_payload(db, pid)
+    st, key, author, err = _public_target(db, pid, sid)
+    if err:
+        return err
+    if not author:
+        return error("You follow this shared label but are not a member, so you can't write public notes in it.")
+    sharing.add_note(st, author, key, body, _display_name(db))
+    _save_share(db, sid, st)
+    db.commit()
+    publish_soon(sid)
+    return _notes_payload(db, pid)
+
+
+@app.put("/api/papers/<int:pid>/notes/<nid>")
+def paper_note_edit(pid, nid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    body = str(b.get("body") or "").strip("\n")
+    if not body.strip():
+        return error("The note is empty.")
+    sid = b.get("share_id") or ""
+    if not sid:
+        lst = _private_notes(db, pid)
+        if not notesmod.edit(lst, nid, body):
+            return error("Note not found.", 404)
+        _set_private(db, pid, lst)
+        db.commit()
+        return _notes_payload(db, pid)
+    st, key, author, err = _public_target(db, pid, sid)
+    if err:
+        return err
+    try:
+        sharing.edit_note(st, author or "", key, nid, body=body, name=_display_name(db))
+    except sharing.ShareError as exc:
+        return error(str(exc), 403)
+    _save_share(db, sid, st)
+    db.commit()
+    publish_soon(sid)
+    return _notes_payload(db, pid)
+
+
+@app.delete("/api/papers/<int:pid>/notes/<nid>")
+def paper_note_delete(pid, nid):
+    """Private note: deleted. Your public note: deleted for everybody. Someone else's: hidden for you."""
+    db = get_db()
+    sid = request.args.get("share") or ""
+    if not sid:
+        lst = _private_notes(db, pid)
+        if not notesmod.remove(lst, nid):
+            return error("Note not found.", 404)
+        _set_private(db, pid, lst)
+        db.commit()
+        return _notes_payload(db, pid)
+    st, key, author, err = _public_target(db, pid, sid)
+    if err:
+        return err
+    n = (st["items"][key].get("notes") or {}).get(nid)
+    if not n:
+        return error("Note not found.", 404)
+    if author and n.get("by") == author:
+        sharing.edit_note(st, author, key, nid, delete=True)
+        _save_share(db, sid, st)
+        db.execute("DELETE FROM note_hidden WHERE share_id=? AND note_id=?", (sid, nid))
+        db.commit()
+        publish_soon(sid)
+    else:
+        db.execute("INSERT OR IGNORE INTO note_hidden VALUES (?, ?)", (sid, nid))
+        db.commit()
+    return _notes_payload(db, pid)
+
+
+@app.post("/api/papers/<int:pid>/notes/<nid>/hide")
+def paper_note_hide(pid, nid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    sid = b.get("share_id") or ""
+    if b.get("hidden", True):
+        db.execute("INSERT OR IGNORE INTO note_hidden VALUES (?, ?)", (sid, nid))
+    else:
+        db.execute("DELETE FROM note_hidden WHERE share_id=? AND note_id=?", (sid, nid))
+    db.commit()
+    return _notes_payload(db, pid)
+
+
+@app.post("/api/notes/export")
+def notes_export():
+    """The notes of the chosen papers, each under its reference: Markdown, plain text or a web page."""
+    b = request.get_json(silent=True) or {}
+    fmt = b.get("format") if b.get("format") in ("md", "txt", "html") else "md"
+    db = get_db()
+    style = b.get("style") or get_settings(db)["default_style"]
+    want_private, want_public = b.get("private", True), b.get("public", True)
+    only_with = bool(b.get("only_with_notes"))
+    ident = share_identity(db)
+    me = _display_name(db, ident) or "Me"
+    entries = []
+    for p in load_papers(db, b.get("ids") or []):
+        lst = []
+        if want_private:
+            lst += [{"body": n["body"], "who": me, "date": (n.get("at") or n.get("created") or "")[:10],
+                     "where": "private", "public": False, "_t": n.get("created") or ""} for n in notesmod.load(p.get("note_list"))]
+        if want_public:
+            for g_ in _paper_public(db, p["id"], ident):
+                lst += [{"body": n["body"], "who": n.get("name") or n.get("by") or "", "date": (n.get("at") or "")[:10],
+                         "where": f"public · {g_['share_name']}", "public": True, "_t": n.get("created") or ""}
+                        for n in g_["notes"] if not n["hidden"]]
+        lst.sort(key=lambda n: n["_t"])
+        if only_with and not lst:
+            continue
+        entries.append({"ref": citations.cite_text(p, style), "notes": lst})
+    title = (b.get("title") or "Notes").strip()[:120] or "Notes"
+    content = notesmod.export(entries, fmt, title)
+    name = re.sub(r"[^\w\- ]+", "", b.get("name") or "notes").strip().replace(" ", "_") or "notes"
+    mime = {"md": "text/markdown", "txt": "text/plain", "html": "text/html"}[fmt]
+    return Response(content, mimetype=mime + "; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}.{fmt}"'})
+
+
 def _share_or_404(db, sid):
     row, st = _load_share(db, sid)
     if not st:
@@ -2548,7 +2804,8 @@ def create_share():
     if not name:
         return error("Give the shared label a name.")
     author = ident["user"] if ident["can_publish"] else ident["local"]
-    st = sharing.new_state(name, author, ident["repo"] if ident["can_publish"] else "")
+    st = sharing.new_state(name, author, ident["repo"] if ident["can_publish"] else "",
+                           display_name=get_settings(db).get("display_name") or ident["user"])
     if b.get("description"):
         sharing.set_description(st, author, b["description"])
     ids = [int(i) for i in b.get("paper_ids") or []]
@@ -2611,6 +2868,7 @@ def leave_share(sid):
             app.logger.warning("could not publish leaving: %s", exc)
     db.execute("DELETE FROM shares WHERE id=?", (sid,))
     db.execute("DELETE FROM share_dismissed WHERE share_id=?", (sid,))
+    db.execute("DELETE FROM note_hidden WHERE share_id=?", (sid,))
     db.commit()
     return jsonify(ok=True)
 

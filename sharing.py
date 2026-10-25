@@ -149,12 +149,13 @@ def present(entry: dict) -> bool:
 
 
 # --------------------------------------------------------------------------- state
-def new_state(name: str, author: str, repo: str = "", list_id: str | None = None) -> dict:
+def new_state(name: str, author: str, repo: str = "", list_id: str | None = None, display_name: str = "") -> dict:
     st = {"papershelf_shared": FORMAT, "id": list_id or new_id(), "clock": 0,
           "name": {"v": "", "s": None}, "description": {"v": "", "s": None},
           "members": {}, "items": {}, "updated_at": _now(), "publisher": author}
     set_name(st, author, name or "Shared list")
     set_member(st, author, author, repo)
+    st["creator"] = {"by": author, "name": (display_name or "")[:60], "at": _now()}
     return st
 
 
@@ -167,6 +168,10 @@ def clock(st: dict) -> int:
     for k in ("name", "description"):
         if (st.get(k) or {}).get("s"):
             c = max(c, st[k]["s"][0])
+    for e in st.get("items", {}).values():
+        for n in (e.get("notes") or {}).values():
+            if n.get("s"):
+                c = max(c, n["s"][0])
     return c
 
 
@@ -211,6 +216,78 @@ def remove_item(st, author, key):
         e["rem"] = tick(st, author)
 
 
+# --------------------------------------------------------------------------- public notes
+# Each paper of a shared label can carry notes. A note belongs to its author: only versions written
+# by the author (stamp author == note author) are accepted when merging, so nobody can change or
+# delete someone else's note for everybody (others can only hide it on their own computer).
+MAX_NOTE = 20000
+
+
+def add_note(st, author, key, body, name="") -> str:
+    e = st["items"].get(key)
+    if e is None:
+        raise ShareError("This paper is not in the shared label.")
+    nid = uuid.uuid4().hex[:16]
+    e.setdefault("notes", {})[nid] = {"by": author, "name": (name or "")[:60], "body": (body or "")[:MAX_NOTE],
+                                      "created": _now(), "at": _now(), "del": False, "s": tick(st, author)}
+    e["notes"][nid]["c"] = e["notes"][nid]["s"][0]  # creation order (stays when the note is edited)
+    return nid
+
+
+def edit_note(st, author, key, nid, body=None, name=None, delete=False):
+    n = ((st["items"].get(key) or {}).get("notes") or {}).get(nid)
+    if not n:
+        raise ShareError("Note not found.")
+    if n.get("by") != author:
+        raise ShareError("Only the author can change this note for everybody.")
+    n.update(at=_now(), s=tick(st, author))
+    if delete:
+        n.update(body="", **{"del": True})
+    else:
+        if body is not None:
+            n["body"] = body[:MAX_NOTE]
+        if name:
+            n["name"] = name[:60]
+
+
+def notes_of(e) -> list:
+    """Visible notes of an item, oldest first."""
+    return sorted((dict(v, id=k) for k, v in (e.get("notes") or {}).items() if not v.get("del")),
+                  key=lambda n: (n.get("created") or "", n.get("c") or (n.get("s") or [0])[0], n.get("id")))
+
+
+def _merge_notes(x: dict, y: dict) -> dict:
+    out = {}
+    for nid in set(x) | set(y):
+        cands = [n for n in (x.get(nid), y.get(nid)) if n and n.get("s") and n["s"][1] == n.get("by")]
+        if not cands:
+            continue
+        best = cands[0]
+        for c in cands[1:]:
+            if newer(c.get("s"), best.get("s")):
+                best = c
+        out[nid] = dict(best)
+    return out
+
+
+def trust_author_copy(st: dict, owner: str, copy: dict):
+    """The copy published by `owner` (read from owner's own gist) is the authority on owner's notes:
+    a version of one of owner's notes found in someone else's copy but not in owner's is dropped,
+    so a member can't forge or change another member's note by editing their own copy by hand."""
+    for key, e in (st.get("items") or {}).items():
+        mine = ((copy.get("items") or {}).get(key) or {})
+        if not mine:
+            continue  # owner doesn't have this paper: nothing to compare with
+        theirs = mine.get("notes") or {}
+        for nid, n in list((e.get("notes") or {}).items()):
+            if n.get("by") != owner:
+                continue
+            if nid not in theirs:
+                del e["notes"][nid]
+            elif n != theirs[nid]:
+                e["notes"][nid] = dict(theirs[nid])
+
+
 def members(st) -> dict:
     """Current members: {name: repo}."""
     return {k: v.get("repo", "") for k, v in st.get("members", {}).items() if present(v)}
@@ -238,6 +315,9 @@ def merge(a: dict, b: dict) -> dict:
             continue
         out["members"][name] = {"add": latest(x.get("add"), y.get("add")), "rem": latest(x.get("rem"), y.get("rem")),
                                 "repo": (y if newer(y.get("add"), x.get("add")) else x).get("repo") or x.get("repo") or y.get("repo") or ""}
+    ca, cb = a.get("creator"), b.get("creator")
+    if ca or cb:
+        out["creator"] = dict(min([c for c in (ca, cb) if c], key=lambda c: c.get("at") or "9"))
     out["items"] = {}
     for key in set(a.get("items", {})) | set(b.get("items", {})):
         x, y = a["items"].get(key), b["items"].get(key)
@@ -247,6 +327,9 @@ def merge(a: dict, b: dict) -> dict:
         src = y if newer(y.get("add"), x.get("add")) else x
         out["items"][key] = {"meta": src.get("meta") or x.get("meta") or y.get("meta"),
                              "add": latest(x.get("add"), y.get("add")), "rem": latest(x.get("rem"), y.get("rem"))}
+        notes = _merge_notes(x.get("notes") or {}, y.get("notes") or {})
+        if notes:
+            out["items"][key]["notes"] = notes
     return out
 
 
@@ -276,7 +359,26 @@ def validate(data) -> dict:
         meta = clean_meta(e["meta"])
         if not (meta.get("title") or meta.get("doi")):
             continue
-        st["items"][item_key(meta)] = {"meta": meta, "add": _stamp(e.get("add")), "rem": _stamp(e.get("rem"))}
+        item = {"meta": meta, "add": _stamp(e.get("add")), "rem": _stamp(e.get("rem"))}
+        raw_notes = e.get("notes") if isinstance(e.get("notes"), dict) else {}
+        notes = {}
+        for nid, n in list(raw_notes.items())[:300]:
+            if not (isinstance(n, dict) and re.match(r"^[a-f0-9]{8,32}$", str(nid))):
+                continue
+            by = str(n.get("by") or "")
+            stp = _stamp(n.get("s"))
+            if not (NAME_RE.match(by) or by.startswith("local-")) or not stp or stp[1] != by:
+                continue  # a version not written by the note's author is ignored
+            notes[str(nid)] = {"by": by, "name": str(n.get("name") or "")[:60], "body": str(n.get("body") or "")[:MAX_NOTE],
+                               "created": str(n.get("created") or "")[:40], "at": str(n.get("at") or "")[:40],
+                               "del": bool(n.get("del")), "s": stp,
+                               "c": n["c"] if isinstance(n.get("c"), int) and 0 <= n["c"] <= stp[0] else stp[0]}
+        if notes:
+            item["notes"] = notes
+        st["items"][item_key(meta)] = item
+    c = data.get("creator") if isinstance(data.get("creator"), dict) else None
+    if c and (NAME_RE.match(str(c.get("by") or "")) or str(c.get("by") or "").startswith("local-")):
+        st["creator"] = {"by": str(c["by"])[:60], "name": str(c.get("name") or "")[:60], "at": str(c.get("at") or "")[:40]}
     st["clock"] = clock(st)
     return st
 
@@ -284,7 +386,9 @@ def validate(data) -> dict:
 def summary(st: dict) -> dict:
     its = items(st)
     return {"id": st["id"], "name": st["name"]["v"], "description": (st.get("description") or {}).get("v", ""),
-            "papers": len(its), "members": members(st), "updated_at": st.get("updated_at")}
+            "papers": len(its), "members": members(st), "updated_at": st.get("updated_at"),
+            "creator": st.get("creator") or {},
+            "notes": sum(len(notes_of(e)) for e in its.values())}
 
 
 # --------------------------------------------------------------------------- where lists live
@@ -372,6 +476,7 @@ class GitHub:
         self.token = (token or "").strip()
         self.timeout = timeout
         self._gists = {}  # gist id -> files, cached for one update round
+        self._owners = {}  # gist id -> GitHub login of its owner (checked when reading a member's copy)
 
     def _headers(self, auth=True):
         h = {"Accept": "application/vnd.github+json", "User-Agent": "PaperShelf-sharing"}
@@ -437,6 +542,7 @@ class GitHub:
         if r.status_code != 200:
             raise ShareError(f"GitHub answered {r.status_code}" + (" (too many requests without a token – try later)" if r.status_code == 403 else ""))
         files = {}
+        self._owners[gid] = ((r.json().get("owner") or {}).get("login") or "")
         for name, f in (r.json().get("files") or {}).items():
             if f.get("truncated") and f.get("raw_url"):
                 rr = self._req("GET", f["raw_url"], headers={"User-Agent": "PaperShelf-sharing"})
@@ -455,6 +561,9 @@ class GitHub:
                 files = self._gist_files(gid, fresh)
                 if files is None or files.get(name) is None:
                     return None
+                real = self._owners.get(gid) or ""
+                if owner and real and real.lower() != owner.lower():
+                    raise ShareError(f"the copy said to be {owner}'s is in a gist of {real} - ignored.")
                 return self._json(files[name], name)
             r = self._req("GET", f"https://gist.githubusercontent.com/{owner}/{gid}/raw/{name}",
                           headers={"User-Agent": "PaperShelf-sharing"})
