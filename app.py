@@ -31,6 +31,7 @@ from urllib.parse import urlencode
 from flask import Flask, Response, g, jsonify, redirect, request, send_file
 
 import citations
+import coauth
 import journals
 import metadata
 import pdffinder
@@ -131,7 +132,7 @@ NEW_PAPER_COLUMNS = {
     "citations_at": "TEXT NOT NULL DEFAULT ''",
 }
 NEW_GROUP_COLUMNS = {"uid": "TEXT", "updated_at": "TEXT NOT NULL DEFAULT ''"}
-NEW_PEOPLE_COLUMNS = {"scholar": "TEXT NOT NULL DEFAULT ''"}
+NEW_PEOPLE_COLUMNS = {"scholar": "TEXT NOT NULL DEFAULT ''", "roles_extra": "TEXT NOT NULL DEFAULT '{}'"}
 
 app = Flask(__name__, static_folder=str(BASE_DIR / "static"), static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
@@ -1178,11 +1179,19 @@ def person_data(row) -> dict:
         data["merge_log"] = (data.get("merge_log") or []) + log
         data["scholar"] = {k: v for k, v in sch.items() if k != "pubs"}
         data["scholar"]["pubs_count"] = len(sch.get("pubs") or [])
+        # (roles from the paper texts are applied below, after the Scholar merge)
         if not data.get("photo") and sch.get("photo_data"):
             data["photo"] = {"data": sch["photo_data"], "url": None, "page": sch["url"], "source": "Google Scholar"}
         if not any(src["name"] == "Google Scholar" for src in data.get("sources") or []):
             data.setdefault("sources", []).append({"name": "Google Scholar", "url": sch["url"],
                                                    "what": f"public profile page captured by you on {sch['captured_at'][:10]}"})
+    extra = json.loads(row["roles_extra"] or "{}") if "roles_extra" in row.keys() else {}
+    for w in data.get("works") or []:  # co-first / co-last found in the papers themselves (kept across refreshes)
+        e = extra.get(w.get("key"))
+        if e:
+            w["eq_checked"] = e
+            if e.get("role") and w.get("role") in ("middle", "", None):
+                w["role"], w["role_source"] = e["role"], e.get("source", "")
     return data
 
 
@@ -1289,6 +1298,47 @@ def person_roles(pid):
     db.execute("UPDATE people SET data=? WHERE id=?", (json.dumps(prof, ensure_ascii=False), pid))
     db.commit()
     return jsonify(person=person_full(db, db.execute("SELECT * FROM people WHERE id=?", (pid,)).fetchone()))
+
+
+@app.post("/api/people/<int:pid>/roles/deep")
+def person_roles_deep(pid):
+    """Read the papers (Europe PMC full text, open-access PDF, publisher page) to find co-first /
+    co-last authorship for the given works. The client calls it a few works at a time."""
+    db = get_db()
+    row = db.execute("SELECT * FROM people WHERE id=?", (pid,)).fetchone()
+    if not row:
+        return error("Not found", 404)
+    keys = [k for k in (request.get_json(silent=True) or {}).get("keys") or []][:6]
+    data = person_data(row)
+    names = people.researcher_names(data)
+    extra = json.loads(row["roles_extra"] or "{}")
+    by_key = {w.get("key"): w for w in data.get("works") or []}
+    out = {}
+    for k in keys:
+        w = by_key.get(k)
+        if not w:
+            continue
+        idx = people.researcher_index(w, names)
+        n = len([a for a in w.get("authors") or [] if a not in ("…", "...")])
+        if w.get("role") not in ("middle", "", None) and not (w.get("eq_checked") or {}).get("role"):
+            res = {"role": "", "source": w.get("role_source") or "", "note": f"already known: {w.get('role')}"}
+        elif idx is None or idx in (0, n - 1):
+            res = {"role": "", "source": "", "note": "not in a middle position"}
+        else:
+            ck = "eq:" + (w.get("doi") or w.get("openalex_id") or k)
+            res = _cache_get(ck)
+            if res is None:
+                try:
+                    res = coauth.check(w, idx)
+                except Exception as exc:  # noqa: BLE001 - one unreadable paper must not stop the others
+                    res = {"role": "", "source": "", "note": f"could not be checked ({exc.__class__.__name__})"}
+                _cache_put(ck, res)
+        res = dict(res, at=now())
+        extra[k] = res
+        out[k] = res
+    db.execute("UPDATE people SET roles_extra=? WHERE id=?", (json.dumps(extra, ensure_ascii=False), pid))
+    db.commit()
+    return jsonify(results=out)
 
 
 @app.put("/api/people/<int:pid>")
@@ -1422,6 +1472,65 @@ def sjr_load():
     except metadata.MetadataError as exc:
         return lookup_error(exc)
     return jsonify(year=year, journals=n)
+
+
+SJR_FILE_RE = re.compile(r"^scimagojr[ _-]*(\d{4})(?:[ _-].*?)?(?: ?\(\d+\))?\.(?:csv|txt|xls)$", re.I)
+SJR_WAIT = {"until": 0.0, "since": 0.0, "seen": set()}
+
+
+@app.post("/api/sjr/await")
+def sjr_await():
+    """The user is downloading SCImago tables in the browser: import them from Downloads for 30 minutes."""
+    SJR_WAIT["until"] = time.time() + 30 * 60
+    SJR_WAIT["since"] = SJR_WAIT["since"] if SJR_WAIT["until"] and SJR_WAIT["since"] else time.time() - 120
+    return jsonify(ok=True, folder=str(WATCHER.folder(get_settings())))
+
+
+def sjr_watch_tick(db) -> list:
+    """Import new "scimagojr YYYY.csv" files that appeared in the Downloads folder."""
+    if time.time() > SJR_WAIT["until"]:
+        return []
+    s = get_settings(db)
+    folder = WATCHER.folder(s)
+    done = []
+    try:
+        files = [f for f in folder.iterdir() if f.is_file() and SJR_FILE_RE.match(f.name)]
+    except OSError:
+        return []
+    for f in files:
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        sig = (f.name, st.st_mtime, st.st_size)
+        if st.st_mtime < SJR_WAIT["since"] or sig in SJR_WAIT["seen"] or time.time() - st.st_mtime < 1.5:
+            continue  # old file, already imported, or still being written
+        SJR_WAIT["seen"].add(sig)
+        year = int(SJR_FILE_RE.match(f.name).group(1))
+        try:
+            journals.import_table(db, year, f.read_bytes())
+            done.append(year)
+            if s.get("remove_downloads") == "1":
+                try:
+                    move_to_trash(str(f))
+                except OSError:
+                    pass
+        except (ValueError, OSError) as exc:
+            logging.getLogger("papershelf").warning("SCImago file %s not imported: %s", f.name, exc)
+    return done
+
+
+def sjr_watch_loop():
+    while not STOP.is_set():
+        if time.time() < SJR_WAIT["until"]:
+            db = connect()
+            try:
+                sjr_watch_tick(db)
+            except Exception as exc:  # noqa: BLE001 - background task
+                logging.getLogger("papershelf").warning("SCImago watch failed: %s", exc)
+            finally:
+                db.close()
+        STOP.wait(2)
 
 
 @app.post("/api/sjr/import")
@@ -2606,6 +2715,7 @@ def main():
         threading.Timer(1.2, lambda: launcher.open_ui(url, own)).start()
     threading.Thread(target=auto_sync_loop, daemon=True).start()
     threading.Thread(target=share_loop, daemon=True).start()
+    threading.Thread(target=sjr_watch_loop, daemon=True).start()
     WATCHER.start()
     import flask.cli
     logging.getLogger("werkzeug").setLevel(logging.ERROR)  # keep the Terminal window quiet

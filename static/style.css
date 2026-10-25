@@ -609,3 +609,13 @@ kbd { background: var(--chip); border: 1px solid var(--border); border-bottom-wi
 .kwm-row:hover { background: var(--hover); }
 .kwm-row span:nth-child(2) { flex: 1; }
 .kwm-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+/* researchers: sortable columns, SCImago guide */
+.prow.head .sorth { border: 0; background: none; padding: 0; font: inherit; color: inherit; cursor: pointer; text-transform: inherit; letter-spacing: inherit; white-space: nowrap; }
+.prow.head .sorth:hover { color: var(--accent); }
+.prow.head .sorth.on { color: var(--accent); }
+.role.r-none { background: none; color: var(--faint); }
+.sjr-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.sjr-years { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }
+.sjr-y { display: inline-block; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 13px; text-decoration: none; color: var(--accent); background: var(--panel); }
+.sjr-y:hover { border-color: var(--accent); background: var(--accent-soft); }
+.sjr-y.ok { color: var(--ok); border-color: transparent; background: color-mix(in srgb, var(--ok) 12%, transparent); }

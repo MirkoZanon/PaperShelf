@@ -130,11 +130,16 @@ const Help = (() => {
       <h4>How the list is built</h4>
       <ul><li>ORCID, OpenAlex (and Google Scholar if imported) are merged and <b>duplicates removed</b> (same DOI, or same title and year).</li>
         <li>Each item gets a type: journal article, preprint, conference paper, abstract/poster, book, thesis, data/software, other. Datasets and files in repositories (figshare, Zenodo, Dryad, OSF, OpenNeuro…), supplementary files, peer-review reports and corrections are recognised from the DOI, the link and the title. Wrong? Change the type in the table – PaperShelf remembers it.</li>
-        <li><b>Role</b>: first, co-first, last, co-last, sole author or co-author. Co-first and co-last come from the equal-contribution statements recorded in <b>PubMed</b> (biomedical journals); elsewhere only first/last position is known.</li>
+        <li><b>Role</b>: first, co-first, last, co-last or sole author; empty for middle positions. Co-first and co-last are found in two steps:
+          <ol><li>the equal-contribution flags recorded in <b>PubMed</b>;</li>
+          <li>for papers where the researcher is in a middle position, PaperShelf <b>reads the paper itself</b> – the Europe PMC full text, the legal open-access PDF, or the article page on the publisher's site – looking for notes such as “† These authors contributed equally” or “M.R. and P.N. contributed equally”. Only a block of equal contributors starting with the first author (co-first) or ending with the last author (co-last) counts.</li></ol>
+          This runs by itself in the background when you open a researcher (progress in the Summary card; you can stop it). Hover a role to see where it was found. Papers that can only be read behind a paywall can't be checked.</li>
         <li><b>IF</b>: see <a href="#" data-help="journal-metrics">Journal metrics &amp; impact factor</a>. The first time, click <i>Load journal metrics</i>.</li>
         <li>Not theirs? Hide it with ✕ (OpenAlex sometimes confuses people with the same name – items “not in ORCID” deserve a check).</li></ul>
       <h4>Filters</h4>
-      <p>Type chips, search, role (e.g. “first, co-first, last or co-last”), years, <i>only ${new Date().getFullYear()}</i>, <i>separate years</i> (headings per year), sort by year, citations or IF.</p>
+      <p>Type chips, search, role (e.g. “first, co-first, last or co-last”), years, <i>only ${new Date().getFullYear()}</i>, <i>separate years</i> (headings per year).</p>
+      <h4>Sorting</h4>
+      <p>Click any column title – Year, Publication, Type, Role, IF pub., IF now, Cit. – to sort by it; click again to reverse (▲ ascending, ▼ descending). Papers without a value always go last. The menu next to the filters does the same.</p>
       <h4>Export (publication list / CV)</h4>
       <p><b>⤓ Export list</b> saves a web page, Word/Pages (.rtf), text, spreadsheet, RIS or BibTeX. You choose:</p>
       <ul><li>which publications and types (supplementary files and other minor items are left out by default), or <b>only the current year</b>;</li>
@@ -160,9 +165,12 @@ const Help = (() => {
       <h4>Years without a table</h4>
       <p>SCImago publishes each year's table around June of the following year, and not every year may be available on your computer. When the table for a year is missing, PaperShelf uses the <b>closest previous year</b> that has data for that journal and shows that reference year in small under the value (e.g. a 2026 paper with <i>2025</i> data). If there is no earlier data, the cell stays empty.</p>
       <h4>If the download is refused</h4>
-      <p>scimagojr.com sometimes refuses downloads made by programs. PaperShelf then tries again only after a few days and shows a yellow note. You can add the tables by hand in two minutes:</p>
-      ${step(1, 'Open <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">scimagojr.com/journalrank.php</a>, choose the year at the top, then click <b>Download data</b> (a file like <i>scimagojr 2025.csv</i>). Repeat for the years you need.')}
-      ${step(2, 'Click <b>Import tables…</b> in the yellow note (or ⚙︎ Settings → Journal rankings) and select all the files at once. The year is read from the file name.')}
+      <p>scimagojr.com sometimes refuses downloads made by programs, but not those made by your browser. PaperShelf then shows a yellow note with <b>Get the missing years…</b>:</p>
+      ${step(1, 'The window lists exactly the years this researcher needs (the latest one and each publication year). Click <b>Download all missing years</b> – or one year at a time.')}
+      ${step(2, 'Your browser downloads the tables into your Downloads folder (allow several downloads if it asks). PaperShelf <b>imports them by itself</b>: each year turns ✓ and the IF columns fill in.')}
+      <p>Tables are kept for every researcher: years already loaded are never asked again. Files you already downloaded can be added with <i>Import files I already have…</i> (several at once – the year is read from the file name).</p>
+      <h4>Why not fully automatic?</h4>
+      <p>The official Journal Impact Factor is sold by Clarivate and can't be downloaded freely. SCImago offers its yearly tables for free on its website; when the site doesn't answer programs, the one-click browser download is the legal way to get them.</p>
       ${step(3, 'Know the official impact factor (many journals show it on their homepage, or via your university\'s JCR access)? Type it in that window: it is stored only on your computer.')}
 `},
 

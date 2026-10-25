@@ -337,6 +337,7 @@ def _oa_item(w: dict, aid: str) -> dict:
                      or ([src["issn_l"]] if src.get("issn_l") else []),
         "openalex_id": openalex_short(w.get("id")), "orcid_type": "", "put_codes": [],
         "pmid": re.sub(r"\D", "", (w.get("ids") or {}).get("pmid") or ""),
+        "pmcid": ((w.get("ids") or {}).get("pmcid") or "").rstrip("/").rsplit("/", 1)[-1],
     }
 
 
@@ -444,7 +445,7 @@ def classify_base(it: dict) -> str:
 def _absorb(base: dict, extra: dict, why: str, log: list):
     log.append({"kept": base["title"], "merged": extra["title"], "kept_sources": list(base["sources"]),
                 "merged_sources": list(extra["sources"]), "reason": why})
-    for k in ("doi", "venue", "url", "year", "volume", "issue", "pages", "oa_url", "openalex_id", "position", "source_type", "pmid"):
+    for k in ("doi", "venue", "url", "year", "volume", "issue", "pages", "oa_url", "openalex_id", "position", "source_type", "pmid", "pmcid"):
         if not base.get(k) and extra.get(k):
             base[k] = extra[k]
     if extra.get("orcid_type") and not base.get("orcid_type"):
@@ -1007,6 +1008,15 @@ def base_role(w: dict, names) -> str:
                 return "last"
             return "middle"
     return ""
+
+
+def researcher_index(w: dict, names) -> int | None:
+    """Position of the researcher in the work's author list (OpenAlex names), or None."""
+    authors = [a for a in (w.get("authors") or []) if a and a not in ("…", "...")]
+    hits = [i for i, a in enumerate(authors) if _name_match(names, split_name(a)["family"], split_name(a)["given"])]
+    if not hits:
+        return None
+    return hits[-1] if w.get("position") == "last" else hits[0]
 
 
 def add_roles(prof: dict, online: bool = True):

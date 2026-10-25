@@ -2,6 +2,18 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.11 – 2026-10-25
+
+- **Researchers – sortable table**: click any column title (Year, Publication, Type, Role, IF pub.,
+  IF now, Cit.) to sort by it, click again to reverse. Empty values always go last.
+- **Co-first and co-last found in the papers themselves**: besides PubMed, PaperShelf reads the
+  Europe PMC full text, the legal open-access PDF or the publisher's article page of papers where the
+  researcher is in a middle position, looking for notes such as “† These authors contributed
+  equally”. Runs in the background, results are kept. Middle positions are no longer labelled.
+- **Journal metrics in one click**: when scimagojr.com refuses PaperShelf's own download, *Get the
+  missing years* lists exactly the years needed (latest + publication years); the browser downloads
+  them and PaperShelf imports them automatically from the Downloads folder.
+
 ## 1.10 – 2026-10-25
 
 - **Labels**: groups are now called *labels*, in two kinds under *Labels* in the sidebar: *Personal*

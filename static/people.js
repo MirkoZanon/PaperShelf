@@ -8,12 +8,14 @@ const People = (() => {
   };
   try { S.ptab = localStorage.getItem('papershelf-ptab') || 'overview'; } catch (e) { /* ignore */ }
   const THIS_YEAR = new Date().getFullYear();
-  const newFilters = () => ({cats: null, q: '', from: '', to: '', role: 'all', sort: 'year', thisYear: false,
+  const newFilters = () => ({cats: null, q: '', from: '', to: '', role: 'all', sort: 'year', dir: 'desc', thisYear: false,
     byYear: true, showExcluded: false, hidePubPreprints: false});
   S.f = newFilters();
   const CAT_CLASS = c => `cat-badge cat-${c}`;
   const fmt = n => (n ?? 0).toLocaleString();
-  const ROLE_LABEL = {first: 'First', 'co-first': 'Co-first', last: 'Last', 'co-last': 'Co-last', sole: 'Sole', middle: 'Co-author', '': '–'};
+  const ROLE_LABEL = {first: 'First', 'co-first': 'Co-first', last: 'Last', 'co-last': 'Co-last', sole: 'Sole', middle: '', '': ''};
+  const ROLE_ORDER = {first: 1, sole: 1, 'co-first': 2, last: 3, 'co-last': 4, middle: 5, '': 6};
+  const SORT_DEFAULT_DIR = {year: 'desc', title: 'asc', type: 'asc', role: 'asc', ifpub: 'desc', ifnow: 'desc', cites: 'desc'};
   const KEY_ROLES = ['first', 'co-first', 'last', 'co-last', 'sole'];
 
   function initials(name) {
@@ -43,6 +45,7 @@ const People = (() => {
     S.person = p; S.selected.clear(); S.jm = null; S.f = newFilters();
     setTimeout(loadJournalMetrics, 0);
     if (!p.profile.roles_checked) setTimeout(checkRoles, 50);
+    else if (deepCandidates().length) setTimeout(() => { if (S.person === p) deepCheck(false); }, 1500);
   }
   async function add(c) {
     S.loadingProfile = true; draw();
@@ -70,7 +73,7 @@ const People = (() => {
     S.rolesChecking = true; if (manual) draw();
     try {
       const d = await api(`/api/people/${P.id}/roles`, {method: 'POST'});
-      if (S.person?.id === P.id) { S.person = d.person; draw(); }
+      if (S.person?.id === P.id) { S.person = d.person; draw(); setTimeout(() => { if (S.person?.id === P.id) deepCheck(false); }, 800); }
       if (manual) toast('Authorship roles checked (co-first / co-last from PubMed where available).', 'ok');
     } catch (err) { if (manual) toast(err.message, 'error'); }
     S.rolesChecking = false;
@@ -106,14 +109,23 @@ const People = (() => {
     if (f.role === 'key') list = list.filter(w => KEY_ROLES.includes(R(w)));
     if (f.hidePubPreprints) list = list.filter(w => !(cat(w) === 'preprint' && w.published_as));
     if (terms.length) list = list.filter(w => { const h = `${w.title} ${w.venue} ${(w.authors || []).join(' ')} ${w.doi}`.toLowerCase(); return terms.every(t => h.includes(t)); });
-    const sorters = {
-      year: (a, b) => (b.year || 0) - (a.year || 0) || a.title.localeCompare(b.title),
-      oldest: (a, b) => (a.year || 9999) - (b.year || 9999) || a.title.localeCompare(b.title),
-      cites: (a, b) => Math.max(b.cited_by || 0, b.scholar_cites || 0) - Math.max(a.cited_by || 0, a.scholar_cites || 0),
-      if: (a, b) => (ifVals(b)[0]?.value || 0) - (ifVals(a)[0]?.value || 0),
-      title: (a, b) => a.title.localeCompare(b.title),
-    };
-    return [...list].sort(sorters[f.sort] || sorters.year);
+    // every column can sort, both ways; empty values always go last
+    if (f.sort === 'oldest') { f.sort = 'year'; f.dir = 'asc'; }
+    if (f.sort === 'if') f.sort = 'ifpub';
+    const catIdx = Object.fromEntries((S.person.categories || []).map((c, i) => [c.id, i]));
+    const val = {
+      year: w => w.year || null, title: w => (w.title || '').toLowerCase(), type: w => catIdx[cat(w)] ?? 99,
+      role: w => ROLE_ORDER[roleOf(w)] ?? 6, ifpub: w => ifVals(w)[0]?.value ?? null, ifnow: w => ifVals(w)[1]?.value ?? null,
+      cites: w => Math.max(w.cited_by || 0, w.scholar_cites || 0),
+    }[f.sort] || (w => w.year || null);
+    const sign = f.dir === 'asc' ? 1 : -1;
+    return [...list].sort((a, b) => {
+      const x = val(a), y = val(b);
+      if (x == null && y != null) return 1;
+      if (y == null && x != null) return -1;
+      const c = x == null ? 0 : (typeof x === 'string' ? x.localeCompare(y) : x - y);
+      return c * sign || (b.year || 0) - (a.year || 0) || a.title.localeCompare(b.title);
+    });
   }
   function authorsHtml(w) {
     const fam = familyNames();
@@ -253,8 +265,7 @@ const People = (() => {
     const tile = (n, label, sub = '') => `<div class="stile"><b>${n}</b><span>${label}</span>${sub ? `<em>${sub}</em>` : ''}</div>`;
     const checked = S.person.profile.roles_checked;
     return `<div class="p-card summary-card">
-      <div class="sum-head"><h3>Summary</h3><span class="muted tiny">${checked ? 'Co-first / co-last from PubMed equal-contribution statements.' : ''}
-        <button class="linklike" id="p-roles">${S.rolesChecking ? 'checking…' : checked ? 'check again' : 'Check co-first / co-last (PubMed)'}</button></span></div>
+      <div class="sum-head"><h3>Summary</h3><span class="muted tiny">${deepStatus()}</span></div>
       <div class="stiles">
         ${tile(c.total, 'publications', `${c.articles} journal articles`)}
         ${tile(c.first, 'first or sole author', `${art.first} in journals`)}
@@ -297,6 +308,84 @@ const People = (() => {
       <div class="src-note">Scholar: <a href="${esc(g.url)}" target="_blank" rel="noopener">public profile</a>, captured ${esc(new Date(g.captured_at).toLocaleDateString())} (${g.pubs_count} publications).
       Scholar usually counts more because it also includes non-peer-reviewed sources. To update, click the 🎓 button again on the Scholar page. <button class="linklike" id="p-rm-scholar">remove Scholar data</button></div></div>`;
   }
+  /* ------------------------------------------------------------ co-first / co-last from the papers themselves */
+  const DEEP_CATS = ['article', 'preprint', 'conference'];
+  function deepCandidates() {
+    const P = S.person; if (!P) return [];
+    return P.profile.works.filter(w => ['middle', ''].includes(roleOf(w) || '') && !w.eq_checked && (w.doi || w.pmcid)
+      && DEEP_CATS.includes(cat(w)) && (w.authors || []).length >= 3);
+  }
+  function deepStatus() {
+    if (S.deep) return `🔍 Reading the papers for co-first / co-last notes… ${S.deep.done}/${S.deep.total}${S.deep.found ? ` · ${S.deep.found} found` : ''} <button class="linklike" id="p-deep">stop</button>`;
+    const read = S.person.profile.works.filter(w => w.eq_checked).length, todo = deepCandidates().length;
+    const pm = S.person.profile.roles_checked ? 'PubMed' : '';
+    return `Co-first / co-last: ${[pm, read ? `${read} papers read` : ''].filter(Boolean).join(' + ') || 'not checked yet'}.
+      ${todo ? `<button class="linklike" id="p-deep">read ${todo} more papers</button> ·` : ''} <button class="linklike" id="p-roles">${S.rolesChecking ? 'checking PubMed…' : 'check PubMed again'}</button>
+      <button class="help-q" data-help="researchers" title="How roles are found">?</button>`;
+  }
+  async function deepCheck(manual = false) {
+    const P = S.person; if (!P || S.deep) return;
+    const todo = deepCandidates(); if (!todo.length) { if (manual) toast('All the papers have been checked.'); return; }
+    S.deep = {done: 0, total: todo.length, found: 0, stop: false}; draw();
+    for (let i = 0; i < todo.length && !S.deep.stop && S.person === P; i += 4) {
+      const chunk = todo.slice(i, i + 4);
+      try {
+        const d = await api(`/api/people/${P.id}/roles/deep`, {method: 'POST', body: {keys: chunk.map(w => w.key)}});
+        for (const w of chunk) {
+          const r = d.results[w.key]; if (!r) continue;
+          w.eq_checked = r;
+          if (r.role) { w.role = r.role; w.role_source = r.source; S.deep.found++; }
+        }
+      } catch (err) { if (manual) toast(err.message, 'error'); break; }
+      S.deep.done = Math.min(todo.length, i + chunk.length);
+      if (S.person === P) draw();
+    }
+    const found = S.deep.found; S.deep = null;
+    if (S.person === P) { draw(); if (found || manual) toast(`Papers read: ${found} more co-first / co-last authorship${found === 1 ? '' : 's'} found.`, 'ok', 8000); }
+  }
+
+  /* ------------------------------------------------------------ SCImago tables: guided download */
+  async function sjrGuide() {
+    const st = await api('/api/sjr/status');
+    const pubYears = S.person.profile.works.filter(w => ['article', 'conference', 'abstract'].includes(cat(w)) && w.year)
+      .map(w => w.year).filter(y => y >= st.first && y <= st.latest);
+    const years = [...new Set([...pubYears, st.latest])].sort((a, b) => b - a);
+    try { await api('/api/sjr/await', {method: 'POST'}); } catch (e) { /* ignore */ }
+    const url = y => `https://www.scimagojr.com/journalrank.php?year=${y}&out=xls`;
+    const m = modal(`<h3>Journal metrics: get the missing years <span class="grow"></span><button class="btn small" data-help="journal-metrics">📘 Guide</button></h3>
+      <p class="muted small">This researcher needs the SCImago tables for <b>${years.length}</b> year${years.length === 1 ? '' : 's'} (the latest one and each publication year). Each button downloads one table <b>in your browser</b> (about 3–6 MB); PaperShelf <b>imports it automatically</b> from your Downloads folder – nothing else to do. If your browser asks to allow several downloads, click Allow.</p>
+      <div class="sjr-actions"><button class="btn primary" id="sjr-all">⬇ Download all missing years</button><button class="btn" id="sjr-files">Import files I already have…</button><input type="file" id="sjr-file2" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-sum"></span></div>
+      <div class="sjr-years" id="sjr-years"></div>
+      <p class="muted small">If a download page asks you to confirm you are human, do it and the file will download. The files go to <code>${esc(state.settings.watch_dir || 'Downloads')}</code> (⚙︎ Settings → PDFs &amp; access). On a Mac, allow PaperShelf to read the Downloads folder if asked.</p>
+      <div class="modal-actions"><button class="btn" data-close>Close</button></div>`, {wide: true});
+    let loaded = new Set(st.loaded), timer = null;
+    const render = () => {
+      const miss = years.filter(y => !loaded.has(y));
+      $('#sjr-years', m.el).innerHTML = years.map(y => loaded.has(y)
+        ? `<span class="sjr-y ok">✓ ${y}</span>`
+        : `<a class="sjr-y" href="${url(y)}" target="_blank" rel="noopener" data-y="${y}" title="Download the ${y} table">⬇ ${y}</a>`).join('');
+      $('#sjr-sum', m.el).textContent = miss.length ? `${years.length - miss.length} of ${years.length} loaded` : 'All years loaded ✓';
+      $('#sjr-all', m.el).disabled = !miss.length;
+    };
+    render();
+    const poll = async () => {
+      try { const s2 = await api('/api/sjr/status'); const before = loaded.size; loaded = new Set(s2.loaded); if (loaded.size !== before) { render(); loadJournalMetrics(); } } catch (e) { /* ignore */ }
+      timer = setTimeout(poll, 2000);
+    };
+    timer = setTimeout(poll, 2000);
+    m.onclose = () => { clearTimeout(timer); loadJournalMetrics(); };
+    $('#sjr-all', m.el).onclick = () => {
+      // hidden frames download every year without opening tabs; the browser may ask to allow multiple downloads
+      years.filter(y => !loaded.has(y)).forEach((y, i) => setTimeout(() => {
+        const f = document.createElement('iframe'); f.style.display = 'none'; f.src = url(y); document.body.appendChild(f);
+        setTimeout(() => f.remove(), 120000);
+      }, i * 1500));
+      toast('Downloading in the background… each year turns ✓ when it has been imported. If nothing happens after a minute, click the years one by one.', 'info', 12000);
+    };
+    $('#sjr-files', m.el).onclick = () => $('#sjr-file2', m.el).click();
+    $('#sjr-file2', m.el).onchange = async e => { await importSjrFiles([...e.target.files]); e.target.value = ''; };
+  }
+
   /* ------------------------------------------------------------ journal metrics */
   async function loadJournalMetrics() {
     const P = S.person; if (!P) return;
@@ -460,6 +549,17 @@ const People = (() => {
       <div class="src-note" style="margin-top:14px">Sources: ${p.sources.map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.name)}</a> (${esc(s.what)})`).join(' · ')}.</div>`;
   }
 
+  function sortHead(key, label, title = '') {
+    const on = S.f.sort === key;
+    return `<span><button class="sorth ${on ? 'on' : ''}" data-psort="${key}" title="${esc(title || 'Sort by ' + label)} – click again to reverse">${label}${on ? (S.f.dir === 'asc' ? ' ▲' : ' ▼') : ''}</button></span>`;
+  }
+  function roleCell(w, r) {
+    if (!r || r === 'middle') {
+      const e = w.eq_checked;
+      return `<span class="role r-none" title="${esc(e ? `Checked ${e.source || ''}: ${e.note || ''}` : 'Middle author')}">${e ? '·' : ''}</span>`;
+    }
+    return `<span class="role r-${esc(r)}" title="${esc(w.role_source ? 'Source: ' + w.role_source : '')}">${ROLE_LABEL[r] || ''}</span>`;
+  }
   function rowHtml(w, num, inLib, ex, byKey) {
     const c = cat(w), r = roleOf(w);
     const link = w.doi ? `https://doi.org/${w.doi}` : w.url;
@@ -479,7 +579,7 @@ const People = (() => {
         <div class="v">${esc(w.venue || '')}${notes.length ? ` <span class="pnotes">· ${notes.join(' · ')}</span>` : ''}</div>
       </div>
       <span><select class="${CAT_CLASS(c)}" data-cat title="Type – change it if it is wrong">${S.person.categories.map(k => `<option value="${k.id}" ${k.id === c ? 'selected' : ''}>${esc(shortCat(k.id))}</option>`).join('')}</select></span>
-      <span><span class="role r-${esc(r || 'none')}" title="${esc(w.role_source ? 'Source: ' + w.role_source : '')}">${ROLE_LABEL[r] ?? '–'}</span></span>
+      <span>${roleCell(w, r)}</span>
       <span class="ifc">${ifCell(ifPub, w, 'At publication', w.year)}</span>
       <span class="ifc">${ifCell(ifNow, w, 'Latest', S.jm?.loaded?.length ? Math.max(...S.jm.loaded) : null)}</span>
       <span class="cit" title="Citations: OpenAlex${w.scholar_cites != null ? ' · Google Scholar ' + fmt(w.scholar_cites) : ''}">${w.cited_by != null ? fmt(w.cited_by) : (w.scholar_cites != null ? fmt(w.scholar_cites) + '<sup>GS</sup>' : '')}</span>
@@ -498,7 +598,7 @@ const People = (() => {
     const nums = new Map(chrono.map((w, i) => [w.key, i + 1]));
     const allSel = list.length && list.every(w => S.selected.has(w.key));
     let rows = '';
-    if (S.f.byYear && ['year', 'oldest'].includes(S.f.sort)) {
+    if (S.f.byYear && S.f.sort === 'year') {
       let cur = undefined;
       for (const w of list) {
         if (w.year !== cur) {
@@ -513,9 +613,9 @@ const People = (() => {
     const jmFailed = S.jm ? Object.keys(S.jm.failed || {}).map(Number).filter(y => !S.jm.loaded.includes(y)).sort((a, b) => b - a) : [];
     const jmBanner = S.jmLoading ? `<div class="s-note">Downloading journal metrics… ${S.jmLoading.done}/${S.jmLoading.total} years</div>`
       : (S.jm && !S.jm.loaded.length && !jmFailed.length) ? `<div class="s-note"><span>📊 To fill the <b>IF</b> columns, load the journal metrics once (SCImago, about 3–6 MB per year). <button class="help-q" data-help="journal-metrics">?</button></span><button class="btn small primary" id="p-rankings">Load journal metrics</button></div>`
-      : jmFailed.length ? `<div class="s-note warn"><span>⚠ The SCImago tables for <b>${esc(compactYears(jmFailed))}</b> couldn't be downloaded automatically${S.jm.loaded.length ? ' – the IF columns use the closest previous year available (shown in small)' : ''}. <span class="muted">${esc((S.jm.failed[jmFailed[0]] || '').split('. ')[0])}.</span>
-          To add them: on <a href="https://www.scimagojr.com/journalrank.php?year=${jmFailed[0]}" target="_blank" rel="noopener">scimagojr.com</a> choose the year → “Download data”, then import the files (several at once). <button class="help-q" data-help="journal-metrics">?</button></span>
-          <span class="s-note-btns"><button class="btn small primary" id="p-sjr-import">Import tables…</button><button class="btn small" id="p-sjr-retry">Try again</button></span><input type="file" id="p-sjr-file" accept=".csv,.txt,.xls" multiple hidden></div>` : '';
+      : jmFailed.length ? `<div class="s-note warn"><span>⚠ scimagojr.com didn't let PaperShelf download the tables for <b>${esc(compactYears(jmFailed))}</b> by itself${S.jm.loaded.length ? ' – meanwhile the IF columns use the closest previous year available (shown in small)' : ''}.
+          Click <b>Get the missing years</b>: your browser downloads them with one click and PaperShelf imports them automatically. <button class="help-q" data-help="journal-metrics">?</button></span>
+          <span class="s-note-btns"><button class="btn small primary" id="p-sjr-guide">Get the missing years…</button><button class="btn small" id="p-sjr-retry">Try again</button></span></div>` : '';
     return `
       <div class="cat-chips">${P.categories.filter(c => cc[c.id]).map(c => `<button class="cat-chip ${!S.f.cats || S.f.cats.has(c.id) ? 'on' : ''}" data-chip="${c.id}">${esc(shortCat(c.id))}<span>${cc[c.id]}</span></button>`).join('')}
         ${S.f.cats ? '<button class="btn small" id="p-allcats">All types</button>' : ''}
@@ -526,7 +626,7 @@ const People = (() => {
         <input type="search" id="p-fq" placeholder="Search titles, journals, co-authors…" value="${esc(S.f.q)}" style="min-width:230px">
         <select id="p-role"><option value="all">Any role</option><option value="key">First, co-first, last or co-last</option><option value="firstany">First or co-first</option><option value="first">First / sole author</option><option value="co-first">Co-first author</option><option value="lastany">Last or co-last</option><option value="last">Last author</option></select>
         <span class="muted small">Years</span><input type="number" id="p-from" placeholder="from" value="${esc(S.f.from)}"><input type="number" id="p-to" placeholder="to" value="${esc(S.f.to)}">
-        <select id="p-sort"><option value="year">Newest first</option><option value="oldest">Oldest first</option><option value="cites">Most cited</option><option value="if">Highest IF</option><option value="title">Title A–Z</option></select>
+        <select id="p-sort" title="Sort by – or click a column title"><option value="year">Sort: year</option><option value="title">Sort: title</option><option value="type">Sort: type</option><option value="role">Sort: role</option><option value="ifpub">Sort: IF at publication</option><option value="ifnow">Sort: IF now</option><option value="cites">Sort: citations</option></select><button class="btn small" id="p-dir" title="Reverse the order">${S.f.dir === 'asc' ? '↑ ascending' : '↓ descending'}</button>
         <label><input type="checkbox" id="p-byyear" ${S.f.byYear ? 'checked' : ''}> separate years</label>
         <label class="${S.f.thisYear ? 'on-filter' : ''}"><input type="checkbox" id="p-thisyear" ${S.f.thisYear ? 'checked' : ''}> only ${THIS_YEAR}</label>
         <details class="more-f"><summary>More</summary>
@@ -535,13 +635,13 @@ const People = (() => {
       </div>
       ${jmBanner}
       <div class="ptable">
-        <div class="prow head"><span><input type="checkbox" id="p-selall" ${allSel ? 'checked' : ''} title="Select all shown"></span><span title="Chronological number (oldest = 1)">#</span><span>Year</span><span>Publication</span><span>Type</span><span>Role</span>
-          <span title="Impact factor in the year of publication">IF pub.</span><span title="Latest impact factor">IF now</span><span>Cit.</span><span></span></div>
+        <div class="prow head"><span><input type="checkbox" id="p-selall" ${allSel ? 'checked' : ''} title="Select all shown"></span><span title="Chronological number (oldest = 1)">#</span>${sortHead('year', 'Year')}${sortHead('title', 'Publication')}${sortHead('type', 'Type')}${sortHead('role', 'Role', 'Order: first, co-first, last, co-last')}
+          ${sortHead('ifpub', 'IF pub.', 'Impact factor in the year of publication')}${sortHead('ifnow', 'IF now', 'Latest impact factor')}${sortHead('cites', 'Cit.', 'Citations')}<span></span></div>
         ${rows || '<div class="empty">No publications match these filters.</div>'}
       </div>
       <div class="src-note" style="margin-top:10px">${list.length} shown${S.selected.size ? ` · ${S.selected.size} selected` : ''} ·
         ${merged ? `duplicate check: ${merged} duplicate record${merged > 1 ? 's' : ''} merged` : 'duplicate check: none found'} ·
-        <b>IF</b>: <sup>*</sup> = SCImago 2-year citations per document (impact-factor formula, Scopus data); without * = official impact factor you entered (click a value). Roles: co-first/co-last from PubMed where available.</div>`;
+        <b>IF</b>: <sup>*</sup> = SCImago 2-year citations per document (impact-factor formula, Scopus data); without * = official impact factor you entered (click a value). Roles: co-first/co-last from PubMed and from the papers themselves (Europe PMC full text, open-access PDF, publisher page); empty = middle author.</div>`;
   }
 
   function profileView() {
@@ -659,6 +759,11 @@ const People = (() => {
         S.loadingProfile = false; draw(); loadList(); return;
       }
       if (id === 'p-roles') { checkRoles(true); return; }
+      if (id === 'p-dir') { S.f.dir = S.f.dir === 'asc' ? 'desc' : 'asc'; draw(); return; }
+      const sh = e.target.closest('[data-psort]');
+      if (sh) { const k = sh.dataset.psort; if (S.f.sort === k) S.f.dir = S.f.dir === 'asc' ? 'desc' : 'asc'; else { S.f.sort = k; S.f.dir = SORT_DEFAULT_DIR[k] || 'desc'; } draw(); return; }
+      if (id === 'p-deep') { S.deep ? (S.deep.stop = true) : deepCheck(true); return; }
+      if (id === 'p-sjr-guide') { sjrGuide(); return; }
       if (id === 'p-goyear') { S.ptab = 'pubs'; S.f.thisYear = true; draw(); return; }
       if (id === 'p-me') { await save({is_me: !S.person.is_me}); draw(); loadList(); return; }
       if (id === 'p-remove') {
@@ -703,7 +808,8 @@ const People = (() => {
         if (t.value === w.category) delete ov[key]; else ov[key] = t.value;
         await save({overrides: ov}); draw(); return;
       }
-      const map = {'p-role': 'role', 'p-sort': 'sort', 'p-from': 'from', 'p-to': 'to'};
+      if (t.id === 'p-sort') { S.f.sort = t.value; S.f.dir = SORT_DEFAULT_DIR[t.value] || 'desc'; draw(); return; }
+      const map = {'p-role': 'role', 'p-from': 'from', 'p-to': 'to'};
       if (map[t.id]) { S.f[map[t.id]] = t.value; draw(); return; }
       const bools = {'p-hidepre': 'hidePubPreprints', 'p-showex': 'showExcluded', 'p-byyear': 'byYear', 'p-thisyear': 'thisYear'};
       if (bools[t.id]) { S.f[bools[t.id]] = t.checked; draw(); }

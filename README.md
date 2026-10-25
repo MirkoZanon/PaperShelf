@@ -143,7 +143,8 @@ co-first / last / co-last authorship, current year), metrics and charts (OpenAle
 education, funding, awards (ORCID). *Publications*: one table, de-duplicated across sources and
 classified (journal article, preprint, conference paper, abstract/poster, book, thesis, data/software,
 other – datasets, supplementary files, peer reviews and corrections are recognised), with the
-researcher's role (co-first/co-last from PubMed equal-contribution statements), journal impact factor
+researcher's role (co-first/co-last from PubMed and from the papers themselves – Europe PMC full text,
+open-access PDF or publisher page), journal impact factor
 at publication and today, citations, year headings and filters. Export as a dated publication list /
 CV (web page, Word, text, spreadsheet, RIS, BibTeX) with optional impact factor, chronological
 numbering, highlighted authorship, summary table, sections by type and/or year, or only the current
@@ -152,8 +153,9 @@ year. Optional import of the public Google Scholar profile page you are viewing.
 **Journal metrics** – SCImago quartile, SJR and citations-per-document (impact-factor formula, Scopus
 data) at publication time and today, OpenAlex 2-year mean citedness, and your own entries of the
 official impact factor. When a year's table is missing, the closest previous year is used and shown;
-otherwise the cell stays empty. If scimagojr.com refuses the automatic download, download the yearly
-files there (*Download data*) and import them all at once (the year is read from the file name).
+otherwise the cell stays empty. If scimagojr.com refuses the automatic download, *Get the missing
+years* lets your browser download exactly the years needed, and PaperShelf imports them automatically
+from your Downloads folder. The publication table can be sorted by any column.
 
 **Shared labels** – share labels with colleagues (journal club, lab reading list…): only titles,
 authors, year, journal and DOI travel, never PDFs or notes. Shared labels are kept apart from your
@@ -328,6 +330,7 @@ journals.py       journal metrics (SCImago tables, OpenAlex, manual impact facto
 watcher.py        attaches PDFs downloaded in the browser to the right paper
 updater.py        in-app updates (GitHub releases → download, backup, replace, restart)
 launcher.py       app window (Chrome/Edge --app) and the PaperShelf icon (Mac .app, Windows shortcut)
+coauth.py         co-first / co-last from paper texts (Europe PMC JATS, open-access PDF, publisher page)
 sharing.py        shared labels: order-independent merge (Lamport-stamped add/remove sets), secret gists
 VERSION           the app version (single source of truth)
 update.json       the GitHub repository the updater checks ("owner/name")
