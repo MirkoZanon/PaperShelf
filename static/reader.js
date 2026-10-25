@@ -16,7 +16,7 @@ const Reader = (() => {
   }
   const root = () => $('#reader');
 
-  async function open(id) {
+  async function open(id, startPage = 0) {
     paper = paperById(id);
     if (!paper?.pdf_exists) { toast('There is no PDF for this paper yet.', 'error'); return; }
     isOpen = true; anns = []; pages = {}; token++;
@@ -60,6 +60,7 @@ const Reader = (() => {
       }
       fitWidth(false);
       layout(); list();
+      if (startPage > 1 && startPage <= n) setTimeout(() => goTo({page: startPage, rects: [], id: 0}), 150);
     } catch (err) {
       $('#r-pages').innerHTML = `<div class="r-loading">Could not open this PDF: ${esc(err.message || String(err))}</div>`;
     }

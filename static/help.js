@@ -60,7 +60,7 @@ const Help = (() => {
       <h4>Status, stars, notes</h4>
       <p>Mark papers <i>To read / Reading / Read</i>, star the important ones, write notes in the details panel.</p>
       <h4>Search and shortcuts</h4>
-      <p>The search box looks in titles, authors, journals, keywords, abstracts and notes. Shortcuts: ${kbd('/')} search · ${kbd('n')} add · ${kbd('Esc')} close · ${kbd('Delete')} delete selected.</p>`},
+      <p>The search box (top right) looks in titles, authors, journals, keywords, abstracts and notes – <b>and inside your PDFs</b>: PaperShelf indexes the text of every PDF on this computer in the background, so a word written anywhere in a paper is found too. Matches inside a PDF show the page and the sentence; click it to open the PDF at that page. Several words must all appear in the paper; use "quotes" for an exact phrase. Scanned PDFs without a text layer can't be searched. Shortcuts: ${kbd('/')} search · ${kbd('n')} add · ${kbd('Esc')} close · ${kbd('Delete')} delete selected.</p>`},
 
     {id: 'pdfs', icon: '📄', title: 'Getting PDFs', html: () => `
       <p><b>⬇ Find &amp; download PDF</b> looks for a legal, free copy in this order: arXiv · the link found when the paper was added · Unpaywall · OpenAlex · Semantic Scholar · CORE (university repositories) · Europe PMC / PubMed Central · the publisher's page.</p>
@@ -116,6 +116,8 @@ const Help = (() => {
       <ul><li><b>Citations</b> – who cites whom (data from OpenAlex).</li>
         <li><b>Keywords</b> – the most common keywords become ◆ nodes and each paper is linked to its keywords, so papers on the same topics cluster together. Or choose <i>Papers linked by shared keywords</i> (thicker line = more keywords in common). Click a keyword ◆ to show only its papers.</li>
         <li><b>Labels</b> – your personal labels become ◆ nodes (a dashed line joins a sub-label to its parent) and each paper is linked to its labels: papers with several labels sit between them. Click a label ◆ to open it. Shared labels are not used here.</li></ul>
+      <h4>Search by topic (in Discover)</h4>
+      <p>At the top of <b>💡 Discover</b>, describe what you're looking for – a few words, a question, or even a whole abstract – and click <b>Search</b>. <b>By meaning</b> (OpenAlex semantic search) compares your text with the titles and abstracts of 250+ million works, so it also finds papers that talk about the same idea in other words; <b>By words</b> is the classic search. Filter by year, type or free-to-read, and add any result with one click. From the Add box, the suggestions list offers <i>🔎 Search by topic</i> too. Only your search text is sent to OpenAlex.</p>
       <h4>Discover</h4>
       <p><b>💡 Discover</b> suggests papers for the current label (or the whole library): works often cited by your papers, recent papers that cite yours, and related works. One click adds them.</p>
       <h4>Citation data</h4>

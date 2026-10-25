@@ -122,7 +122,8 @@ is used); browser buttons that save the page you are reading. Duplicates are rec
 keywords: the sidebar shows the most frequent ones with a filter and *Show all*, and a keyword manager
 merges variants (“fMRI” / “fmri”), renames or deletes keywords across the library. Reading status,
 stars, notes; a compact library menu (*All papers*, *To read*, *Reading*, the rest under *More*);
-search in titles, authors, journals, keywords, abstracts and notes.
+search in titles, authors, journals, keywords, abstracts, notes **and the text inside your PDFs**
+(indexed locally; matches show page and sentence).
 
 **PDFs** – legal free copies from arXiv, Unpaywall, OpenAlex, Semantic Scholar, CORE (university
 repositories), Europe PMC / PubMed Central and publisher pages. For subscription papers:
@@ -132,6 +133,9 @@ PDF, and PaperShelf attaches it automatically from your Downloads folder. Option
 
 **Reader** – read PDFs inside the app, highlight in five colours, add notes, copy highlights to your
 notes, or save them into the PDF file (visible in Preview, Acrobat, Zotero).
+
+**Search by topic** – in Discover, describe a subject, a question or an abstract: OpenAlex semantic
+search finds papers about the same idea even when they use other words (or classic search by words).
 
 **Map** – the papers of a label as a network linked by **citations** (with the important papers you
 don't have yet), by **keywords** (keywords as nodes, or papers linked by shared keywords) or by your
@@ -330,6 +334,7 @@ journals.py       journal metrics (SCImago tables, OpenAlex, manual impact facto
 watcher.py        attaches PDFs downloaded in the browser to the right paper
 updater.py        in-app updates (GitHub releases → download, backup, replace, restart)
 launcher.py       app window (Chrome/Edge --app) and the PaperShelf icon (Mac .app, Windows shortcut)
+fulltext.py       PDF text index (SQLite FTS5) for searching inside PDFs
 coauth.py         co-first / co-last from paper texts (Europe PMC JATS, open-access PDF, publisher page)
 sharing.py        shared labels: order-independent merge (Lamport-stamped add/remove sets), secret gists
 VERSION           the app version (single source of truth)

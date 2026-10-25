@@ -229,7 +229,8 @@ function filteredPapers({ignoreKeyword = false} = {}) {
   } else if (v.type === 'share') list = list.filter(p => (p.share_ids || []).includes(v.id));
   if (!ignoreKeyword && state.keyword) list = list.filter(p => p.keywords.some(k => k.toLowerCase() === state.keyword));
   const terms = state.search.toLowerCase().split(/\s+/).filter(Boolean);
-  if (terms.length) list = list.filter(p => { const h = haystack(p); return terms.every(t => h.includes(t)); });
+  const ft = state.ftQuery === state.search ? (state.ftHits || {}) : {};
+  if (terms.length) list = list.filter(p => { const h = haystack(p); return terms.every(t => h.includes(t)) || ft[p.id]; });
   return [...list].sort(SORTS[state.sort][1]);
 }
 function viewKey() {
@@ -332,7 +333,7 @@ function rowHtml(p) {
   return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''}" data-id="${p.id}" draggable="true">
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
-    <div><div class="row-title">${esc(p.title || 'Untitled')}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
+    <div><div class="row-title">${esc(p.title || 'Untitled')}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${ftSnippet(p)}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
     <div class="row-side"><span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span>${p.pdf_exists ? '<span class="pdf-badge" title="PDF saved">PDF</span>' : ''}${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}</div>
   </div>`;
 }
@@ -359,7 +360,11 @@ function renderList() {
     chips.push(`<span class="fchip">Keyword: ${esc(label)} <button data-clear="kw" title="Clear">×</button></span>
       <button class="btn small" id="kw-to-group" title="Create a label for these papers">Make label from keyword</button>`);
   }
-  if (state.search) chips.push(`<span class="fchip">Search: ${esc(state.search)} <button data-clear="search" title="Clear">×</button></span>`);
+  if (state.search) {
+    const fs = state.ftStatus, nft = Object.keys(state.ftQuery === state.search ? state.ftHits || {} : {}).length;
+    chips.push(`<span class="fchip">Search: ${esc(state.search)} <button data-clear="search" title="Clear">×</button></span>`
+      + (fs && fs.with_pdf ? `<span class="muted small" title="The text of your PDFs is searched too (indexed on this computer)">📄 ${nft ? `${nft} found inside PDFs · ` : ''}searching the text of ${fs.indexed} of ${fs.with_pdf} PDFs${fs.indexed < fs.with_pdf - fs.unreadable ? ' (indexing…)' : ''}</span>` : ''));
+  }
   $('#filters').innerHTML = chips.join('');
 
   const n = state.selected.size;
@@ -866,6 +871,26 @@ async function manageKeywords() {
   });
 }
 
+/* ------------------------------------------------------------------ search inside PDFs */
+let ftSeq = 0;
+async function searchPdfs() {
+  const q = state.search, my = ++ftSeq;
+  if (q.length < 2) { state.ftHits = {}; state.ftQuery = q; return; }
+  try {
+    const d = await api('/api/fulltext?q=' + encodeURIComponent(q));
+    if (my !== ftSeq) return;
+    state.ftHits = d.hits; state.ftStatus = d.status; state.ftQuery = q;
+    renderList(); renderKeywords();
+  } catch (e) { /* the metadata search still works */ }
+}
+function snippetHtml(s) { return esc(s).replace(/\[\[/g, '<mark>').replace(/\]\]/g, '</mark>'); }
+function ftSnippet(p) {
+  if (!state.search || state.ftQuery !== state.search) return '';
+  const h = (state.ftHits || {})[p.id]; if (!h || !h.hits?.length) return '';
+  const first = h.hits[0];
+  return `<div class="row-ft" data-ftpage="${first.page}" title="Open the PDF at this page">📄 <b>p. ${first.page}</b>${h.pages > 1 ? ` <span class="muted">(+${h.pages - 1} more page${h.pages > 2 ? 's' : ''})</span>` : ''} – ${snippetHtml(first.snippet)}</div>`;
+}
+
 /* ------------------------------------------------------------------ quit */
 async function quitApp() {
   const ok = await confirmBox('Quit PaperShelf?', 'PaperShelf stops on this computer. Everything is already saved. Start it again with its icon or with start.command / start.bat.', {ok: 'Quit'});
@@ -1088,7 +1113,7 @@ function bind() {
 
   // Search & sort
   let st = null;
-  $('#search').addEventListener('input', e => { clearTimeout(st); st = setTimeout(() => { state.search = e.target.value.trim(); renderList(); renderKeywords(); }, 120); });
+  $('#search').addEventListener('input', e => { clearTimeout(st); st = setTimeout(() => { state.search = e.target.value.trim(); renderList(); renderKeywords(); searchPdfs(); }, 120); });
   $('#sort').innerHTML = Object.entries(SORTS).map(([k, [label]]) => `<option value="${k}">${label}</option>`).join('');
   $('#sort').value = state.sort;
   $('#sort').addEventListener('change', e => { state.sort = e.target.value; savePrefs(); renderList(); });
@@ -1096,7 +1121,7 @@ function bind() {
   $('#filters').addEventListener('click', async e => {
     const c = e.target.closest('[data-clear]');
     if (c?.dataset.clear === 'kw') { state.keyword = null; renderList(); renderKeywords(); }
-    if (c?.dataset.clear === 'search') { state.search = ''; $('#search').value = ''; renderList(); renderKeywords(); }
+    if (c?.dataset.clear === 'search') { state.search = ''; $('#search').value = ''; state.ftHits = {}; renderList(); renderKeywords(); }
     if (e.target.id === 'kw-to-group') {
       const ids = state.visible.slice(); const label = paperById(ids[0])?.keywords.find(k => k.toLowerCase() === state.keyword) || state.keyword;
       const name = await askText('New label from keyword', {value: label, ok: 'Create', label: `Creates a label${currentGroupId() ? ' inside the current one' : ''} for the ${ids.length} papers shown.`});
@@ -1189,6 +1214,8 @@ function bind() {
     if (chip) { state.keyword = chip.dataset.kw; renderList(); renderKeywords(); return; }
     const gchip = e.target.closest('[data-goto]');
     if (gchip) { setView({type: 'group', id: +gchip.dataset.goto}); return; }
+    const ftp = e.target.closest('[data-ftpage]');
+    if (ftp) { Reader.open(id, +ftp.dataset.ftpage); return; }
     const schip = e.target.closest('[data-goto-share]');
     if (schip) { setView({type: 'share', id: schip.dataset.gotoShare}); return; }
     const idx = state.visible.indexOf(id);

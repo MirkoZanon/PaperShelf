@@ -2,6 +2,16 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 1.13 – 2026-10-25
+
+- **Search inside your PDFs**: the library search box also finds words written in the PDFs (indexed on
+  this computer in the background). Matches show the page and the sentence; click to open the PDF
+  there. The researchers' publication list searches the PDFs of the papers you have too.
+- **Search by topic**: in Discover, describe what you're looking for (words, a question or an
+  abstract). *By meaning* uses OpenAlex semantic search to find papers about the same idea even if
+  they use other words; *By words* is the classic search. Filters for year, type and free-to-read.
+  Also reachable from the Add box (*🔎 Search by topic*).
+
 ## 1.12 – 2026-10-25
 
 - **Journal metrics kept in PaperShelf's own folder**: SCImago tables downloaded by the browser are

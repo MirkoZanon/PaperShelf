@@ -621,3 +621,19 @@ kbd { background: var(--chip); border: 1px solid var(--border); border-bottom-wi
 .sjr-y.ok { color: var(--ok); border-color: transparent; background: color-mix(in srgb, var(--ok) 12%, transparent); }
 .if-cell.na { display: inline-block; min-width: 10px; }
 .if-cell .if-ni { font-size: 10.5px; color: var(--faint); white-space: nowrap; }
+
+/* ---------------------------------------------------------------- v1.13: search inside PDFs, search by topic */
+.row-ft { font-size: 12.5px; color: var(--muted); margin-top: 3px; cursor: pointer; line-height: 1.4; }
+.row-ft:hover { color: var(--text); }
+mark { background: color-mix(in srgb, #f5c542 55%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.pft { color: var(--muted); }
+.p-search-box { flex: 1 1 340px; min-width: 260px; }
+.suggest .sg-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.suggest .sg-foot .linklike { font-size: 12px; }
+.topic-box { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 18px; }
+.topic-row { display: flex; gap: 8px; }
+.topic-row .input { flex: 1; font-size: 15px; padding: 10px 12px; }
+.topic-opts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.topic-opts select.input { padding: 4px 8px; font-size: 13px; }
+.s-abs { font-size: 12.5px; color: var(--muted); margin: 4px 0 6px; line-height: 1.45; }
+.oa-tag { color: var(--ok); }

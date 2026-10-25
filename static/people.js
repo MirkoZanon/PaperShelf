@@ -108,7 +108,8 @@ const People = (() => {
     if (f.role === 'lastany') list = list.filter(w => ['last', 'co-last', 'sole'].includes(R(w)));
     if (f.role === 'key') list = list.filter(w => KEY_ROLES.includes(R(w)));
     if (f.hidePubPreprints) list = list.filter(w => !(cat(w) === 'preprint' && w.published_as));
-    if (terms.length) list = list.filter(w => { const h = `${w.title} ${w.venue} ${(w.authors || []).join(' ')} ${w.doi}`.toLowerCase(); return terms.every(t => h.includes(t)); });
+    const ft = S.ftQ === f.q ? (S.ftByDoi || {}) : {};
+    if (terms.length) list = list.filter(w => { const h = `${w.title} ${w.venue} ${(w.authors || []).join(' ')} ${w.doi} ${w.year || ''}`.toLowerCase(); return terms.every(t => h.includes(t)) || (w.doi && ft[w.doi.toLowerCase()]); });
     // every column can sort, both ways; empty values always go last
     if (f.sort === 'oldest') { f.sort = 'year'; f.dir = 'asc'; }
     if (f.sort === 'if') f.sort = 'ifpub';
@@ -316,6 +317,20 @@ const People = (() => {
       <div class="src-note">Scholar: <a href="${esc(g.url)}" target="_blank" rel="noopener">public profile</a>, captured ${esc(new Date(g.captured_at).toLocaleDateString())} (${g.pubs_count} publications).
       Scholar usually counts more because it also includes non-peer-reviewed sources. To update, click the 🎓 button again on the Scholar page. <button class="linklike" id="p-rm-scholar">remove Scholar data</button></div></div>`;
   }
+  /* ------------------------------------------------------------ search inside the PDFs of papers you have */
+  let ftSeq = 0;
+  async function searchPdfs(q) {
+    const my = ++ftSeq;
+    if ((q || '').trim().length < 2) { S.ftByDoi = {}; S.ftQ = q; return; }
+    try {
+      const d = await api('/api/fulltext?q=' + encodeURIComponent(q.trim()));
+      if (my !== ftSeq) return;
+      S.ftByDoi = {}; for (const h of Object.values(d.hits)) if (h.doi) S.ftByDoi[h.doi.toLowerCase()] = h;
+      S.ftQ = q; draw();
+      const el = $('#p-fq'); if (el && document.activeElement !== el) { /* keep focus where it was */ }
+    } catch (e) { /* metadata search still works */ }
+  }
+
   /* ------------------------------------------------------------ co-first / co-last from the papers themselves */
   const DEEP_CATS = ['article', 'preprint', 'conference'];
   function deepCandidates() {
@@ -578,6 +593,8 @@ const People = (() => {
     const notes = [];
     if (w.cat_note && !S.person.overrides[w.key]) notes.push(esc(w.cat_note));
     if (pub) notes.push(`published as <a href="#" data-jump="${esc(pub.key)}">${esc(truncate(pub.venue || 'article', 34))} ${pub.year || ''}</a>`);
+    const fh = S.f.q && S.ftQ === S.f.q && w.doi ? (S.ftByDoi || {})[w.doi.toLowerCase()] : null;
+    if (fh?.hits?.length) notes.push(`<span class="pft" title="Found inside your PDF of this paper">📄 p. ${fh.hits[0].page}: ${esc(fh.hits[0].snippet).replace(/\[\[/g, '<mark>').replace(/\]\]/g, '</mark>')}</span>`);
     if (S.person.profile.orcid && !w.sources.includes('ORCID')) notes.push('<span title="Found by OpenAlex/Scholar but not in the ORCID record – check it is really theirs">not in ORCID</span>');
     return `<div class="prow ${ex ? 'excluded' : ''} ${KEY_ROLES.includes(r) ? 'keyrole' : ''}" data-key="${esc(w.key)}">
       <span><input type="checkbox" class="psel" ${S.selected.has(w.key) ? 'checked' : ''}></span>
@@ -633,7 +650,7 @@ const People = (() => {
         <button class="btn small" id="p-addsel" ${S.selected.size ? '' : 'disabled'}>＋ Add ${S.selected.size || ''} to library</button>
         <button class="btn small primary" id="p-export">⤓ Export list</button></div>
       <div class="pub-filters">
-        <input type="search" id="p-fq" placeholder="Search titles, journals, co-authors…" value="${esc(S.f.q)}" style="min-width:230px">
+        <input type="search" id="p-fq" class="p-search-box" placeholder="🔍 Search this list – titles, journals, co-authors, year, and inside your PDFs" value="${esc(S.f.q)}">
         <select id="p-role"><option value="all">Any role</option><option value="key">First, co-first, last or co-last</option><option value="firstany">First or co-first</option><option value="first">First / sole author</option><option value="co-first">Co-first author</option><option value="lastany">Last or co-last</option><option value="last">Last author</option></select>
         <span class="muted small">Years</span><input type="number" id="p-from" placeholder="from" value="${esc(S.f.from)}"><input type="number" id="p-to" placeholder="to" value="${esc(S.f.to)}">
         <select id="p-sort" title="Sort by – or click a column title"><option value="year">Sort: year</option><option value="title">Sort: title</option><option value="type">Sort: type</option><option value="role">Sort: role</option><option value="ifpub">Sort: IF at publication</option><option value="ifnow">Sort: IF now</option><option value="cites">Sort: citations</option></select><button class="btn small" id="p-dir" title="Reverse the order">${S.f.dir === 'asc' ? '↑ ascending' : '↓ descending'}</button>
@@ -828,7 +845,7 @@ const People = (() => {
     main.addEventListener('input', e => {
       if (e.target.id !== 'p-fq') return;
       clearTimeout(qt);
-      qt = setTimeout(() => { S.f.q = e.target.value; draw(); }, 220);
+      qt = setTimeout(() => { S.f.q = e.target.value; draw(); searchPdfs(S.f.q); }, 220);
     });
   }
 

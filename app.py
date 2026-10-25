@@ -32,6 +32,7 @@ from flask import Flask, Response, g, jsonify, redirect, request, send_file
 
 import citations
 import coauth
+import fulltext
 import journals
 import metadata
 import pdffinder
@@ -155,6 +156,7 @@ def init_db():
     db = connect()
     db.executescript(SCHEMA)
     journals.init(db)
+    fulltext.init(db)
     for table, cols in (("papers", NEW_PAPER_COLUMNS), ("collections", NEW_GROUP_COLUMNS), ("people", NEW_PEOPLE_COLUMNS)):
         have = {r[1] for r in db.execute(f"PRAGMA table_info({table})")}
         for name, ddl in cols.items():
@@ -569,6 +571,88 @@ def add_paper():
     pid, dup = insert_paper(db, meta, _int(body.get("group_id")))
     pdf = try_download(db, pid) if body.get("download_pdf") else None
     return jsonify(paper=load_paper(db, pid), duplicate=dup, pdf=pdf)
+
+
+@app.get("/api/fulltext")
+def fulltext_search():
+    """Papers whose PDF contains all the words of the query, with snippets."""
+    db = get_db()
+    q = (request.args.get("q") or "").strip()
+    hits = fulltext.search(db, q) if len(q) >= 2 else {}
+    dois = {r["id"]: r["doi"] for r in db.execute(
+        f"SELECT id, doi FROM papers WHERE id IN ({','.join('?' * len(hits))})", list(hits))} if hits else {}
+    return jsonify(hits={str(k): dict(v, doi=dois.get(k, "")) for k, v in hits.items()}, status=fulltext.status(db))
+
+
+def fulltext_loop():
+    """Index the text of new or changed PDFs in the background (a few at a time)."""
+    if STOP.wait(10):
+        return
+    while not STOP.is_set():
+        db = connect()
+        try:
+            n = fulltext.index_pending(db, limit=5, stop=STOP)
+        except Exception as exc:  # noqa: BLE001 - background task
+            logging.getLogger("papershelf").warning("PDF text index failed: %s", exc)
+            n = 0
+        finally:
+            db.close()
+        STOP.wait(2 if n else 60)
+
+
+@app.get("/api/search-topic")
+def search_topic():
+    """Search OpenAlex by meaning (semantic search on titles and abstracts) or by words."""
+    q = (request.args.get("q") or "").strip()[:2000]
+    if len(q) < 3:
+        return error("Describe what you are looking for (a few words or a sentence).")
+    mode = request.args.get("mode") or "semantic"
+    filters = []
+    y = _int(request.args.get("from"))
+    if y:
+        filters.append(f"publication_year:>{y - 1}")
+    if request.args.get("oa") == "1":
+        filters.append("is_oa:true")
+    if request.args.get("type") == "articles":
+        filters.append("type:article|review")
+    if request.args.get("type") == "reviews":
+        filters.append("type:review")
+    params = {"per_page": 30 if mode == "semantic" else 40,
+              "select": "id,doi,display_name,publication_year,authorships,primary_location,cited_by_count,type,open_access,abstract_inverted_index"}
+    if filters:
+        params["filter"] = ",".join(filters)
+    note = ""
+    try:
+        r = metadata.http_get("https://api.openalex.org/works", params={**params, ("search.semantic" if mode == "semantic" else "search"): q})
+        if mode == "semantic" and r.status_code != 200:
+            note = "Search by meaning isn't available right now – showing results by words instead."
+            r = metadata.http_get("https://api.openalex.org/works", params={**params, "search": q})
+        if r.status_code != 200:
+            return error(f"OpenAlex answered {r.status_code}. Try again in a moment.", 502)
+        results = r.json().get("results") or []
+    except metadata.MetadataError as exc:
+        return lookup_error(exc)
+    db = get_db()
+    have_doi = {(x["doi"] or "").lower(): x["id"] for x in db.execute("SELECT id, doi FROM papers WHERE doi != ''")}
+    have_oa = {x["openalex_id"]: x["id"] for x in db.execute("SELECT id, openalex_id FROM papers WHERE openalex_id != ''")}
+    out = []
+    for w in results:
+        wid = metadata.openalex_short(w.get("id"))
+        doi = metadata.clean_doi((w.get("doi") or "").replace("https://doi.org/", ""))
+        names = [((a.get("author") or {}).get("display_name") or "") for a in w.get("authorships") or []]
+        names = [n for n in names if n]
+        abstract = ""
+        inv = w.get("abstract_inverted_index") or {}
+        if inv:
+            pos = sorted((i, word) for word, idx in inv.items() for i in idx)
+            abstract = " ".join(word for _, word in pos)
+        out.append({"id": wid, "doi": doi, "title": metadata.clean_text(w.get("display_name") or "", ""),
+                    "authors": (", ".join(names[:3]) + (" et al." if len(names) > 3 else "")),
+                    "venue": ((w.get("primary_location") or {}).get("source") or {}).get("display_name") or "",
+                    "year": w.get("publication_year"), "cited_by_count": w.get("cited_by_count") or 0,
+                    "type": w.get("type") or "", "oa": bool((w.get("open_access") or {}).get("is_oa")),
+                    "abstract": abstract[:700], "in_library": have_doi.get(doi.lower()) or have_oa.get(wid)})
+    return jsonify(results=out, mode="keyword" if note else mode, note=note)
 
 
 @app.get("/api/search-online")
@@ -2758,6 +2842,7 @@ def main():
     threading.Thread(target=auto_sync_loop, daemon=True).start()
     threading.Thread(target=share_loop, daemon=True).start()
     threading.Thread(target=sjr_watch_loop, daemon=True).start()
+    threading.Thread(target=fulltext_loop, daemon=True).start()
     WATCHER.start()
     import flask.cli
     logging.getLogger("werkzeug").setLevel(logging.ERROR)  # keep the Terminal window quiet

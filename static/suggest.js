@@ -17,6 +17,7 @@ const Suggest = (() => {
     $('#add-form').appendChild(box);
     box.addEventListener('mousedown', e => e.preventDefault()); // keep the focus in the input
     box.addEventListener('click', e => {
+      if (e.target.closest('[data-topic]')) { const q = lastQ || input().value.trim(); close(); input().value = ''; setMode('discover'); Discover.searchFor(q); return; }
       const it = e.target.closest('[data-si]'); if (it) pick(+it.dataset.si);
       if (e.target.closest('[data-sclose]')) close();
     });
@@ -45,7 +46,8 @@ const Suggest = (() => {
         <div class="sg-title">${esc(c.title)}</div>
         <div class="sg-meta">${authorsLine(c)}${c.year ? ` · <b>${c.year}</b>` : ''}${c.venue ? ` · <i>${esc(truncate(c.venue, 50))}</i>` : ''}${c.cites ? ` · ${c.cites.toLocaleString()} cit.` : ''}${c.type && !['article', 'journal-article'].includes(c.type) ? ` · ${esc(c.type)}` : ''}</div>
         ${c.in_library ? '<span class="sg-have">in your library</span>' : ''}</div>`).join('');
-    box.innerHTML = head + body + '<div class="sg-foot">Results from OpenAlex / Crossref · only the words you typed are sent</div>';
+    box.innerHTML = head + body + `<div class="sg-foot"><span>Papers whose title matches · OpenAlex / Crossref · only the words you typed are sent</span>
+      <button class="linklike" data-topic title="Find papers about this subject, even if their titles use other words">🔎 Search by topic: “${esc(truncate(q, 40))}”</button></div>`;
     box.hidden = false;
   }
 
