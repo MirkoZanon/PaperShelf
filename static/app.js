@@ -1031,23 +1031,24 @@ function ftSnippet(p) {
 // hides and slides in when the mouse reaches the left edge, with ☰, or while dragging papers there.
 const Side = {
   timer: null,
-  pinned: () => !!(state.sidePin || {})[state.area],
+  key: () => state.tab === 'people' ? 'people' : state.area,  // reading / library / people, each remembered
+  el: () => $(state.tab === 'people' ? '#people-side' : '#sidebar'),
+  pinned: () => !!(state.sidePin || {})[Side.key()],
   apply() {
-    const auto = state.tab !== 'people' && !Side.pinned();
+    const auto = !Side.pinned();
     document.body.classList.toggle('side-auto', auto);
     if (!auto) document.body.classList.remove('side-open');
-    const t = $('#side-toggle');
-    if (t) { t.classList.toggle('on', Side.pinned()); t.title = Side.pinned() ? 'Hide the sidebar (it slides in when you move the mouse to the left edge)' : 'Keep the sidebar open (now it slides in when you move the mouse to the left edge)'; }
-    const b = $('#side-pin');
-    if (b) { b.classList.toggle('on', Side.pinned()); b.title = Side.pinned() ? `The sidebar stays open on the ${state.area === 'reading' ? 'Reading list' : 'Library'} – click to hide it automatically` : `Keep the sidebar open on the ${state.area === 'reading' ? 'Reading list' : 'Library'}`; }
+    const where = {reading: 'Reading list', library: 'Library', people: 'Researchers'}[Side.key()];
+    $$('#side-toggle, #people-side-toggle').forEach(t => { t.classList.toggle('on', Side.pinned()); t.title = Side.pinned() ? 'Hide the sidebar (it slides in when you move the mouse to the left edge)' : 'Keep the sidebar open (now it slides in when you move the mouse to the left edge)'; });
+    $$('[data-sidepin]').forEach(b => { b.classList.toggle('on', Side.pinned()); b.title = Side.pinned() ? `The sidebar stays open on ${where} – click to hide it automatically` : `Keep the sidebar open on ${where}`; });
   },
-  toggle() { state.sidePin = {...(state.sidePin || {}), [state.area]: !Side.pinned()}; savePrefs(); Side.apply(); },
+  toggle() { state.sidePin = {...(state.sidePin || {}), [Side.key()]: !Side.pinned()}; savePrefs(); Side.apply(); },
   open() { clearTimeout(Side.timer); if (document.body.classList.contains('side-auto')) document.body.classList.add('side-open'); },
   close(delay = 350) {
     clearTimeout(Side.timer);
     Side.timer = setTimeout(() => {
-      const sb = $('#sidebar');
-      if (sb.matches(':hover') || sb.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || $('.color-pop')) return;
+      const sb = Side.el();
+      if (!sb || sb.matches(':hover') || sb.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || $('.color-pop')) return;
       document.body.classList.remove('side-open');
     }, delay);
   },
@@ -1259,7 +1260,7 @@ function setTab(tab) {
   document.body.classList.toggle('area-reading', state.tab !== 'people' && state.area === 'reading');
   const on = state.tab === 'people' ? 'people' : state.area;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
-  Side.apply();
+  document.body.classList.remove('side-open'); Side.apply();
   if (state.tab === 'people') { Graph.stop(); People.show(); } else { closeDetail(); renderAll(); renderMode(true); }
 }
 
@@ -1507,8 +1508,7 @@ function bind() {
   });
   document.addEventListener('dragend', () => { dragKind = null; $$('.drop').forEach(x => x.classList.remove('drop')); Side.close(600); });
   // sidebar that hides by itself
-  $('#side-pin').addEventListener('click', e => { e.stopPropagation(); Side.toggle(); });
-  $('#side-toggle').addEventListener('click', e => { e.stopPropagation(); Side.toggle(); });  // ☰ = sidebar always open / hides by itself
+  document.addEventListener('click', e => { if (e.target.closest('[data-sidepin], #side-toggle, #people-side-toggle')) { e.stopPropagation(); Side.toggle(); } }, true);  // ☰ / 📌: always open or hides by itself
   $('#side-hot').addEventListener('mouseenter', () => Side.open());
   $('#side-hot').addEventListener('dragenter', () => Side.open());
   document.addEventListener('mousemove', e => {  // moving away from the open sidebar hides it again
@@ -1516,8 +1516,11 @@ function bind() {
       Side.timer2 = setTimeout(() => { Side.timer2 = null; }, 120); Side.close(250);
     }
   }, {passive: true});
-  $('#sidebar').addEventListener('mouseenter', () => clearTimeout(Side.timer));
-  $('#sidebar').addEventListener('mouseleave', () => { if (!dragKind) Side.close(); });
+  for (const sel of ['#sidebar', '#people-side']) {
+    $(sel).addEventListener('mouseenter', () => clearTimeout(Side.timer));
+    $(sel).addEventListener('mouseleave', () => { if (!dragKind) Side.close(); });
+  }
+  $('#people-side').addEventListener('click', e => { if (e.target.closest('[data-pid]')) Side.close(150); });
   $('#sidebar').addEventListener('dragenter', () => clearTimeout(Side.timer));
   $('#sidebar').addEventListener('click', e => {  // choosing a list or label closes the auto-hiding sidebar
     if (e.target.closest('button, .caret, [data-sec], [data-kwtoggle], [data-navmore], input')) return;

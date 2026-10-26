@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.2.2 – 2026-10-26
+
+- **Researchers**: the list of researchers hides by itself too – move the mouse to the left edge to
+  see it, or click ☰ (or its 📌) to keep it open. Each page remembers its choice.
+- The citations chart uses the app's green.
+
 ## 2.2.1 – 2026-10-26
 
 - **☰ next to the page title** switches the sidebar between always open and hiding by itself (it is
