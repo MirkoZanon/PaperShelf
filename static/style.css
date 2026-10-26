@@ -845,7 +845,7 @@ body.area-reading .row.is-reading:hover, body.area-reading .row.is-reading.open 
 #side-pin.on { color: var(--accent); }
 #side-pin.on svg path { fill: color-mix(in srgb, var(--accent) 35%, transparent); }
 .vh-left { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
-.side-toggle { display: none; width: 34px; height: 34px; padding: 0; align-items: center; justify-content: center; margin-top: 1px; }
+.side-toggle { display: inline-flex; width: 34px; height: 34px; padding: 0; align-items: center; justify-content: center; margin-top: 1px; }
 .side-toggle svg { width: 16px; height: 16px; }
 #side-hot { display: none; }
 body.side-auto:not(.tab-people) .app { grid-template-columns: 0 1fr; }
@@ -854,7 +854,7 @@ body.side-auto:not(.tab-people) #sidebar { position: fixed; top: 58px; bottom: 0
   transform: translateX(-100%); transition: transform .18s ease, box-shadow .18s ease; }
 body.side-auto.side-open:not(.tab-people) #sidebar { transform: none; box-shadow: 8px 0 30px rgba(20, 22, 26, .18); }
 body.side-auto:not(.tab-people) #side-hot { display: block; position: fixed; left: 0; top: 58px; bottom: 0; width: 12px; z-index: 44; }
-body.side-auto:not(.tab-people) .side-toggle { display: inline-flex; }
+
 .drag-ghost { position: fixed; top: -100px; left: -100px; max-width: 320px; padding: 5px 10px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
   background: var(--accent); color: var(--accent-ink); box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ctx-menu { position: fixed; z-index: 95; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
@@ -873,3 +873,8 @@ body.side-auto:not(.tab-people) .side-toggle { display: inline-flex; }
 .ctx-tick { width: 12px; color: var(--accent); font-weight: 700; flex-shrink: 0; }
 .ctx-check.part .ctx-tick { color: var(--muted); }
 .ctx-empty { color: var(--muted); padding: 6px 10px; font-size: 12.5px; }
+
+/* 2.2.1: ☰ always there (on = sidebar pinned); bigger fold arrows for the main sections */
+body.tab-people .side-toggle { display: none; }
+.side-toggle.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); background: var(--accent-soft); }
+#labels-head .sec-car, #kw-head .sec-car { width: 14px; font-size: 13px; color: var(--muted); }

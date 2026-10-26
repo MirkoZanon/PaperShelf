@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.2.1 – 2026-10-26
+
+- **☰ next to the page title** switches the sidebar between always open and hiding by itself (it is
+  green while the sidebar stays open).
+- Label sections are open by default again; the fold arrows of *Labels* and *Keywords* are bigger.
+
 ## 2.2 – 2026-10-26
 
 - **Right-click a paper** for a quick menu: tick or untick labels from the list of all your labels

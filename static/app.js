@@ -33,11 +33,11 @@ function loadPrefs() {
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
     if (p.tab === 'people') state.tab = 'people';
-    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.closed = new Set(p.closed || []); state.sidePin = p.sidePin || {};
+    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.closed = new Set(p.v >= 2 ? (p.closed || []) : []); state.sidePin = p.sidePin || {};  // v2.2.1: sections open again once
   } catch (e) { /* storage unavailable */ }
 }
 function savePrefs() {
-  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, closed: [...(state.closed || [])], sidePin: state.sidePin || {}})); }
+  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, closed: [...(state.closed || [])], sidePin: state.sidePin || {}, v: 2})); }
   catch (e) { /* ignore */ }
 }
 
@@ -1036,6 +1036,8 @@ const Side = {
     const auto = state.tab !== 'people' && !Side.pinned();
     document.body.classList.toggle('side-auto', auto);
     if (!auto) document.body.classList.remove('side-open');
+    const t = $('#side-toggle');
+    if (t) { t.classList.toggle('on', Side.pinned()); t.title = Side.pinned() ? 'Hide the sidebar (it slides in when you move the mouse to the left edge)' : 'Keep the sidebar open (now it slides in when you move the mouse to the left edge)'; }
     const b = $('#side-pin');
     if (b) { b.classList.toggle('on', Side.pinned()); b.title = Side.pinned() ? `The sidebar stays open on the ${state.area === 'reading' ? 'Reading list' : 'Library'} – click to hide it automatically` : `Keep the sidebar open on the ${state.area === 'reading' ? 'Reading list' : 'Library'}`; }
   },
@@ -1506,7 +1508,7 @@ function bind() {
   document.addEventListener('dragend', () => { dragKind = null; $$('.drop').forEach(x => x.classList.remove('drop')); Side.close(600); });
   // sidebar that hides by itself
   $('#side-pin').addEventListener('click', e => { e.stopPropagation(); Side.toggle(); });
-  $('#side-toggle').addEventListener('click', e => { e.stopPropagation(); document.body.classList.contains('side-open') ? document.body.classList.remove('side-open') : Side.open(); });
+  $('#side-toggle').addEventListener('click', e => { e.stopPropagation(); Side.toggle(); });  // ☰ = sidebar always open / hides by itself
   $('#side-hot').addEventListener('mouseenter', () => Side.open());
   $('#side-hot').addEventListener('dragenter', () => Side.open());
   document.addEventListener('mousemove', e => {  // moving away from the open sidebar hides it again
