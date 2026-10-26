@@ -58,8 +58,11 @@ const Help = (() => {
         <li><b>The paper list</b> is kept clean: title, authors, labels, status and the buttons 📝 (notes) and <b>PDF</b>. Tick <b>Details</b> above the list to see the keywords too. Click a paper to open its details (click anywhere outside them to close); select several with ${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click – the selection boxes appear as soon as something is selected (⚙︎ Settings → General → <i>Always show selection boxes</i> to keep them).</li>
         <li><b>📄 PDF</b> (green) opens the PDF in the reader. <b>⬇ PDF</b> fetches it: PaperShelf looks for a free legal copy and opens it; if there is none, it opens the article page – log in with your university there and download it: it is attached automatically.</li>
         <li>“include sub-labels” shows the papers of all sub-labels too. Deleting a label never deletes papers.</li></ul>
-      <h4>The library menu</h4>
-      <p><i>All papers</i>, <i>To read</i> and <i>Reading</i> are always shown; <i>Starred</i>, <i>Read</i>, <i>Without labels</i> and <i>Without PDF</i> are under <b>More</b>.</p>
+      <h4>Reading list and Library</h4>
+      <p>PaperShelf has two pages over the same papers (tabs at the top):</p>
+      <ul><li><b>📖 Reading list</b> – only what you are reading and want to read. <i>Reading now</i> comes first, highlighted; then <i>To read</i>. Every paper you add is <i>To read</i>. Opening a PDF from the list (<b>PDF</b> button) moves the paper to <i>Reading now</i>; hover a paper and click <b>✓ Read</b> when you are done: it leaves the list and stays in the Library. Labels, keywords, search and <b>Discover</b> work on the reading list too (“papers like the ones I'm reading”).</li>
+        <li><b>📚 Library</b> – all your papers, read ones included, with the <b>Map</b>, Discover, statistics and exports. Its menu: <i>All papers</i>, <i>Read</i>, <i>Starred</i>; <i>To read</i>, <i>Reading now</i>, <i>Without labels</i> and <i>Without PDF</i> under <b>More</b>.</li></ul>
+      <p>A label stays selected when you switch page. Choose where PaperShelf opens in ⚙︎ Settings → General → <i>Open PaperShelf on</i>.</p>
       <h4>Keywords</h4>
       <p>Filled in automatically, editable in each paper. The sidebar shows the most frequent keywords of the papers in view (bigger = more frequent); <b>Show all</b> and the filter box find the others, and ▾ folds the section away. Click a keyword to filter; <i>Make label from keyword</i> turns the filter into a label.</p>
       <p>With many papers, keywords tend to multiply (“fMRI”, “functional MRI”, “fmri”…). Click <b>✎</b> next to <i>Keywords</i> to <b>merge</b> variants into one, <b>rename</b> or <b>delete</b> keywords in the whole library at once.</p>

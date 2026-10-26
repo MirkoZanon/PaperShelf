@@ -117,6 +117,11 @@ whole copied references; a few words of a title show a list of likely papers to 
 Crossref search); many at once (one per line); PDF files dragged onto the window (the DOI inside
 is used); browser buttons that save the page you are reading. Duplicates are recognised.
 
+**Reading list & Library** – PaperShelf opens on your **Reading list**: only the papers you are reading
+(highlighted, first) and want to read, each with a PDF button and *✓ Read* to tick it off. The
+**Library** tab has all your papers, read ones included, with the map and statistics. Choose the start
+page in Settings.
+
 **Organising** – **labels** that work like tags (a paper can have many; dragging adds, never moves):
 *Personal* labels (nested, used by the map and statistics) and *Shared* labels (see below). Automatic
 keywords: the sidebar shows the most frequent ones with a filter and *Show all*, and a keyword manager

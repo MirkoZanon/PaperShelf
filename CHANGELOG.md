@@ -2,6 +2,16 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.1 – 2026-10-26
+
+- **Reading list**: a new start page with only the papers you are reading and want to read –
+  *Reading now* first (highlighted), then *To read*. Open a PDF from the list and the paper moves to
+  *Reading now*; hover and click **✓ Read** when you are done (it stays in the Library). Labels,
+  keywords, search and Discover work on the reading list too; *search the whole library* is one click.
+- **Library**: all your papers, read ones included, with the citation map, Discover and statistics.
+- **Tabs at the top**: *Reading list* (with how many papers are waiting) · *Library* · *Researchers*.
+  Choose where PaperShelf opens in Settings → General → *Open PaperShelf on*.
+
 ## 2.0.2 – 2026-10-25
 
 - Researchers: the publication list opens on the papers (journal articles, preprints, conference

@@ -235,7 +235,7 @@ def get_settings(db=None, secrets=True) -> dict:
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
          "update_auto": "1", "just_updated": "", "own_window": "1",
          "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
-         "display_name": "", "list_checkboxes": ""}
+         "display_name": "", "list_checkboxes": "", "start_page": "reading"}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
@@ -1098,6 +1098,8 @@ def suggestions():
         scope = [p for p in all_papers if p["id"] in members]
     else:
         scope = all_papers
+    if request.args.get("reading") == "1":  # the Reading list: papers to read and being read
+        scope = [p for p in scope if p["status"] != "read"]
     owned_ids = {p["openalex_id"] for p in all_papers if p["openalex_id"]}
     owned_dois = {p["doi"].lower() for p in all_papers if p["doi"]}
     with_data = [p for p in scope if p["openalex_id"]]
@@ -1851,6 +1853,8 @@ def write_settings():
         set_setting(db, "core_key", body["core_key"].strip())
     if body.get("clear_core_key"):
         set_setting(db, "core_key", "")
+    if body.get("start_page") in ("reading", "library", "people"):
+        set_setting(db, "start_page", body["start_page"])
     if "display_name" in body:
         dn = " ".join(str(body.get("display_name") or "").split())[:60]
         if dn != get_settings(db).get("display_name"):

@@ -18,7 +18,7 @@ const SORTS = {
 
 const state = {
   papers: [], groups: [], settings: {}, dataDir: '',
-  view: {type: 'all'}, search: '', keyword: null, sort: 'added_desc', includeSub: true,
+  view: {type: 'reading'}, area: 'reading', search: '', keyword: null, sort: 'added_desc', includeSub: true,
   selected: new Set(), openId: null, collapsed: new Set(), lastIndex: null,
   mode: 'list', styles: [], platform: '', tab: 'library',
 };
@@ -160,7 +160,7 @@ function groupPath(gid) {
 }
 function groupCount(gid) {
   const ids = state.includeSub ? descendants(gid) : new Set([gid]);
-  return state.papers.filter(p => p.group_ids.some(g => ids.has(g))).length;
+  return areaPapers().filter(p => p.group_ids.some(g => ids.has(g))).length;
 }
 function groupOptions(pid = null, depth = 0) {
   return childrenOf(pid).map(g => `<option value="${g.id}">${'   '.repeat(depth)}${esc(g.name)}</option>` + groupOptions(g.id, depth + 1)).join('');
@@ -216,8 +216,10 @@ function haystack(p) {
   return [p.title, p.authors.map(a => `${a.given} ${a.family}`).join(' '), p.journal, p.year, p.doi,
     p.keywords.join(' '), p.abstract, p.notes, p.publisher].join(' ').toLowerCase();
 }
+// two pages over the same library: the Reading list (to read + reading now) and the whole Library
+const areaPapers = () => state.area === 'reading' ? state.papers.filter(p => p.status !== 'read') : state.papers;
 function filteredPapers({ignoreKeyword = false} = {}) {
-  let list = state.papers;
+  let list = areaPapers();
   const v = state.view;
   if (v.type === 'starred') list = list.filter(p => p.starred);
   else if (v.type === 'status') list = list.filter(p => p.status === v.value);
@@ -239,8 +241,8 @@ function viewKey() {
 }
 function viewTitle() {
   const v = state.view;
-  return {all: 'All papers', starred: 'Starred', unfiled: 'Unfiled papers', nopdf: 'Without PDF'}[v.type]
-    || (v.type === 'status' ? STATUS_LABEL[v.value] : v.type === 'group' ? groupPath(v.id)
+  return {all: 'All papers', reading: 'Reading list', starred: 'Starred', unfiled: 'Unfiled papers', nopdf: 'Without PDF'}[v.type]
+    || (v.type === 'status' ? (v.value === 'reading' ? 'Reading now' : STATUS_LABEL[v.value]) : v.type === 'group' ? groupPath(v.id)
       : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Shared list') : 'Papers');
 }
 function setView(view) {
@@ -285,24 +287,31 @@ async function setGroupColor(gid, color) {
 }
 
 function renderSidebar() {
-  const P = state.papers;
-  const main = [
-    ['all', 'All papers', '📚', P.length],
+  const P = state.papers, R = areaPapers(), reading = state.area === 'reading';
+  const main = reading ? [
+    ['reading', 'Reading list', '📖', R.length],
+    ['status:reading', 'Reading now', '◐', P.filter(p => p.status === 'reading').length],
     ['status:to_read', 'To read', '○', P.filter(p => p.status === 'to_read').length],
-    ['status:reading', 'Reading', '◐', P.filter(p => p.status === 'reading').length],
-  ];
-  const more = [
-    ['starred', 'Starred', '★', P.filter(p => p.starred).length],
+    ['starred', 'Starred', '★', R.filter(p => p.starred).length],
+  ] : [
+    ['all', 'All papers', '📚', P.length],
     ['status:read', 'Read', '●', P.filter(p => p.status === 'read').length],
+    ['starred', 'Starred', '★', P.filter(p => p.starred).length],
+  ];
+  const more = reading ? [] : [
+    ['status:to_read', 'To read', '○', P.filter(p => p.status === 'to_read').length],
+    ['status:reading', 'Reading now', '◐', P.filter(p => p.status === 'reading').length],
     ['unfiled', 'Without labels', '▫︎', P.filter(p => !p.group_ids.length).length],
     ['nopdf', 'Without PDF', '⌀', P.filter(p => !p.pdf_exists).length],
   ];
+  $('#nav-head').textContent = reading ? 'Reading list' : 'Library';
   const key = viewKey();
   const open = state.navMore || more.some(([k]) => k === key);
   const item = ([k, label, ico, n]) => `<div class="nav-item ${key === k ? 'active' : ''}" data-view="${k}"><span class="ico">${ico}</span><span class="label">${label}</span><span class="count">${n}</span></div>`;
   $('#nav').innerHTML = main.map(item).join('')
-    + `<div class="nav-item nav-more" data-navmore><span class="ico">${open ? '▾' : '▸'}</span><span class="label">${open ? 'Less' : 'More'}</span>${open ? '' : '<span class="count">starred, read…</span>'}</div>`
-    + (open ? `<div class="nav-sub">${more.map(item).join('')}</div>` : '');
+    + (more.length ? `<div class="nav-item nav-more" data-navmore><span class="ico">${open ? '▾' : '▸'}</span><span class="label">${open ? 'Less' : 'More'}</span>${open ? '' : '<span class="count">to read, without PDF…</span>'}</div>`
+    + (open ? `<div class="nav-sub">${more.map(item).join('')}</div>` : '') : '');
+  const tn = $('#tab-reading-n'); if (tn) tn.textContent = P.filter(p => p.status !== 'read').length || '';
   // collapsible sections: Labels, and inside it Personal and Shared
   const C = state.closed || (state.closed = new Set());
   const car = k => `<span class="sec-car">${C.has(k) ? '▸' : '▾'}</span>`;
@@ -373,14 +382,15 @@ function pdfButton(p) {
 }
 async function quickPdf(id, btn) {
   const p = paperById(id); if (!p) return;
-  if (p.pdf_exists) { Reader.open(id); return; }
+  const startReading = () => { if (p.status === 'to_read' && state.area === 'reading') savePaper(id, {status: 'reading'}, {rerender: false}); };
+  if (p.pdf_exists) { startReading(); Reader.open(id); return; }
   setBusy(btn, true, 'PDF');
   const t = toast('Looking for a free PDF…', 'info', 0);
   try {
     const d = await api(`/api/papers/${id}/pdf`, {method: 'POST'});
     upsertPaper(d.paper); t.close(); renderAll();
     toast(`PDF found via ${d.pdf.source} and saved.`, 'ok');
-    Reader.open(id);
+    startReading(); Reader.open(id);
   } catch (err) {
     t.close(); setBusy(btn, false);
     if (err.data?.paper) { upsertPaper(err.data.paper); renderAll(); }
@@ -395,14 +405,16 @@ function rowHtml(p) {
     .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${labelIcon(G?.color, 'tag')}${esc(G?.name || '')}</span>`; }).join('')
     + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id))
       .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Shared label: ${esc(sh.name)}">${labelIcon(sh.color, sh.role === 'member' ? 'link' : 'inbox')}${esc(sh.name)}</span>` : ''; }).join('');
-  return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''}" data-id="${p.id}" draggable="true">
+  return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''} ${p.status === 'reading' ? 'is-reading' : ''}" data-id="${p.id}" draggable="true">
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
     <div><div class="row-title">${esc(p.title || 'Untitled')}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${ftSnippet(p)}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
-    <div class="row-side"><span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span><div class="row-acts">${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}${Notes.badge(p)}${pdfButton(p)}</div></div>
+    <div class="row-side">${state.area === 'reading' ? '' : `<span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span>`}<div class="row-acts">${state.area === 'reading' ? `<button class="done-btn" data-done title="Mark as read – it leaves the reading list (it stays in the Library)">✓ Read</button>` : ''}${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}${Notes.badge(p)}${pdfButton(p)}</div></div>
   </div>`;
 }
 function emptyHtml() {
+  if (state.area === 'reading' && state.papers.length && !state.search && !state.keyword) return `<div class="empty"><div class="big">📖</div><h2>Nothing to read here</h2>
+    <div>Papers you add are <b>To read</b> and appear here; when you mark them <b>Read</b> they stay in the <button class="linklike" data-goto-library>Library</button>.</div></div>`;
   if (!state.papers.length) return `<div class="empty"><div class="big">📄</div><h2>Your shelf is empty</h2>
     <div>Paste something in the box at the top and press Enter. It understands:</div>
     <ul><li>DOIs – <code>10.1038/s41586-020-2649-2</code></li><li>arXiv links or IDs – <code>2106.09685</code></li>
@@ -419,6 +431,7 @@ function renderList() {
   $('#view-sub').textContent = state.view.type === 'group' && state.includeSub && childrenOf(state.view.id).length
     ? 'Showing papers with this label and its sub-labels' : '';
   if (state.view.type === 'share' && typeof Shares !== 'undefined') $('#view-sub').innerHTML = Shares.viewSub(state.view.id);
+  else if (state.area === 'reading') $('#view-sub').innerHTML = `${['group', 'share'].includes(state.view.type) ? 'In your reading list · ' : ''}Papers to read and being read – <button class="linklike" data-goto-library>the whole library</button>`;
   const chips = [];
   if (state.keyword) {
     const label = list[0]?.keywords.find(k => k.toLowerCase() === state.keyword) || state.keyword;
@@ -428,6 +441,7 @@ function renderList() {
   if (state.search) {
     const fs = state.ftStatus, nft = Object.keys(state.ftQuery === state.search ? state.ftHits || {} : {}).length;
     chips.push(`<span class="fchip">Search: ${esc(state.search)} <button data-clear="search" title="Clear">×</button></span>`
+      + (state.area === 'reading' ? `<button class="linklike small" data-goto-library title="Search all your papers, read ones included">search the whole library</button>` : '')
       + (fs && fs.with_pdf ? `<span class="muted small" title="The text of your PDFs is searched too (indexed on this computer)">📄 ${nft ? `${nft} found inside PDFs · ` : ''}searching the text of ${fs.indexed} of ${fs.with_pdf} PDFs${fs.indexed < fs.with_pdf - fs.unreadable ? ' (indexing…)' : ''}</span>` : ''));
   }
   $('#filters').innerHTML = chips.join('');
@@ -448,7 +462,13 @@ function renderList() {
   L.classList.toggle('with-checks', state.settings.list_checkboxes === '1' || n > 0);  // boxes appear while you select
   L.classList.toggle('details', !!state.details);
   $('#details-toggle').checked = !!state.details;
-  L.innerHTML = list.length ? list.map(rowHtml).join('') : emptyHtml();
+  if (state.area === 'reading' && list.length) {
+    const now = list.filter(p => p.status === 'reading'), next = list.filter(p => p.status !== 'reading');
+    state.visible = now.concat(next).map(p => p.id);
+    const head = (t, n, tip) => `<div class="list-sec" title="${tip}">${t} <span>${n}</span></div>`;
+    L.innerHTML = (now.length ? head('📖 Reading now', now.length, 'Papers you are reading – open a PDF from the list and it moves here') + now.map(rowHtml).join('') : '')
+      + (next.length ? (now.length ? head('To read', next.length, 'Papers waiting to be read') : '') + next.map(rowHtml).join('') : '');
+  } else L.innerHTML = list.length ? list.map(rowHtml).join('') : emptyHtml();
 }
 
 /* ------------------------------------------------------------------ detail */
@@ -780,6 +800,8 @@ function openSettings(startTab) {
     <p class="muted small">Or create a plain PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
     <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
+    <div class="section-label">Open PaperShelf on</div>
+    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list – only the papers to read and being read</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library – all your papers, with map and statistics</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👤 Researchers</option></select>
     <div class="section-label">Paper list</div>
     <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes<small>Off: a cleaner list – select papers with ${state.platform === 'darwin' ? '⌘' : 'Ctrl'}-click (or Shift-click for a range); the boxes appear as soon as something is selected.</small></span></label>
     <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
@@ -867,6 +889,10 @@ function openSettings(startTab) {
     finally { setBusy(b, false); }
   };
   if (typeof AppInstall !== 'undefined') AppInstall.settingsHtml().then(h => { const el = $('#ia-section', m.el); if (el) { el.innerHTML = h; AppInstall.settingsBind(m); } });
+  $('#set-start', m.el).onchange = async e => {
+    try { const d = await api('/api/settings', {method: 'PUT', body: {start_page: e.target.value}}); state.settings = d.settings; toast('Saved – PaperShelf will open there next time.', 'ok'); }
+    catch (err) { toast(err.message, 'error'); }
+  };
   $('#set-checks', m.el).onchange = async e => {
     try { const d = await api('/api/settings', {method: 'PUT', body: {list_checkboxes: e.target.checked}}); state.settings = d.settings; renderList(); }
     catch (err) { toast(err.message, 'error'); }
@@ -1030,8 +1056,8 @@ async function brandMenu() {
     const a = b.dataset.bm;
     if (a === 'update') syncNow();
     if (a === 'install-update' || a === 'check') Updates.open();
-    if (a === 'topic') { if (state.tab !== 'library') setTab('library'); setMode('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
-    if (a === 'bulk') { if (state.tab !== 'library') setTab('library'); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
+    if (a === 'topic') { if (state.tab !== 'library') setTab(state.area); setMode('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
+    if (a === 'bulk') { if (state.tab !== 'library') setTab(state.area); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
     if (a === 'export') openExport();
     if (a === 'shares') Shares.startMenu();
     if (a === 'app') { openSettings('general'); }
@@ -1131,10 +1157,21 @@ async function handleEvent(e) {
   }
 }
 function setTab(tab) {
-  state.tab = tab; savePrefs();
-  document.body.classList.toggle('tab-people', tab === 'people');
-  $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-  if (tab === 'people') { Graph.stop(); People.show(); } else renderAll();
+  if (tab === 'reading' || tab === 'library') {
+    if (state.area !== tab || state.tab !== 'library') {
+      state.area = tab; state.selected.clear(); state.keyword = null; state.lastIndex = null;
+      // labels and shared labels stay selected when you switch page; the rest goes to the page's start
+      if (!['group', 'share'].includes(state.view.type)) state.view = {type: tab === 'reading' ? 'reading' : 'all'};
+      if (tab === 'reading' && state.mode === 'map') state.mode = 'list';
+    }
+    state.tab = 'library';
+  } else state.tab = tab;
+  savePrefs();
+  document.body.classList.toggle('tab-people', state.tab === 'people');
+  document.body.classList.toggle('area-reading', state.tab !== 'people' && state.area === 'reading');
+  const on = state.tab === 'people' ? 'people' : state.area;
+  $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
+  if (state.tab === 'people') { Graph.stop(); People.show(); } else { closeDetail(); renderAll(); renderMode(true); }
 }
 
 /* ------------------------------------------------------------------ styles, sync, citations */
@@ -1248,6 +1285,8 @@ function chooseNoteTarget(T, title) {
 
 /* ------------------------------------------------------------------ modes */
 function renderMode(scopeChanged = false) {
+  const mapBtn = $('#mode-seg [data-mode=map]'); if (mapBtn) mapBtn.style.display = state.area === 'reading' ? 'none' : '';
+  if (state.area === 'reading' && state.mode === 'map') state.mode = 'list';
   $$('#mode-seg [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
   $('#list').style.display = state.mode === 'list' ? '' : 'none';
   $('#list-toolbar').style.display = state.mode === 'list' ? '' : 'none';
@@ -1414,6 +1453,7 @@ function bind() {
     if (e.target.closest('.star')) { savePaper(id, {starred: !p.starred}); return; }
     if (e.target.closest('[data-notes]')) { Notes.open(id); return; }
     const pq = e.target.closest('[data-pdfq]'); if (pq) { quickPdf(id, pq); return; }
+    if (e.target.closest('[data-done]')) { savePaper(id, {status: 'read'}).then(pp => { if (pp) toast(`Marked as read: ${truncate(pp.title, 60)} – it is in the Library.`, 'ok'); }); return; }
     const chip = e.target.closest('[data-kw]');
     if (chip) { state.keyword = chip.dataset.kw; renderList(); renderKeywords(); return; }
     const gchip = e.target.closest('[data-goto]');
@@ -1434,6 +1474,7 @@ function bind() {
     }
     state.lastIndex = idx; openDetail(id);
   });
+  document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
   $('#select-all').addEventListener('change', e => {
     if (e.target.checked) state.visible.forEach(id => state.selected.add(id)); else state.selected.clear();
     renderList();
@@ -1547,9 +1588,11 @@ function handleHash() {
 (async function init() {
   loadPrefs(); bind();
   try { await loadLibrary(); } catch (err) { toast(err.message, 'error', 0); }
+  const start = state.settings.start_page || 'reading';  // Settings → General → Open PaperShelf on
+  setTab(start === 'library' || start === 'people' ? start : 'reading');
   handleHash();
   try { lastEvent = (await api('/api/events?after=999999999')).last_id || 0; } catch (e) { /* ignore */ }
   schedulePoll(3000);
   Help.welcome();
-  if (state.tab === 'people' && !document.body.classList.contains('tab-people')) setTab('people');
+
 })();

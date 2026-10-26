@@ -36,7 +36,7 @@ const Shares = (() => {
     const L = state.shares || [];
     el.innerHTML = L.length ? L.map(x => {
       const active = state.view.type === 'share' && state.view.id === x.id;
-      const n = state.papers.filter(p => (p.share_ids || []).includes(x.id)).length;
+      const n = (typeof areaPapers === 'function' ? areaPapers() : state.papers).filter(p => (p.share_ids || []).includes(x.id)).length;
       return `<div class="nav-item share-item ${x.role === 'member' ? 'editable' : ''} ${active ? 'active' : ''}" data-share="${esc(x.id)}"
           title="${x.role === 'member' ? 'Shared label – drag papers here to share them' : 'You follow this shared label (read-only)'}${x.creator && x.creator.by ? '\nCreated by ' + esc(x.creator.name || x.creator.by) : ''}${x.last_error ? '\n⚠ ' + esc(x.last_error) : ''}">
           <span class="caret invisible"></span><span class="ico">${labelIcon(x.color, x.role === 'member' ? 'link' : 'inbox')}</span><span class="label">${esc(x.name)}</span>

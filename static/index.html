@@ -20,9 +20,9 @@
       <button class="brand" id="brand-btn" type="button" title="PaperShelf menu"><img src="/static/icons/icon-64.png" alt="" width="26" height="26">PaperShelf<svg class="brand-car" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="menu brand-menu" id="brand-menu"></div>
     </div>
-    <div class="seg tabs" id="tabs"><button data-tab="library" class="on">Library</button><button data-tab="people">Researchers</button></div>
+    <div class="seg tabs" id="tabs"><button data-tab="reading" class="on" title="Papers to read and being read">Reading list <span class="tab-n" id="tab-reading-n"></span></button><button data-tab="library" title="All your papers, with map and statistics">Library</button><button data-tab="people">Researchers</button></div>
     <form id="add-form" class="tab-library-only" autocomplete="off">
-      <input id="add-input" class="input" placeholder="Paste a link or DOI, or type a few words of the title…">
+      <input id="add-input" class="input" placeholder="Add a paper: paste a DOI or link, or type the title…">
       <button class="btn primary" id="add-btn" type="submit">Add paper</button>
       <div class="menu-wrap">
         <button class="btn icon" type="button" id="more-btn" title="More ways to add">⋯</button>
@@ -45,7 +45,7 @@
   <main id="people-main" class="tab-people-only"></main>
 
   <aside id="sidebar" class="tab-library-only">
-    <div class="side-head">Library</div>
+    <div class="side-head" id="nav-head">Reading list</div>
     <div id="nav"></div>
     <div class="side-head" id="labels-head">Labels</div>
     <div id="labels-body">

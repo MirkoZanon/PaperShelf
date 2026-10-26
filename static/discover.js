@@ -8,12 +8,16 @@ const Discover = (() => {
   try { Object.assign(T, JSON.parse(localStorage.getItem('papershelf-topic') || '{}'), {results: null, loading: false, error: '', note: ''}); } catch (e) { /* ignore */ }
   const added = new Map();  // suggestion id -> paper id
 
-  const scopeKey = () => state.view.type === 'group' ? `g${state.view.id}:${state.includeSub ? 1 : 0}` : 'all';
-  const scopeLabel = () => state.view.type === 'group' ? `“${groupPath(state.view.id)}”` : 'your whole library';
+  const rd = () => state.area === 'reading';
+  const scopeKey = () => (rd() ? 'r:' : '') + (state.view.type === 'group' ? `g${state.view.id}:${state.includeSub ? 1 : 0}` : 'all');
+  const scopeLabel = () => state.view.type === 'group' ? `“${groupPath(state.view.id)}”${rd() ? ' in your reading list' : ''}` : rd() ? 'your reading list' : 'your whole library';
 
   async function load() {
     loading = true; draw();
-    const q = state.view.type === 'group' ? `?group=${state.view.id}&sub=${state.includeSub ? 1 : 0}` : '';
+    const ps = new URLSearchParams();
+    if (state.view.type === 'group') { ps.set('group', state.view.id); ps.set('sub', state.includeSub ? 1 : 0); }
+    if (rd()) ps.set('reading', 1);
+    const q = ps.toString() ? '?' + ps : '';
     try { data = await api('/api/suggestions' + q); }
     catch (err) { data = {error: err.message}; }
     loading = false; draw();
@@ -79,7 +83,7 @@ const Discover = (() => {
 
   function draw() {
     const root = $('#discover-view');
-    const nonGroup = !['all', 'group'].includes(state.view.type);
+    const nonGroup = !['all', 'group', 'reading'].includes(state.view.type);
     let html = topicPanel() + `<div class="s-head"><div><b>Suggestions based on ${scopeLabel()}</b>${nonGroup ? ' <span class="muted small">(open a label to get suggestions for that topic)</span>' : ''}</div>
       <span><button class="btn small" id="s-refresh" ${loading ? 'disabled' : ''}>↻ Refresh</button> <button class="help-q" data-help="map" title="Explain this">?</button></span></div>`;
     if (loading) {
