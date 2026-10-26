@@ -2,6 +2,20 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.2 – 2026-10-26
+
+- **Right-click a paper** for a quick menu: tick or untick labels from the list of all your labels
+  (several in a row), shared labels, status, PDF, notes, details, star, citation, delete – also for
+  several selected papers at once.
+- **The sidebar hides by itself**: a cleaner list; move the mouse to the left edge (or click ☰) and it
+  slides in, also while dragging papers onto a label. The 📌 pin keeps it open – separately for the
+  Reading list and the Library.
+- **Dragging papers** now shows a small label with the title instead of the whole row, so you can see
+  the label you drop it on.
+- Library menu: only *All papers*; Read, Starred, To read… are under *More*.
+- Fixed: on a fast computer the page could occasionally stay empty at start (now it waits until it
+  is fully loaded).
+
 ## 2.1 – 2026-10-26
 
 - **Reading list**: a new start page with only the papers you are reading and want to read –

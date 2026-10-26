@@ -33,11 +33,11 @@ function loadPrefs() {
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
     if (p.tab === 'people') state.tab = 'people';
-    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.closed = new Set(p.closed || []);
+    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.closed = new Set(p.closed || []); state.sidePin = p.sidePin || {};
   } catch (e) { /* storage unavailable */ }
 }
 function savePrefs() {
-  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, closed: [...(state.closed || [])]})); }
+  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, closed: [...(state.closed || [])], sidePin: state.sidePin || {}})); }
   catch (e) { /* ignore */ }
 }
 
@@ -295,10 +295,10 @@ function renderSidebar() {
     ['starred', 'Starred', '★', R.filter(p => p.starred).length],
   ] : [
     ['all', 'All papers', '📚', P.length],
-    ['status:read', 'Read', '●', P.filter(p => p.status === 'read').length],
-    ['starred', 'Starred', '★', P.filter(p => p.starred).length],
   ];
   const more = reading ? [] : [
+    ['status:read', 'Read', '●', P.filter(p => p.status === 'read').length],
+    ['starred', 'Starred', '★', P.filter(p => p.starred).length],
     ['status:to_read', 'To read', '○', P.filter(p => p.status === 'to_read').length],
     ['status:reading', 'Reading now', '◐', P.filter(p => p.status === 'reading').length],
     ['unfiled', 'Without labels', '▫︎', P.filter(p => !p.group_ids.length).length],
@@ -309,7 +309,7 @@ function renderSidebar() {
   const open = state.navMore || more.some(([k]) => k === key);
   const item = ([k, label, ico, n]) => `<div class="nav-item ${key === k ? 'active' : ''}" data-view="${k}"><span class="ico">${ico}</span><span class="label">${label}</span><span class="count">${n}</span></div>`;
   $('#nav').innerHTML = main.map(item).join('')
-    + (more.length ? `<div class="nav-item nav-more" data-navmore><span class="ico">${open ? '▾' : '▸'}</span><span class="label">${open ? 'Less' : 'More'}</span>${open ? '' : '<span class="count">to read, without PDF…</span>'}</div>`
+    + (more.length ? `<div class="nav-item nav-more" data-navmore><span class="ico">${open ? '▾' : '▸'}</span><span class="label">${open ? 'Less' : 'More'}</span>${open ? '' : '<span class="count">read, starred…</span>'}</div>`
     + (open ? `<div class="nav-sub">${more.map(item).join('')}</div>` : '') : '');
   const tn = $('#tab-reading-n'); if (tn) tn.textContent = P.filter(p => p.status !== 'read').length || '';
   // collapsible sections: Labels, and inside it Personal and Shared
@@ -1026,6 +1026,92 @@ function ftSnippet(p) {
 }
 
 /* ------------------------------------------------------------------ quit */
+/* ------------------------------------------------------------------ sidebar: pinned or auto-hide */
+// Each page (Reading list / Library) remembers whether its sidebar stays open. Unpinned, the sidebar
+// hides and slides in when the mouse reaches the left edge, with ☰, or while dragging papers there.
+const Side = {
+  timer: null,
+  pinned: () => !!(state.sidePin || {})[state.area],
+  apply() {
+    const auto = state.tab !== 'people' && !Side.pinned();
+    document.body.classList.toggle('side-auto', auto);
+    if (!auto) document.body.classList.remove('side-open');
+    const b = $('#side-pin');
+    if (b) { b.classList.toggle('on', Side.pinned()); b.title = Side.pinned() ? `The sidebar stays open on the ${state.area === 'reading' ? 'Reading list' : 'Library'} – click to hide it automatically` : `Keep the sidebar open on the ${state.area === 'reading' ? 'Reading list' : 'Library'}`; }
+  },
+  toggle() { state.sidePin = {...(state.sidePin || {}), [state.area]: !Side.pinned()}; savePrefs(); Side.apply(); },
+  open() { clearTimeout(Side.timer); if (document.body.classList.contains('side-auto')) document.body.classList.add('side-open'); },
+  close(delay = 350) {
+    clearTimeout(Side.timer);
+    Side.timer = setTimeout(() => {
+      const sb = $('#sidebar');
+      if (sb.matches(':hover') || sb.contains(document.activeElement) && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || $('.color-pop')) return;
+      document.body.classList.remove('side-open');
+    }, delay);
+  },
+};
+
+/* ------------------------------------------------------------------ right-click menu on a paper */
+function rowMenu(e, id) {
+  e.preventDefault();
+  document.querySelector('.ctx-menu')?.remove();
+  const ids = state.selected.has(id) ? [...state.selected] : [id];
+  const P = ids.map(paperById).filter(Boolean); if (!P.length) return;
+  const one = P.length === 1 ? P[0] : null;
+  const has = gid => P.every(p => p.group_ids.includes(gid));
+  const some = gid => P.some(p => p.group_ids.includes(gid));
+  const labelItems = (pid = null, depth = 0) => childrenOf(pid).map(g => `<button class="ctx-item ctx-check ${has(g.id) ? 'on' : some(g.id) ? 'part' : ''}" data-cl="${g.id}" style="padding-left:${10 + depth * 14}px"><span class="ctx-tick">${has(g.id) ? '✓' : some(g.id) ? '–' : ''}</span>${labelIcon(g.color, 'tag')}<span>${esc(g.name)}</span></button>` + labelItems(g.id, depth + 1)).join('');
+  const shares = (state.shares || []).filter(x => x.role === 'member');
+  const shHas = sid => P.every(p => (p.share_ids || []).includes(sid));
+  const m = document.createElement('div');
+  m.className = 'ctx-menu';
+  m.innerHTML = `<div class="ctx-head">${one ? esc(truncate(one.title || 'Untitled', 60)) : `${P.length} papers`}</div>
+    <div class="ctx-item ctx-parent">🏷 Labels<span class="ctx-arrow">›</span><div class="ctx-sub">${state.groups.length ? labelItems() : '<div class="ctx-empty">No labels yet</div>'}<div class="ctx-sep"></div><button class="ctx-item" data-c="newlabel">＋ New label…</button></div></div>
+    ${shares.length ? `<div class="ctx-item ctx-parent">🔗 Shared labels<span class="ctx-arrow">›</span><div class="ctx-sub">${shares.map(x => `<button class="ctx-item ctx-check ${shHas(x.id) ? 'on' : ''}" data-cs="${esc(x.id)}"><span class="ctx-tick">${shHas(x.id) ? '✓' : ''}</span>${labelIcon(x.color, 'link')}<span>${esc(x.name)}</span></button>`).join('')}</div></div>` : ''}
+    <div class="ctx-item ctx-parent">◐ Status<span class="ctx-arrow">›</span><div class="ctx-sub">${Object.entries({to_read: 'To read', reading: 'Reading now', read: 'Read'}).map(([k, l]) => `<button class="ctx-item ctx-check ${P.every(p => p.status === k) ? 'on' : ''}" data-cst="${k}"><span class="ctx-tick">${P.every(p => p.status === k) ? '✓' : ''}</span><span>${l}</span></button>`).join('')}</div></div>
+    <div class="ctx-sep"></div>
+    ${one ? `<button class="ctx-item" data-c="pdf">📄 ${one.pdf_exists ? 'Open PDF' : 'Get the PDF'}</button><button class="ctx-item" data-c="notes">📝 Notes</button><button class="ctx-item" data-c="details">ⓘ Details</button><button class="ctx-item" data-c="cite">❝ Copy citation</button>` : `<button class="ctx-item" data-c="export">⤓ Export references</button>`}
+    <button class="ctx-item" data-c="star">${P.every(p => p.starred) ? '☆ Unstar' : '★ Star'}</button>
+    <div class="ctx-sep"></div>
+    <button class="ctx-item ctx-danger" data-c="delete">🗑 Delete${one ? '' : ` ${P.length} papers`}…</button>`;
+  document.body.appendChild(m);
+  const W = window.innerWidth, H = window.innerHeight;
+  m.style.left = Math.min(e.clientX, W - m.offsetWidth - 8) + 'px';
+  m.style.top = Math.min(e.clientY, H - m.offsetHeight - 8) + 'px';
+  if (e.clientX + m.offsetWidth + 240 > W) m.classList.add('flip');
+  const close = () => { m.remove(); document.removeEventListener('mousedown', out, true); document.removeEventListener('keydown', esc_, true); };
+  const out = ev => { if (!m.contains(ev.target)) close(); };
+  const esc_ = ev => { if (ev.key === 'Escape') { ev.stopPropagation(); close(); } };
+  setTimeout(() => { document.addEventListener('mousedown', out, true); document.addEventListener('keydown', esc_, true); }, 0);
+  m.addEventListener('click', async ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.cl) {  // toggle a label, keep the menu open to tick more
+      const gid = +b.dataset.cl, on = has(gid);
+      await assign(gid, ids, on ? 'remove' : 'add');
+      P.forEach((p, i) => { P[i] = paperById(p.id) || p; });
+      const tick = !on; b.classList.toggle('on', tick); b.classList.remove('part'); b.querySelector('.ctx-tick').textContent = tick ? '✓' : '';
+      return;
+    }
+    if (b.dataset.cs) { close(); shHas(b.dataset.cs) ? Shares.removePapers(b.dataset.cs, ids) : Shares.addPapers(b.dataset.cs, ids); return; }
+    if (b.dataset.cst) {
+      close();
+      try { const d = await api('/api/papers/bulk', {method: 'POST', body: {ids, changes: {status: b.dataset.cst}}}); d.papers.forEach(upsertPaper); renderAll(); }
+      catch (err) { toast(err.message, 'error'); }
+      return;
+    }
+    const c = b.dataset.c; if (!c) return;
+    close();
+    if (c === 'newlabel') { const g = await createGroup(null); if (g) assign(g.id, ids); }
+    if (c === 'pdf') quickPdf(id, $(`.row[data-id="${id}"] [data-pdfq]`));
+    if (c === 'notes') Notes.open(id);
+    if (c === 'details') openDetail(id);
+    if (c === 'cite') copyCitation(id);
+    if (c === 'export') { openExport(); }
+    if (c === 'star') { const v = !P.every(p => p.starred); try { const d = await api('/api/papers/bulk', {method: 'POST', body: {ids, changes: {starred: v}}}); d.papers.forEach(upsertPaper); renderAll(); } catch (err) { toast(err.message, 'error'); } }
+    if (c === 'delete') deletePapers(ids);
+  });
+}
+
 /* ------------------------------------------------------------------ the PaperShelf menu (logo) */
 async function brandMenu() {
   const menu = $('#brand-menu');
@@ -1171,6 +1257,7 @@ function setTab(tab) {
   document.body.classList.toggle('area-reading', state.tab !== 'people' && state.area === 'reading');
   const on = state.tab === 'people' ? 'people' : state.area;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
+  Side.apply();
   if (state.tab === 'people') { Graph.stop(); People.show(); } else { closeDetail(); renderAll(); renderMode(true); }
 }
 
@@ -1408,11 +1495,33 @@ function bind() {
       const id = +row.dataset.id;
       const ids = state.selected.has(id) ? [...state.selected] : [id];
       dragKind = 'papers'; e.dataTransfer.setData('text/plain', JSON.stringify(ids)); e.dataTransfer.effectAllowed = 'copyMove';
+      // a small label instead of the whole row, so you can see where you drop it
+      const gh = document.createElement('div'); gh.className = 'drag-ghost';
+      gh.textContent = ids.length > 1 ? `📄 ${ids.length} papers` : `📄 ${truncate(paperById(id)?.title || 'Paper', 42)}`;
+      document.body.appendChild(gh); e.dataTransfer.setDragImage(gh, 14, 14); setTimeout(() => gh.remove(), 0);
     } else if (grp) {
       dragKind = 'group'; e.dataTransfer.setData('text/plain', grp.dataset.group); e.dataTransfer.effectAllowed = 'move';
     }
   });
-  document.addEventListener('dragend', () => { dragKind = null; $$('.drop').forEach(x => x.classList.remove('drop')); });
+  document.addEventListener('dragend', () => { dragKind = null; $$('.drop').forEach(x => x.classList.remove('drop')); Side.close(600); });
+  // sidebar that hides by itself
+  $('#side-pin').addEventListener('click', e => { e.stopPropagation(); Side.toggle(); });
+  $('#side-toggle').addEventListener('click', e => { e.stopPropagation(); document.body.classList.contains('side-open') ? document.body.classList.remove('side-open') : Side.open(); });
+  $('#side-hot').addEventListener('mouseenter', () => Side.open());
+  $('#side-hot').addEventListener('dragenter', () => Side.open());
+  document.addEventListener('mousemove', e => {  // moving away from the open sidebar hides it again
+    if (!dragKind && e.clientX > 300 && document.body.classList.contains('side-open') && !Side.timer2) {
+      Side.timer2 = setTimeout(() => { Side.timer2 = null; }, 120); Side.close(250);
+    }
+  }, {passive: true});
+  $('#sidebar').addEventListener('mouseenter', () => clearTimeout(Side.timer));
+  $('#sidebar').addEventListener('mouseleave', () => { if (!dragKind) Side.close(); });
+  $('#sidebar').addEventListener('dragenter', () => clearTimeout(Side.timer));
+  $('#sidebar').addEventListener('click', e => {  // choosing a list or label closes the auto-hiding sidebar
+    if (e.target.closest('button, .caret, [data-sec], [data-kwtoggle], [data-navmore], input')) return;
+    if (e.target.closest('[data-view], [data-group], [data-share]')) Side.close(150);
+  });
+  $('#list').addEventListener('contextmenu', e => { const row = e.target.closest('.row'); if (row) rowMenu(e, +row.dataset.id); });
   $('#sidebar').addEventListener('dragover', e => {
     if (!dragKind) return;
     const target = e.target.closest('.group-item') || (dragKind === 'papers' ? e.target.closest('.share-item.editable') : null)
@@ -1585,7 +1694,8 @@ function handleHash() {
   history.replaceState(null, '', location.pathname);
 }
 
-(async function init() {
+// start once every script of the page has loaded (notes.js, shares.js… come after this file)
+async function init() {
   loadPrefs(); bind();
   try { await loadLibrary(); } catch (err) { toast(err.message, 'error', 0); }
   const start = state.settings.start_page || 'reading';  // Settings → General → Open PaperShelf on
@@ -1595,4 +1705,5 @@ function handleHash() {
   schedulePoll(3000);
   Help.welcome();
 
-})();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
