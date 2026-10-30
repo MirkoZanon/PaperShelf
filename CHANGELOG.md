@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.3.1 – 2026-10-30
+
+- **Researcher overview reorganised**: one *At a glance* card with impact (citations, h-index, i10,
+  mean citedness) and authorship (publications, first, co-first, last, co-last, this year) – no more
+  repeated numbers. Every tile is clickable: *h-index → how to raise it* opens the outlook right
+  there, authorship tiles open the publication list filtered on them. With Google Scholar data a
+  switch chooses OpenAlex or Scholar numbers (the comparison table is gone).
+- The h-index chart is no longer stretched; the authorship chart (same as the tiles) was removed.
+
 ## 2.3 – 2026-10-30
 
 - **h-index outlook** (Researchers → Overview): how many more citations are needed to reach h+1, h+2

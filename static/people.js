@@ -109,6 +109,7 @@ const People = (() => {
     if (f.role === 'firstany') list = list.filter(w => isFirst(R(w)) || R(w) === 'co-first');
     if (f.role === 'last') list = list.filter(w => R(w) === 'last' || R(w) === 'sole');
     if (f.role === 'lastany') list = list.filter(w => ['last', 'co-last', 'sole'].includes(R(w)));
+    if (f.role === 'co-last') list = list.filter(w => R(w) === 'co-last');
     if (f.role === 'key') list = list.filter(w => KEY_ROLES.includes(R(w)));
     if (f.hidePubPreprints) list = list.filter(w => !(cat(w) === 'preprint' && w.published_as));
     const ft = S.ftQ === f.q ? (S.ftByDoi || {}) : {};
@@ -232,8 +233,7 @@ const People = (() => {
   // papers all need h+k citations: the cheapest way, since they are the ones closest to it.
   function hIndex(c) { let h = 0; while (h < c.length && c[h] >= h + 1) h++; return h; }
   function hOutlook(works) {
-    const hasGS = works.some(w => w.scholar_cites != null);
-    const src = S.hsrc === 'gs' && hasGS ? 'gs' : 'oa';
+    const src = metricSrc();
     const cites = w => src === 'gs' ? (w.scholar_cites ?? 0) : (w.cited_by ?? 0);
     // a preprint later published counts once (its journal version)
     // corrections, peer-review reports and supplementary files ("Other") aren't counted
@@ -254,11 +254,10 @@ const People = (() => {
     const n = Math.min(list.length, Math.max(h + 6, 10)), maxC = Math.max(n, Math.ceil((h + 3) * 1.8)), W = 300, Hh = 120, bw = W / n;  // zoom on the zone around h; taller bars are cut (number on top)
     const y = v => Hh - Math.min(v, maxC) / maxC * Hh;
     const bars = c.slice(0, n).map((v, i) => `<rect x="${(i * bw + 1).toFixed(1)}" y="${y(v).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${(Hh - y(v)).toFixed(1)}" rx="2" class="${i < h ? 'ho-in' : 'ho-out'}"><title>#${i + 1}: ${v} citations</title></rect>${v > maxC ? `<text x="${(i * bw + bw / 2).toFixed(1)}" y="9" text-anchor="middle" class="ho-val">${v}</text>` : ''}`).join('');
-    const svg = `<svg class="ho-chart" viewBox="0 0 ${W} ${Hh + 16}" preserveAspectRatio="none" aria-label="Citations of the papers by rank">${bars}
+    const svg = `<svg class="ho-chart" viewBox="0 0 ${W} ${Hh + 16}" aria-label="Citations of the papers by rank">${bars}
       <line x1="0" y1="${y(0)}" x2="${W}" y2="${y(n)}" class="ho-line"/><line x1="${(h * bw).toFixed(1)}" y1="0" x2="${(h * bw).toFixed(1)}" y2="${Hh}" class="ho-h"/><text x="${(h * bw + 4).toFixed(1)}" y="20" class="ho-lbl ho-hl">h = ${h}</text><text x="${W - 4}" y="${Math.max(10, y(n) + 12)}" text-anchor="end" class="ho-lbl">citations = rank</text>
       <text x="2" y="${Hh + 13}" class="ho-lbl">papers, most cited first →</text></svg>`;
-    return `<div class="p-card ho-card"><h3>📈 h-index outlook <button class="help-q" data-help="researchers" title="How it is calculated">?</button>
-        ${hasGS ? `<span class="seg ho-src"><button data-hsrc="oa" class="${src === 'oa' ? 'on' : ''}">OpenAlex</button><button data-hsrc="gs" class="${src === 'gs' ? 'on' : ''}">Google Scholar</button></span>` : ''}</h3>
+    return `<div class="ho-card"><div class="ho-headline">📈 How to raise the h-index <button class="help-q" data-help="researchers" title="How it is calculated">?</button><span class="grow"></span><button class="linklike small" data-mt="close">close ✕</button></div>
       <div class="ho-grid"><div>
         <div class="ho-now">h-index <b>${h}</b> <span class="muted small">from the citations of ${list.length} publications in this list${reported != null && reported !== h ? ` (${src === 'gs' ? 'Google Scholar' : 'OpenAlex'} reports ${reported}: it counts its own list of works)` : ''}</span></div>
         ${steps.map(st => `<div class="ho-step"><div class="ho-target"><span class="ho-badge">h ${st.H}</span> <b>${st.total}</b> more citation${st.total === 1 ? '' : 's'}${st.need.length ? ` on ${st.need.length} paper${st.need.length === 1 ? '' : 's'}` : ''}</div>
@@ -266,10 +265,10 @@ const People = (() => {
         ${steps.length < 3 ? `<div class="muted small">With ${list.length} publications the h-index can reach at most ${list.length}: more papers are needed to go further.</div>` : ''}
       </div><div>
         ${svg}
-        <div class="ho-i10"><b>i10-index ${i10}</b> <span class="muted small">(papers with 10+ citations)</span>
+        <div class="ho-i10"><b>i10: ${i10}</b> <span class="muted small">papers of this list with 10+ citations${near10.length ? ' – the closest:' : ''}</span>
           ${near10.length ? `<ul>${near10.map(x => `<li><span class="ho-add">+${10 - x.c}</span> ${ttl(x)}</li>`).join('')}</ul>` : ''}</div>
       </div></div>
-      <div class="src-note">Citations from ${src === 'gs' ? 'your Google Scholar import' : 'OpenAlex'}; papers you excluded, items of type <i>Other</i> (corrections, peer reviews, supplementary files) and preprints already published are not counted. Each step lists the papers closest to counting – the cheapest way to get there.</div></div>`;
+      <div class="src-note">Citations of each paper from ${src === 'gs' ? 'your Google Scholar import' : 'OpenAlex'}; papers you excluded, items of type <i>Other</i> (corrections, peer reviews, supplementary files) and preprints already published are not counted. Each step lists the papers closest to counting – the cheapest way to get there.</div></div>`;
   }
 
   function chartsSection(works) {
@@ -295,7 +294,6 @@ const People = (() => {
     }
     const typeParts = S.person.categories.map(c => ({label: shortCat(c.id), value: works.filter(w => cat(w) === c.id).length, color: CAT_COLORS[c.id]})).filter(x => x.value);
     cards.push(`<div class="p-card"><h3>Types of output</h3>${donut(typeParts)}</div>`);
-    cards.push(`<div class="p-card"><h3>Authorship <span class="muted tiny">(articles &amp; conference papers)</span></h3>${rolesChart(works)}</div>`);
     const venues = {};
     for (const w of works.filter(w => ['article', 'conference'].includes(cat(w)))) if (w.venue) venues[w.venue] = (venues[w.venue] || 0) + 1;
     const top = Object.entries(venues).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([l, v]) => ({label: l, value: v}));
@@ -316,6 +314,40 @@ const People = (() => {
       first: r.filter(isFirst).length, cofirst: r.filter(x => x === 'co-first').length,
       last: r.filter(x => x === 'last').length, colast: r.filter(x => x === 'co-last').length};
   }
+  const metricSrc = () => S.msrc === 'gs' && S.person.profile.scholar ? 'gs' : 'oa';
+  // one card with everything that counts: impact (clickable: h-index opens how to raise it) and authorship
+  function dashboard(works) {
+    const p = S.person.profile, oa = p.metrics || {}, g = p.scholar, gm = g?.metrics || {};
+    const src = metricSrc(), gs = src === 'gs';
+    const all = visibleWorks(), c = counts(all), y = counts(all.filter(w => w.year === THIS_YEAR)), art = counts(all.filter(w => cat(w) === 'article'));
+    const val = (o, s) => gs ? s : o;
+    const other = (o, s) => g ? (gs ? (o != null ? `OpenAlex ${fmt(o)}` : '') : (s != null ? `Scholar ${fmt(s)}` : '')) : '';
+    const tile = ({k, n, label, sub = '', cls = '', tip = ''}) => `<button class="mtile ${cls} ${S.hopen === k ? 'on' : ''}" data-mt="${k}" title="${esc(tip)}"><b>${n ?? '–'}</b><span>${label}</span>${sub ? `<em>${sub}</em>` : ''}</button>`;
+    const hv = val(oa.h_index, gm.h_index?.all), i10 = val(oa.i10_index, gm.i10_index?.all), cit = val(oa.cited_by_count, gm.citations?.all);
+    const impact = [
+      tile({k: 'cit', n: fmt(cit), label: 'citations', sub: [gs && gm.citations?.since != null ? `${fmt(gm.citations.since)} ${esc(gm.since_label || 'recent')}` : '', other(oa.cited_by_count, gm.citations?.all)].filter(Boolean).join(' · '), cls: 'plain', tip: 'Citations per year are in the chart below'}),
+      tile({k: 'h', n: hv, label: 'h-index', sub: [other(oa.h_index, gm.h_index?.all), '<span class="mt-cta">how to raise it ›</span>'].filter(Boolean).join(' · '), cls: 'hot', tip: 'Show how many citations, on which papers, are needed for h+1, h+2, h+3'}),
+      tile({k: 'i10', n: i10, label: 'i10-index', sub: [other(oa.i10_index, gm.i10_index?.all), '<span class="mt-cta">closest papers ›</span>'].filter(Boolean).join(' · '), cls: 'hot', tip: 'Papers with at least 10 citations – and the ones closest to it'}),
+      gs ? '' : tile({k: 'mc', n: oa.mean_citedness_2yr ?? '–', label: '2-year mean citedness', sub: 'OpenAlex', cls: 'plain', tip: 'Average citations, in the last year, of the works of the two previous years'}),
+    ].join('');
+    const authorship = [
+      tile({k: 'pubs', n: c.total, label: 'publications', sub: `${c.articles} journal articles${oa.works_count != null ? ` · ${fmt(oa.works_count)} in OpenAlex` : ''}`, tip: 'Open the publication list'}),
+      tile({k: 'first', n: c.first, label: 'first or sole', sub: `${art.first} in journals`, tip: 'Show these publications'}),
+      tile({k: 'co-first', n: c.cofirst, label: 'co-first', sub: `${art.cofirst} in journals`, tip: 'Show these publications'}),
+      tile({k: 'last', n: c.last, label: 'last author', sub: `${art.last} in journals`, tip: 'Show these publications'}),
+      tile({k: 'co-last', n: c.colast, label: 'co-last', sub: `${art.colast} in journals`, tip: 'Show these publications'}),
+      tile({k: 'year', n: y.total, label: `in ${THIS_YEAR}`, sub: `${y.first + y.cofirst} first/co-first · ${y.last + y.colast} last/co-last`, cls: 'this-year', tip: 'Show this year\'s publications'}),
+    ].join('');
+    return `<div class="p-card dash">
+      <div class="dash-head"><h3>At a glance</h3>
+        ${g ? `<span class="seg dash-src" title="Source of the citation metrics"><button data-msrc="oa" class="${!gs ? 'on' : ''}">OpenAlex</button><button data-msrc="gs" class="${gs ? 'on' : ''}">Google Scholar</button></span>` : ''}
+        <span class="grow"></span><span class="muted tiny">${gs ? `Google Scholar, <a href="${esc(g.url)}" target="_blank" rel="noopener">public profile</a> captured ${esc(new Date(g.captured_at).toLocaleDateString())}` : `OpenAlex, ${esc(new Date(p.fetched_at).toLocaleDateString())}`} – can differ from other databases</span></div>
+      <div class="dash-label">Impact</div><div class="mtiles">${impact}</div>
+      ${S.hopen === 'h' || S.hopen === 'i10' ? `<div class="ho-panel">${hOutlook(works)}</div>` : ''}
+      <div class="dash-label">Authorship <span class="muted tiny">${deepStatus()}</span></div><div class="mtiles">${authorship}</div>
+    </div>`;
+  }
+
   function summaryCard() {
     const all = visibleWorks(), c = counts(all), y = counts(all.filter(w => w.year === THIS_YEAR));
     const art = counts(all.filter(w => cat(w) === 'article'));
@@ -599,16 +631,7 @@ const People = (() => {
     const works = visibleWorks();
     return `
       ${p.warnings?.length ? `<div class="warn-box">${p.warnings.map(esc).join('<br>')}</div>` : ''}
-      ${summaryCard()}
-      ${m.works_count != null ? `<div class="metrics">
-        <div class="metric"><b>${fmt(m.cited_by_count)}</b><span>citations</span></div>
-        <div class="metric"><b>${m.h_index ?? '–'}</b><span>h-index</span></div>
-        <div class="metric"><b>${m.i10_index ?? '–'}</b><span>i10-index</span></div>
-        <div class="metric"><b>${fmt(m.works_count)}</b><span>works in OpenAlex</span></div>
-        <div class="metric"><b>${m.mean_citedness_2yr ?? '–'}</b><span>2-year mean citedness</span></div>
-      </div>
-      <div class="src-note">Metrics: OpenAlex, retrieved ${esc(new Date(p.fetched_at).toLocaleDateString())}; they can differ from Google Scholar or Scopus.</div>` : ''}
-      ${hOutlook(works)}
+      ${dashboard(works)}
       ${chartsSection(works)}
       ${p.bio || p.keywords?.length || p.topics?.length ? `<div class="p-card" style="margin-bottom:12px"><h3>About</h3>${p.bio ? `<div class="bio">${esc(truncate(p.bio, 900))}</div>` : ''}
         <div class="row-chips" style="margin-top:8px">${(p.keywords || []).map(k => `<span class="chip">${esc(k)}</span>`).join('')}${(p.topics || []).slice(0, 8).map(t => `<span class="chip" title="OpenAlex topic · ${t.count} works">${esc(t.name)}</span>`).join('')}</div></div>` : ''}
@@ -616,7 +639,6 @@ const People = (() => {
         <div class="p-card"><h3>Positions</h3>${timeline(p.employments || [], p.oa_affiliations?.length ? '' : 'Not available on ORCID.')}
           ${!(p.employments || []).length && p.oa_affiliations?.length ? p.oa_affiliations.map(a => `<div class="tl-item"><div class="when">${a.years[0] || ''}${a.years.length > 1 ? '–' + a.years[a.years.length - 1] : ''}</div><div>${esc(a.organization)} <span class="muted">(${esc(a.country)})</span></div></div>`).join('') + '<div class="src-note">Source: OpenAlex</div>' : '<div class="src-note">Source: ORCID</div>'}</div>
         <div class="p-card"><h3>Education</h3>${timeline(p.educations || [], 'Not available on ORCID.')}<div class="src-note">Source: ORCID</div></div>
-        ${scholarCard()}
         ${p.fundings?.length ? `<div class="p-card"><h3>Funding</h3>${p.fundings.map(f => `<div class="tl-item"><div class="when">${esc(f.start || '?')}${f.end ? '–' + esc(f.end) : ''}</div><div><b>${esc(f.title)}</b><br><span class="muted">${esc(f.funder)}</span></div></div>`).join('')}<div class="src-note">Source: ORCID</div></div>` : ''}
         ${p.distinctions?.length ? `<div class="p-card"><h3>Awards</h3>${timeline(p.distinctions, '')}<div class="src-note">Source: ORCID</div></div>` : ''}
       </div>
@@ -701,7 +723,7 @@ const People = (() => {
         <button class="btn small primary" id="p-export">⤓ Export list</button></div>
       <div class="pub-filters">
         <input type="search" id="p-fq" class="p-search-box" placeholder="🔍 Search this list – titles, journals, co-authors, year, and inside your PDFs" value="${esc(S.f.q)}">
-        <select id="p-role"><option value="all">Any role</option><option value="key">First, co-first, last or co-last</option><option value="firstany">First or co-first</option><option value="first">First / sole author</option><option value="co-first">Co-first author</option><option value="lastany">Last or co-last</option><option value="last">Last author</option></select>
+        <select id="p-role"><option value="all">Any role</option><option value="key">First, co-first, last or co-last</option><option value="firstany">First or co-first</option><option value="first">First / sole author</option><option value="co-first">Co-first author</option><option value="lastany">Last or co-last</option><option value="last">Last author</option><option value="co-last">Co-last author</option></select>
         <span class="muted small">Years</span><input type="number" id="p-from" placeholder="from" value="${esc(S.f.from)}"><input type="number" id="p-to" placeholder="to" value="${esc(S.f.to)}">
         <select id="p-sort" title="Sort by – or click a column title"><option value="year">Sort: year</option><option value="title">Sort: title</option><option value="type">Sort: type</option><option value="role">Sort: role</option><option value="ifpub">Sort: IF at publication</option><option value="ifnow">Sort: IF now</option><option value="cites">Sort: citations</option></select><button class="btn small" id="p-dir" title="Reverse the order">${S.f.dir === 'asc' ? '↑ ascending' : '↓ descending'}</button>
         <label><input type="checkbox" id="p-byyear" ${S.f.byYear ? 'checked' : ''}> separate years</label>
@@ -828,7 +850,20 @@ const People = (() => {
       if (!S.person) return;
       const id = e.target.id;
       const pt = e.target.closest('[data-ptab]');
-      const hs = e.target.closest('[data-hsrc]'); if (hs) { S.hsrc = hs.dataset.hsrc; draw(); return; }
+      const ms = e.target.closest('[data-msrc]'); if (ms) { S.msrc = ms.dataset.msrc; draw(); return; }
+      const mt = e.target.closest('[data-mt]');
+      if (mt) {
+        const k = mt.dataset.mt;
+        if (k === 'h' || k === 'i10') { S.hopen = S.hopen === k ? null : k; draw(); return; }
+        if (k === 'close') { S.hopen = null; draw(); return; }
+        const role = {first: 'first', 'co-first': 'co-first', last: 'last', 'co-last': 'co-last'}[k];
+        if (k === 'pubs' || role || k === 'year') {
+          S.ptab = 'pubs'; S.f.role = role || 'all'; S.f.thisYear = k === 'year'; if (role || k === 'year') S.f.cats = null;
+          draw(); $('#people-main').scrollTop = 0; return;
+        }
+        if (k === 'cit') { $('.charts')?.scrollIntoView({behavior: 'smooth', block: 'start'}); return; }
+        return;
+      }
       if (pt) { S.ptab = pt.dataset.ptab; try { localStorage.setItem('papershelf-ptab', S.ptab); } catch (x) { /* ignore */ } draw(); $('#people-main').scrollTop = 0; return; }
       if (id === 'p-refresh') {
         S.loadingProfile = true; draw();

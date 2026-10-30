@@ -903,7 +903,7 @@ body.tab-people:not(.side-auto) #people-main { padding-left: 64px; }
 .ho-card li { font-size: 12.5px; padding: 2px 0; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
 .ho-add { color: var(--accent); font-weight: 700; min-width: 30px; font-variant-numeric: tabular-nums; }
 .ho-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
-.ho-chart { width: 100%; height: 150px; display: block; }
+.ho-chart { display: block; }
 .ho-chart .ho-in { fill: var(--accent); }
 .ho-chart .ho-out { fill: color-mix(in srgb, var(--accent) 30%, transparent); }
 .ho-chart .ho-line { stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
@@ -912,3 +912,26 @@ body.tab-people:not(.side-auto) #people-main { padding-left: 64px; }
 .ho-chart .ho-h { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
 .ho-chart .ho-val { font-size: 8.5px; fill: var(--accent-ink); font-weight: 700; }
 .ho-chart .ho-hl { font-weight: 700; font-size: 10px; fill: var(--text); }
+
+/* ---------- 2.3.1: researcher dashboard */
+.dash { margin-bottom: 12px; }
+.dash-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.dash-head h3 { margin: 0; }
+.dash-src button { padding: 3px 10px; font-size: 12px; }
+.dash-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--faint); margin: 10px 0 6px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.dash-label .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.mtiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.mtile { text-align: left; background: var(--bg); border: 1px solid transparent; border-radius: 10px; padding: 9px 12px; display: flex; flex-direction: column;
+  cursor: pointer; color: var(--text); font: inherit; min-width: 0; }
+.mtile:hover { border-color: var(--border); }
+.mtile b { font-size: 23px; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.mtile span { font-size: 12.5px; }
+.mtile em { font-style: normal; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.mtile.hot { background: color-mix(in srgb, var(--accent) 9%, var(--bg)); }
+.mtile.hot:hover, .mtile.on { border-color: var(--accent); }
+.mtile.on { background: var(--accent-soft); }
+.mtile .mt-cta { color: var(--accent); font-weight: 600; }
+.mtile.this-year { background: var(--accent-soft); }
+.ho-panel { margin-top: 10px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 10px; padding: 10px 14px; background: var(--panel); }
+.ho-headline { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+.ho-chart { width: 100%; max-width: 380px; height: auto; }
