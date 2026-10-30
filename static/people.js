@@ -227,6 +227,51 @@ const People = (() => {
       .map(([, l, c, fn]) => ({label: l, value: peer.filter(w => fn(roleOf(w))).length, color: c})).filter(x => x.value);
     return hbars(parts);
   }
+  /* ------------------------------------------------------------ h-index outlook */
+  // h = the largest h such that h papers have at least h citations each. To reach h+k, the h+k most cited
+  // papers all need h+k citations: the cheapest way, since they are the ones closest to it.
+  function hIndex(c) { let h = 0; while (h < c.length && c[h] >= h + 1) h++; return h; }
+  function hOutlook(works) {
+    const hasGS = works.some(w => w.scholar_cites != null);
+    const src = S.hsrc === 'gs' && hasGS ? 'gs' : 'oa';
+    const cites = w => src === 'gs' ? (w.scholar_cites ?? 0) : (w.cited_by ?? 0);
+    // a preprint later published counts once (its journal version)
+    // corrections, peer-review reports and supplementary files ("Other") aren't counted
+    const list = works.filter(w => cat(w) !== 'other' && !(w.published_as && works.some(x => x.key === w.published_as)))
+      .map(w => ({w, c: cites(w)})).sort((a, b) => b.c - a.c);
+    if (!list.length || !list[0].c) return '';
+    const c = list.map(x => x.c), h = hIndex(c);
+    const steps = [];
+    for (let k = 1; k <= 3; k++) {
+      const H = h + k; if (H > list.length) break;
+      const need = list.slice(0, H).map((x, i) => ({...x, i, add: Math.max(0, H - x.c)})).filter(x => x.add > 0);
+      steps.push({H, total: need.reduce((n, x) => n + x.add, 0), need});
+    }
+    const i10 = c.filter(x => x >= 10).length, near10 = list.filter(x => x.c >= 5 && x.c < 10).slice(0, 5);
+    const reported = src === 'gs' ? S.person.profile.scholar?.metrics?.h_index?.all : S.person.profile.metrics?.h_index;
+    const ttl = x => `<span class="ho-title" title="${esc(x.w.title)}">${esc(truncate(x.w.title || 'Untitled', 70))}</span>${x.w.year ? ` <span class="muted">${x.w.year}</span>` : ''}`;
+    // citations by rank (bars) against the line y = rank: h is where the bars cross the line
+    const n = Math.min(list.length, Math.max(h + 6, 10)), maxC = Math.max(n, Math.ceil((h + 3) * 1.8)), W = 300, Hh = 120, bw = W / n;  // zoom on the zone around h; taller bars are cut (number on top)
+    const y = v => Hh - Math.min(v, maxC) / maxC * Hh;
+    const bars = c.slice(0, n).map((v, i) => `<rect x="${(i * bw + 1).toFixed(1)}" y="${y(v).toFixed(1)}" width="${(bw - 2).toFixed(1)}" height="${(Hh - y(v)).toFixed(1)}" rx="2" class="${i < h ? 'ho-in' : 'ho-out'}"><title>#${i + 1}: ${v} citations</title></rect>${v > maxC ? `<text x="${(i * bw + bw / 2).toFixed(1)}" y="9" text-anchor="middle" class="ho-val">${v}</text>` : ''}`).join('');
+    const svg = `<svg class="ho-chart" viewBox="0 0 ${W} ${Hh + 16}" preserveAspectRatio="none" aria-label="Citations of the papers by rank">${bars}
+      <line x1="0" y1="${y(0)}" x2="${W}" y2="${y(n)}" class="ho-line"/><line x1="${(h * bw).toFixed(1)}" y1="0" x2="${(h * bw).toFixed(1)}" y2="${Hh}" class="ho-h"/><text x="${(h * bw + 4).toFixed(1)}" y="20" class="ho-lbl ho-hl">h = ${h}</text><text x="${W - 4}" y="${Math.max(10, y(n) + 12)}" text-anchor="end" class="ho-lbl">citations = rank</text>
+      <text x="2" y="${Hh + 13}" class="ho-lbl">papers, most cited first →</text></svg>`;
+    return `<div class="p-card ho-card"><h3>📈 h-index outlook <button class="help-q" data-help="researchers" title="How it is calculated">?</button>
+        ${hasGS ? `<span class="seg ho-src"><button data-hsrc="oa" class="${src === 'oa' ? 'on' : ''}">OpenAlex</button><button data-hsrc="gs" class="${src === 'gs' ? 'on' : ''}">Google Scholar</button></span>` : ''}</h3>
+      <div class="ho-grid"><div>
+        <div class="ho-now">h-index <b>${h}</b> <span class="muted small">from the citations of ${list.length} publications in this list${reported != null && reported !== h ? ` (${src === 'gs' ? 'Google Scholar' : 'OpenAlex'} reports ${reported}: it counts its own list of works)` : ''}</span></div>
+        ${steps.map(st => `<div class="ho-step"><div class="ho-target"><span class="ho-badge">h ${st.H}</span> <b>${st.total}</b> more citation${st.total === 1 ? '' : 's'}${st.need.length ? ` on ${st.need.length} paper${st.need.length === 1 ? '' : 's'}` : ''}</div>
+          <ul>${st.need.slice(0, 6).map(x => `<li><span class="ho-add">+${x.add}</span> ${ttl(x)} <span class="muted small">${x.c} → ${st.H}</span></li>`).join('')}${st.need.length > 6 ? `<li class="muted small">… and ${st.need.length - 6} more</li>` : ''}</ul></div>`).join('')}
+        ${steps.length < 3 ? `<div class="muted small">With ${list.length} publications the h-index can reach at most ${list.length}: more papers are needed to go further.</div>` : ''}
+      </div><div>
+        ${svg}
+        <div class="ho-i10"><b>i10-index ${i10}</b> <span class="muted small">(papers with 10+ citations)</span>
+          ${near10.length ? `<ul>${near10.map(x => `<li><span class="ho-add">+${10 - x.c}</span> ${ttl(x)}</li>`).join('')}</ul>` : ''}</div>
+      </div></div>
+      <div class="src-note">Citations from ${src === 'gs' ? 'your Google Scholar import' : 'OpenAlex'}; papers you excluded, items of type <i>Other</i> (corrections, peer reviews, supplementary files) and preprints already published are not counted. Each step lists the papers closest to counting – the cheapest way to get there.</div></div>`;
+  }
+
   function chartsSection(works) {
     const p = S.person.profile;
     const cards = [];
@@ -563,6 +608,7 @@ const People = (() => {
         <div class="metric"><b>${m.mean_citedness_2yr ?? '–'}</b><span>2-year mean citedness</span></div>
       </div>
       <div class="src-note">Metrics: OpenAlex, retrieved ${esc(new Date(p.fetched_at).toLocaleDateString())}; they can differ from Google Scholar or Scopus.</div>` : ''}
+      ${hOutlook(works)}
       ${chartsSection(works)}
       ${p.bio || p.keywords?.length || p.topics?.length ? `<div class="p-card" style="margin-bottom:12px"><h3>About</h3>${p.bio ? `<div class="bio">${esc(truncate(p.bio, 900))}</div>` : ''}
         <div class="row-chips" style="margin-top:8px">${(p.keywords || []).map(k => `<span class="chip">${esc(k)}</span>`).join('')}${(p.topics || []).slice(0, 8).map(t => `<span class="chip" title="OpenAlex topic · ${t.count} works">${esc(t.name)}</span>`).join('')}</div></div>` : ''}
@@ -782,6 +828,7 @@ const People = (() => {
       if (!S.person) return;
       const id = e.target.id;
       const pt = e.target.closest('[data-ptab]');
+      const hs = e.target.closest('[data-hsrc]'); if (hs) { S.hsrc = hs.dataset.hsrc; draw(); return; }
       if (pt) { S.ptab = pt.dataset.ptab; try { localStorage.setItem('papershelf-ptab', S.ptab); } catch (x) { /* ignore */ } draw(); $('#people-main').scrollTop = 0; return; }
       if (id === 'p-refresh') {
         S.loadingProfile = true; draw();

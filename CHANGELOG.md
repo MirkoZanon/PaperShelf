@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.3 – 2026-10-30
+
+- **h-index outlook** (Researchers → Overview): how many more citations are needed to reach h+1, h+2
+  and h+3, and on which papers – the ones closest to counting, with how many each needs. A chart of
+  citations by rank shows where the h-index lies, and the papers closest to 10 citations for the
+  i10-index. With Google Scholar data you can switch between OpenAlex and Scholar citations.
+
 ## 2.2.2 – 2026-10-26
 
 - **Researchers**: the list of researchers hides by itself too – move the mouse to the left edge to
