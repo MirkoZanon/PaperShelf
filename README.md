@@ -147,7 +147,28 @@ lists, to-dos, quotes and links; *📝 Export notes* saves the notes of the sele
 its reference, as Markdown, text or web page.
 
 **Reader** – read PDFs inside the app, highlight in five colours, add notes, copy highlights to your
-notes, or save them into the PDF file (visible in Preview, Acrobat, Zotero).
+notes, or save them into the PDF file (visible in Preview, Acrobat, Zotero). It remembers where you
+stopped and opens there next time; the list shows a progress bar (*p. 7/20*).
+
+**What's new** – the bell at the top lists recent papers by the researchers you follow (the ones in the
+Researchers tab) and on topics you choose to watch, found in OpenAlex when you press ⟳. One click adds
+a paper to the reading list.
+
+**Library check** – when you press ⟳, papers are checked (about once a week each) for **retractions and
+corrections** (Crossref notices, the Retraction Watch database, OpenAlex) and **preprints** for their
+**published version** (arXiv, bioRxiv/medRxiv links, exact title match). Badges in the list, the
+details and the notice in the paper panel, a *Needs attention* view, and one click to switch a preprint
+to its journal version (labels, notes, highlights and PDF stay).
+
+**Reading tools** – reminders for papers waiting too long in the reading list (*Keep*, *✓ Read* or *To
+Library*); **reading stats** (papers read per month, minutes of reading per week, streak – only on your
+computer); **label suggestions** for a paper, from the papers already in each label (computed
+locally); under a label, how many **key references** cited by several of its papers you don't have
+(→ Discover).
+
+**Review table** – for a label: one row per paper, your own columns (aim, method, data, main result,
+limitations…), filled as you like with the paper's notes and highlights at hand; exported as CSV or
+Markdown. Handy for a literature review or a thesis chapter.
 
 **Search by topic** – in Discover, describe a subject, a question or an abstract: OpenAlex semantic
 search finds papers about the same idea even when they use other words (or classic search by words).
@@ -277,7 +298,8 @@ in ⚙︎ Settings → *Updates*.
 open, a **⬆ Update** button appears at the top right (or ⚙︎ Settings → *Updates* → *Check for updates…*). Read what's new → **Install
 update and restart**. PaperShelf downloads the new version from this GitHub repository, keeps a backup
 of the current app in `~/PaperShelf/backups`, replaces only the app files, installs new libraries if
-needed and restarts; the page reloads by itself. Your library is never touched.
+needed and restarts; the page reloads by itself. A progress bar shows the download and installation.
+Your library is never touched.
 
 - The check is an anonymous request to GitHub at start-up and twice a day (nothing about you or your
   library is sent). Check and automatic installation can be turned off in the Updates window.
@@ -296,7 +318,8 @@ needed and restarts; the page reloads by itself. Your library is never touched.
 - Library, private notes, highlights, profiles and settings are stored only in your library folder (and
   your own private GitHub repository if you turn on sync). Public notes go only to the members of the
   shared label they are written in, with the display name you choose.
-- Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search).
+- Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search, the
+  topics you choose to watch). Reading position, reading time and statistics never leave your computer.
   Your e-mail is never sent anywhere except to Unpaywall, if you enter it. E-mail search of
   researchers is disabled.
 - University logins happen on your university's / the publisher's page; PaperShelf never sees or
@@ -353,11 +376,14 @@ updater.py        in-app updates (GitHub releases → download, backup, replace,
 launcher.py       app window (Chrome/Edge --app) and the PaperShelf icon (Mac .app, Windows shortcut)
 fulltext.py       PDF text index (SQLite FTS5) for searching inside PDFs
 coauth.py         co-first / co-last from paper texts (Europe PMC JATS, open-access PDF, publisher page)
+insights.py       retraction / correction check, published versions of preprints, What's new,
+                  label suggestions, reading statistics
 sharing.py        shared labels: order-independent merge (Lamport-stamped add/remove sets), secret gists
 VERSION           the app version (single source of truth)
 update.json       the GitHub repository the updater checks ("owner/name")
 static/           interface: app.js, graph.js, discover.js, reader.js, people.js, help.js, update.js,
-                  suggest.js (title search under the Add box), shares.js (shared labels), style.css, icons/
+                  suggest.js (title search under the Add box), shares.js (shared labels),
+                  smart.js (What's new, library check, reminders, stats, review tables), style.css, icons/
 static/vendor/pdfjs   PDF.js 4.10 (Apache-2.0), bundled for offline reading
 start.command / start.bat   launchers (create .venv, install requirements, update via git if cloned)
 .github/workflows/release.yml   creates a GitHub release when VERSION changes

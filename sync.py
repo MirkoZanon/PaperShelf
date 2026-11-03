@@ -197,11 +197,18 @@ def _merge(db, repo: Path, pdf_dir: Path, with_pdfs: bool):
         if loc is None:
             db.execute("INSERT INTO collections (uid, name, position, updated_at, color) VALUES (?, ?, ?, ?, ?)",
                        (uid, g.get("name") or "Group", g.get("position") or 0, g_time, str(g.get("color") or "")[:12]))
+            if isinstance(g.get("review"), str):
+                try:
+                    db.execute("UPDATE collections SET review=? WHERE uid=?", (g["review"], uid))
+                except Exception:  # noqa: BLE001 - older database without the column
+                    pass
             remote_won.add(uid)
         elif g_time > (loc.get("updated_at") or ""):
             db.execute("UPDATE collections SET name=?, position=?, updated_at=?, color=? WHERE uid=?",
                        (g.get("name") or loc["name"], g.get("position") or 0, g_time,
                         str(g.get("color") if "color" in g else loc.get("color") or "")[:12], uid))
+            if isinstance(g.get("review"), str) and "review" in loc:   # the label's review table
+                db.execute("UPDATE collections SET review=? WHERE uid=?", (g["review"], uid))
             remote_won.add(uid)
     uid2gid = {r["uid"]: r["id"] for r in db.execute("SELECT id, uid FROM collections")}
     for uid in remote_won:
@@ -311,7 +318,8 @@ def _write_state(db, repo: Path, with_pdfs: bool, remote_papers: dict, stats: di
 
     gid2uid = {r["id"]: r["uid"] for r in db.execute("SELECT id, uid FROM collections")}
     groups = {r["uid"]: {"name": r["name"], "parent_uid": gid2uid.get(r["parent_id"]), "position": r["position"],
-                         "updated_at": r["updated_at"] or "", "color": r["color"] if "color" in r.keys() else ""}
+                         "updated_at": r["updated_at"] or "", "color": r["color"] if "color" in r.keys() else "",
+                         **({"review": r["review"]} if "review" in r.keys() and r["review"] else {})}
               for r in db.execute("SELECT * FROM collections")}
     memberships: dict[int, list[str]] = {}
     for r in db.execute("SELECT paper_id, collection_id FROM paper_collections"):

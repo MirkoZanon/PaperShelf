@@ -36,6 +36,7 @@
     <input id="search" class="input tab-library-only" type="search" placeholder="Search library &amp; PDFs  ( / )" title="Searches titles, authors, journals, keywords, abstracts, notes – and the text inside your PDFs">
     <div class="grow tab-people-only"></div>
     <button class="btn small update-btn" id="update-btn" style="display:none">⬆ Update</button>
+    <button class="btn icon round feed-btn" id="feed-btn" type="button" title="What's new"><svg class="hb-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 1.8H4.4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span class="feed-n" id="feed-n"></span></button>
     <button class="btn icon round" id="sync-btn" title="Update now"><svg class="sync-ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 6.3A5.4 5.4 0 0 0 3.4 4.9M2.8 9.7a5.4 5.4 0 0 0 9.8 1.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13.6 2.6v3.9H9.7M2.4 13.4V9.5h3.9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     <button class="btn icon round" data-help="start" title="Guide and help"><span class="hb-q">?</span></button>
     <button class="btn icon round" id="settings-btn" title="Settings"><svg class="hb-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5a7.6 7.6 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.4 7.4 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.4 7.4 0 0 0 2.6-1.5l2.4 1 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
@@ -71,6 +72,7 @@
         <div class="seg mode-seg" id="mode-seg" role="tablist">
           <button data-mode="list" class="on" title="List of papers">☰ List</button>
           <button data-mode="map" title="Citation map of these papers">🕸 Map</button>
+          <button data-mode="table" title="Review table of a label: one row per paper, your own columns (aim, method, result…)">▦ Table</button>
           <button data-mode="discover" title="Suggested papers related to these">💡 Discover</button>
         </div>
       </div>
@@ -96,6 +98,7 @@
     <div id="list"></div>
     <div id="map-view" class="mode-view"></div>
     <div id="discover-view" class="mode-view"></div>
+    <div id="review-view" class="mode-view"></div>
   </main>
 </div>
 
@@ -123,5 +126,6 @@
 <script src="/static/shares.js"></script>
 <script src="/static/notes.js"></script>
 <script src="/static/appinstall.js"></script>
+<script src="/static/smart.js"></script>
 </body>
 </html>

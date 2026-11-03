@@ -225,6 +225,7 @@ function filteredPapers({ignoreKeyword = false} = {}) {
   else if (v.type === 'status') list = list.filter(p => p.status === v.value);
   else if (v.type === 'unfiled') list = list.filter(p => !p.group_ids.length);
   else if (v.type === 'nopdf') list = list.filter(p => !p.pdf_exists);
+  else if (v.type === 'attention') list = list.filter(Smart.attention);
   else if (v.type === 'group') {
     const ids = state.includeSub ? descendants(v.id) : new Set([v.id]);
     list = list.filter(p => p.group_ids.some(g => ids.has(g)));
@@ -241,7 +242,7 @@ function viewKey() {
 }
 function viewTitle() {
   const v = state.view;
-  return {all: 'All papers', reading: 'Reading list', starred: 'Starred', unfiled: 'Unfiled papers', nopdf: 'Without PDF'}[v.type]
+  return {all: 'All papers', reading: 'Reading list', starred: 'Starred', unfiled: 'Unfiled papers', nopdf: 'Without PDF', attention: 'Needs attention'}[v.type]
     || (v.type === 'status' ? (v.value === 'reading' ? 'Reading now' : STATUS_LABEL[v.value]) : v.type === 'group' ? groupPath(v.id)
       : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Shared list') : 'Papers');
 }
@@ -296,6 +297,8 @@ function renderSidebar() {
   ] : [
     ['all', 'All papers', '📚', P.length],
   ];
+  const nAtt = R.filter(Smart.attention).length;   // retracted / corrected papers, preprints now published
+  if (nAtt || state.view.type === 'attention') main.push(['attention', 'Needs attention', '⚠', nAtt]);
   const more = reading ? [] : [
     ['status:read', 'Read', '●', P.filter(p => p.status === 'read').length],
     ['starred', 'Starred', '★', P.filter(p => p.starred).length],
@@ -411,7 +414,7 @@ function rowHtml(p) {
   return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''} ${p.status === 'reading' ? 'is-reading' : ''}" data-id="${p.id}" draggable="true"${rc ? ` style="--rc:${rc}"` : ''}>
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
-    <div><div class="row-title">${esc(p.title || 'Untitled')}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${ftSnippet(p)}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
+    <div><div class="row-title">${esc(p.title || 'Untitled')}${Smart.badges(p)}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${Smart.progress(p)}${ftSnippet(p)}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
     <div class="row-side">${state.area === 'reading' ? '' : `<span class="pill s-${p.status}">${STATUS_LABEL[p.status] || ''}</span>`}<div class="row-acts">${state.area === 'reading' ? `<button class="done-btn" data-done title="Mark as read – it leaves the reading list (it stays in the Library)">✓ Read</button>` : ''}${p.annotation_count ? `<span class="hl-badge" title="${p.annotation_count} highlight(s)">🖍 ${p.annotation_count}</span>` : ''}${Notes.badge(p)}${pdfButton(p)}</div></div>
   </div>`;
 }
@@ -467,12 +470,15 @@ function renderList() {
   $('#details-toggle').checked = !!state.details;
   const grouped = (state.arrange || {})[state.area] === 'groups';
   $('#arr-sel').value = grouped ? (state.grpMode || 'each') : 'list';
-  if (grouped && list.length) { L.innerHTML = groupedHtml(list); return; }
+  if (state.view.type === 'attention' && list.length) $('#view-sub').innerHTML = 'Retracted or corrected papers, and preprints now published in a journal – open a paper to see the details';
+  Smart.gapsHint();
+  const stale = state.area === 'reading' && ['reading', 'status'].includes(state.view.type) ? Smart.staleBanner() : '';
+  if (grouped && list.length) { L.innerHTML = stale + groupedHtml(list); return; }
   if (state.area === 'reading' && list.length) {
     const now = list.filter(p => p.status === 'reading'), next = list.filter(p => p.status !== 'reading');
     state.visible = now.concat(next).map(p => p.id);
     const head = (t, n, tip) => `<div class="list-sec" title="${tip}">${t} <span>${n}</span></div>`;
-    L.innerHTML = (now.length ? head('📖 Reading now', now.length, 'Papers you are reading – open a PDF from the list and it moves here') + now.map(rowHtml).join('') : '')
+    L.innerHTML = stale + (now.length ? head('📖 Reading now', now.length, 'Papers you are reading – open a PDF from the list and it moves here') + now.map(rowHtml).join('') : '')
       + (next.length ? (now.length ? head('To read', next.length, 'Papers waiting to be read') : '') + next.map(rowHtml).join('') : '');
   } else L.innerHTML = list.length ? list.map(rowHtml).join('') : emptyHtml();
 }
@@ -606,6 +612,7 @@ function renderDetail() {
   $('#detail-body').innerHTML = detailHead(p) + detailRest(p, link, authorsText);
   $('#d-edit').addEventListener('toggle', e => { state.editOpen = e.target.open; });
   loadCitation(p.id);
+  Smart.labelSuggestions(p);
 }
 function detailHead(p) {
   const meta = [p.journal, p.year, TYPE_LABEL[p.type] && p.type !== 'article' ? TYPE_LABEL[p.type] : ''].filter(Boolean).map(esc).join(' · ');
@@ -618,7 +625,7 @@ function detailHead(p) {
     </div>`;
 }
 function detailRest(p, link, authorsText) {
-  return `
+  return `${Smart.detailBanners(p)}
     <div class="d-actions">
       ${p.pdf_exists
         ? `<button class="btn primary" data-act="read">📖 Read &amp; highlight</button><button class="btn" data-act="openapp" title="Open in Preview / your default PDF app">Open in app</button><button class="btn" data-act="reveal">${finderLabel()}</button>`
@@ -631,7 +638,7 @@ function detailRest(p, link, authorsText) {
     ${!p.pdf_exists && (p.doi || p.url) ? `<div class="lib-btns"><button class="btn small" data-act="institution" title="Opens the article on the publisher's site: use its “Access through your institution” / “Log in via your university” option, then download the PDF – it is attached automatically">🔐 Open article &amp; log in with my university</button>${(state.settings.proxies || []).map(x => `<button class="btn small" data-act="viaproxy" data-proxy="${esc(x.id)}" title="Open the article through ${esc(x.name)}, then download the PDF: it is attached automatically">🏛 Via ${esc(x.name)}</button>`).join('')}</div>` : ''}
     <div class="seg">${Object.keys(STATUS_LABEL).map(s => `<button data-status="${s}" class="${p.status === s ? 'on' : ''}">${STATUS_LABEL[s]}</button>`).join('')}</div>
     ${Notes.detailField(p)}
-    <div class="fld"><span>Labels</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No labels yet – create one in the sidebar (Labels → Personal ＋).</span>'}</div></div>
+    <div class="fld"><span>Labels</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No labels yet – create one in the sidebar (Labels → Personal ＋).</span>'}</div><div class="lsugg" id="lsugg"></div></div>
     ${typeof Shares !== 'undefined' ? Shares.detailField(p) : ''}
     ${p.annotation_count ? `<div class="fld"><span>Highlights</span><div class="hl-summary">🖍 ${p.annotation_count} highlight${p.annotation_count > 1 ? 's' : ''} in the PDF · <button class="linklike" data-act="read">open reader</button> · <button class="linklike" data-act="hl-notes">copy them into a note</button></div></div>` : ''}
     <details class="fld d-sec" ${p.abstract ? 'open' : ''}><summary>Abstract</summary><textarea data-f="abstract" rows="9" placeholder="No abstract">${esc(p.abstract)}</textarea></details>
@@ -659,7 +666,7 @@ function detailRest(p, link, authorsText) {
     <label class="fld"><span>URL</span><input data-f="url" value="${esc(p.url)}"></label>
     </details>
     <div class="d-foot"><div class="d-foot-btns"><button class="btn small" data-act="refresh">↻ Update metadata</button><button class="btn small danger" data-act="delete">Delete paper</button></div>
-      Added ${esc(new Date(p.added_at).toLocaleString())}${p.pdf_exists ? `<br>PDF: ${esc(p.pdf_path)} · <button class="linklike" data-act="detach">unlink PDF</button>` : ''}</div>`;
+      Added ${esc(new Date(p.added_at).toLocaleString())}${p.read_at ? ` · read ${esc(new Date(p.read_at).toLocaleDateString())}` : ''}${Smart.footNote(p)}${p.pdf_exists ? `<br>PDF: ${esc(p.pdf_path)} · <button class="linklike" data-act="detach">unlink PDF</button>` : ''}</div>`;
 }
 async function loadCitation(id) {
   try {
@@ -906,6 +913,11 @@ function openSettings(startTab) {
     <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list – only the papers to read and being read</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library – all your papers, with map and statistics</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👤 Researchers</option></select>
     <div class="section-label">Paper list</div>
     <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes<small>Off: a cleaner list – select papers with ${state.platform === 'darwin' ? '⌘' : 'Ctrl'}-click (or Shift-click for a range); the boxes appear as soon as something is selected.</small></span></label>
+    <div class="section-label">Reading list reminders</div>
+    <label class="opt-row">Remind me of papers waiting in the reading list for more than
+      <select class="input" id="set-stale">${[['', 'never'], ['30', '1 month'], ['60', '2 months'], ['90', '3 months'], ['180', '6 months']].map(([v, l]) => `<option value="${v}" ${(s.stale_days || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    <div class="section-label">Library check</div>
+    <label class="opt"><input type="checkbox" id="set-libcheck" ${s.lib_check !== '' ? 'checked' : ''}><span>Watch my papers for retractions, corrections and published versions<small>When you press ⟳ (each paper about once a week), PaperShelf asks Crossref, OpenAlex and arXiv – sending only the papers' DOIs / arXiv IDs, nothing about you. Retracted papers get a red badge; preprints that appeared in a journal can be switched to the published version.</small></span></label>
     <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
     <select class="input wide" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
     <div class="section-label">Folder for downloaded PDFs</div>
@@ -993,6 +1005,14 @@ function openSettings(startTab) {
   if (typeof AppInstall !== 'undefined') AppInstall.settingsHtml().then(h => { const el = $('#ia-section', m.el); if (el) { el.innerHTML = h; AppInstall.settingsBind(m); } });
   $('#set-start', m.el).onchange = async e => {
     try { const d = await api('/api/settings', {method: 'PUT', body: {start_page: e.target.value}}); state.settings = d.settings; toast('Saved – PaperShelf will open there next time.', 'ok'); }
+    catch (err) { toast(err.message, 'error'); }
+  };
+  $('#set-stale', m.el).onchange = async e => {
+    try { const d = await api('/api/settings', {method: 'PUT', body: {stale_days: e.target.value}}); state.settings = d.settings; renderList(); }
+    catch (err) { toast(err.message, 'error'); }
+  };
+  $('#set-libcheck', m.el).onchange = async e => {
+    try { const d = await api('/api/settings', {method: 'PUT', body: {lib_check: e.target.checked}}); state.settings = d.settings; }
     catch (err) { toast(err.message, 'error'); }
   };
   $('#set-checks', m.el).onchange = async e => {
@@ -1229,6 +1249,9 @@ async function brandMenu() {
     ${item('update', '⟳ Update now', 'Sync, shared labels, new version')}
     ${upd ? item('install-update', `⬆ Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') : item('check', '⬆ Check for updates')}
     <div class="bm-sep"></div>
+    ${item('feed', "✨ What's new", Feed.data && Feed.data.count ? `${Feed.data.count} new papers from people and topics you follow` : 'New papers from people and topics you follow')}
+    ${item('stats', '📊 Reading stats', 'Papers read, time spent reading')}
+    ${item('checklib', '🩺 Check my library', 'Retractions, corrections, published preprints')}
     ${item('topic', '🔎 Search papers by topic', 'Find papers online by meaning')}
     ${item('bulk', '＋ Add many papers at once')}
     ${item('export', '⤓ Export references or notes')}
@@ -1250,6 +1273,9 @@ async function brandMenu() {
     if (a === 'topic') { if (state.tab !== 'library') setTab(state.area); setMode('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
     if (a === 'bulk') { if (state.tab !== 'library') setTab(state.area); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
     if (a === 'export') openExport();
+    if (a === 'feed') Feed.open();
+    if (a === 'stats') Stats.open();
+    if (a === 'checklib') { const t = toast('Checking your library…', 'info', 0); Smart.runChecks({force: true}).catch(err => toast(err.message, 'error')).finally(() => t.close()); }
     if (a === 'shares') Shares.startMenu();
     if (a === 'app') { openSettings('general'); }
     if (a === 'settings') openSettings();
@@ -1410,6 +1436,17 @@ async function syncNow() {
       if (L.some(r => r.error || (r.errors || []).length)) problems.push('some members of a shared label could not be read (see the label)');
     } catch (err) { problems.push('shared labels: ' + err.message); }
   }
+  const fd = Feed.data;
+  if (!fd || fd.followed.some(f => !f.muted) || fd.topics.length) {
+    t.set('Looking for new papers by the researchers you follow…');
+    try { const d = await Feed.check({quiet: true}); if (d && d.new) done.push(`${d.new} new paper${d.new > 1 ? 's' : ''} in What's new`); }
+    catch (err) { problems.push("What's new: " + err.message); }
+  }
+  if (state.settings.lib_check !== '') {
+    t.set('Checking your library (retractions, published versions)…');
+    try { const d = await Smart.runChecks({quiet: true}); if (d.summary && d.summary.length) done.push(...d.summary); }
+    catch (err) { problems.push('library check: ' + err.message); }
+  }
   t.set('Checking for a new version of PaperShelf…');
   try { const d = await Updates.check({force: true}); if (d.available) newVersion = d; else if (d.configured !== false) done.push(`PaperShelf ${d.current} is the latest version`); }
   catch (err) { problems.push('update check: ' + err.message); }
@@ -1478,12 +1515,15 @@ function chooseNoteTarget(T, title) {
 /* ------------------------------------------------------------------ modes */
 function renderMode(scopeChanged = false) {
   const mapBtn = $('#mode-seg [data-mode=map]'); if (mapBtn) mapBtn.style.display = state.area === 'reading' ? 'none' : '';
-  if (state.area === 'reading' && state.mode === 'map') state.mode = 'list';
+  const tblBtn = $('#mode-seg [data-mode=table]'); if (tblBtn) tblBtn.style.display = state.area === 'reading' ? 'none' : '';
+  if (state.area === 'reading' && (state.mode === 'map' || state.mode === 'table')) state.mode = 'list';
   $$('#mode-seg [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
   $('#list').style.display = state.mode === 'list' ? '' : 'none';
   $('#list-toolbar').style.display = state.mode === 'list' ? '' : 'none';
   $('#map-view').style.display = state.mode === 'map' ? 'flex' : 'none';
   $('#discover-view').style.display = state.mode === 'discover' ? 'block' : 'none';
+  $('#review-view').style.display = state.mode === 'table' ? 'block' : 'none';
+  if (state.mode === 'table') Review.render();
   if (state.mode === 'map') Graph.render(filteredPapers(), scopeChanged);
   else Graph.stop();
   if (state.mode === 'discover') Discover.render(scopeChanged);
@@ -1710,8 +1750,11 @@ function bind() {
 
   // List
   $('#list').addEventListener('click', e => {
+    if (e.target.closest('[data-stale-review]')) { Smart.staleReview(); return; }
+    if (e.target.closest('[data-stale-hide]')) { try { localStorage.setItem('papershelf-stale-hidden', Date.now()); } catch (err) { /* ignore */ } renderList(); return; }
     const row = e.target.closest('.row'); if (!row) return;
     const id = +row.dataset.id; const p = paperById(id);
+    if (e.target.closest('[data-alert]')) { openDetail(id); return; }
     if (e.target.closest('.star')) { savePaper(id, {starred: !p.starred}); return; }
     if (e.target.closest('[data-notes]')) { Notes.open(id); return; }
     const pq = e.target.closest('[data-pdfq]'); if (pq) { quickPdf(id, pq); return; }
@@ -1737,6 +1780,7 @@ function bind() {
     state.lastIndex = idx; openDetail(id);
   });
   document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
+  $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setMode('discover'); });
   $('#select-all').addEventListener('change', e => {
     if (e.target.checked) state.visible.forEach(id => state.selected.add(id)); else state.selected.clear();
     renderList();
@@ -1795,8 +1839,11 @@ function bind() {
     if (del) { const kws = p.keywords.filter((_, i) => i !== +del.dataset.kwdel); savePaper(id, {keywords: kws}); return; }
     const s = e.target.closest('[data-status]');
     if (s) { savePaper(id, {status: s.dataset.status}); return; }
+    const ls = e.target.closest('[data-lsugg]');
+    if (ls) { savePaper(id, {group_ids: [...p.group_ids, +ls.dataset.lsugg]}).then(pp => { if (pp) toast(`Label added: ${groupPath(+ls.dataset.lsugg)}`, 'ok'); }); return; }
     const a = e.target.closest('[data-act]'); if (!a) return;
     const act = a.dataset.act;
+    if (await Smart.detailAct(act, p)) return;
     if (act === 'findpdf') { setBusy(a, true, 'Searching…'); await findPdf(id); setBusy(a, false); }
     if (act === 'attach') pickAttach(id);
     if (act === 'openapp' || act === 'reveal') api(`/api/papers/${id}/open`, {method: 'POST', body: {reveal: act === 'reveal'}}).catch(err => toast(err.message, 'error'));

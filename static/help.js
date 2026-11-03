@@ -109,7 +109,28 @@ const Help = (() => {
         <li>Click a highlight to change colour, add a note or delete it. The list on the right jumps to each highlight.</li>
         <li><b>Add to paper notes</b> copies all highlights into a note of the paper; <b>Copy all</b> copies them to the clipboard.</li>
         <li>When you write a note on a highlight, <i>Also add it to the paper's notes</i> copies it (with the highlighted sentence and page) into the paper's notes: <b>🔒 private</b>, or <b>🌐 public</b> in a shared label the paper belongs to, so its members see it.</li>
-        <li><b>💾 Save into PDF</b> writes the highlights into the file itself, so they appear in Preview, Acrobat or Zotero (repeat it after new highlights – nothing is duplicated).</li></ul>`},
+        <li><b>💾 Save into PDF</b> writes the highlights into the file itself, so they appear in Preview, Acrobat or Zotero (repeat it after new highlights – nothing is duplicated).</li>
+        <li><b>Resume reading</b>: the reader remembers the page where you stopped and opens there next time (“from the start” goes back to page 1). The list shows a small progress bar – <i>p. 7/20</i> – under papers you are reading.</li></ul>
+      ${tip('Time spent with a PDF open in the reader is counted for 📊 Reading stats – only on this computer, never sent anywhere.')}`},
+
+    {id: 'smart', icon: '✨', title: "What's new, library check & reading tools", html: () => `
+      <h4>✨ What's new</h4>
+      <p>The bell at the top shows <b>recent papers by the researchers you follow</b> (everyone you added in the <b>Researchers</b> tab, except yourself) and on <b>topics you watch</b> (add them in the What's new window, e.g. “sleep spindles”). New papers are looked up in OpenAlex when you press ⟳ or “Check now”. <b>＋ Reading list</b> adds one; <b>✕</b> removes it from the list for good.</p>
+      <h4>🩺 Library check</h4>
+      <ul><li><b>Retractions and corrections</b>: when you press ⟳, papers are checked about once a week against Crossref (notices published by the journals and the <b>Retraction Watch</b> database) and OpenAlex. A retracted paper gets a red <span class="al-badge lvl-retracted">⚠ Retracted</span> badge, a corrected one a <span class="al-badge lvl-corrected">✎ Corrected</span> badge; the details panel links to the notice.</li>
+        <li><b>Published preprints</b>: for arXiv, bioRxiv, medRxiv… papers, PaperShelf looks for the journal version (the DOI the authors added on arXiv, the preprint server's link, or an exact title + first-author match). <span class="pub-badge">📰 Published</span> → open the paper → <b>Use the published version</b>: title, journal, DOI and pages become those of the article; labels, notes, highlights and the PDF stay.</li>
+        <li>All of them are listed under <b>⚠ Needs attention</b> in the sidebar. Logo menu → <b>🩺 Check my library</b> checks everything now. Turn it off in ⚙︎ Settings → General.</li></ul>
+      ${tip('Only DOIs and arXiv IDs are sent to these public services – nothing about you.')}
+      <h4>⏳ Reading-list reminders</h4>
+      <p>Papers waiting in the reading list for more than 2 months are pointed out at the top of the list. For each: <b>Keep</b> (remind me later), <b>✓ Read</b>, or <b>To Library</b> – it leaves the reading list without counting as read. Change or switch off the delay in ⚙︎ Settings → General.</p>
+      <h4>📊 Reading stats</h4>
+      <p>Logo menu → <b>Reading stats</b>: papers read per month, minutes of reading per week, your streak, the papers you spent most time on. Computed only on this computer.</p>
+      <h4>🏷 Label suggestions</h4>
+      <p>In a paper's details, under its labels, PaperShelf suggests labels whose papers are similar (same words in title, abstract and keywords; citations between them). Click one to add it. Computed on your computer.</p>
+      <h4>📚 Key references you don't have</h4>
+      <p>In a label, a link under the title tells you how many works are cited by several of its papers but are not in your library; it opens <b>💡 Discover</b> with them.</p>
+      <h4>▦ Review table</h4>
+      <p>In the Library, open a label and choose <b>▦ Table</b>: one row per paper, with columns you choose (aim, method, data, main result, limitations… add, rename, move or delete them). It's saved as you type; <b>📝 notes</b> shows the paper's notes and highlights to copy from. Export it as <b>CSV</b> (Excel, Numbers) or <b>Markdown</b>. Tables of your own labels travel with your personal sync; tables of shared labels stay on this computer.</p>`},
 
     {id: 'export', icon: '⤓', title: 'Citations, export & Zotero', html: () => `
       <h4>Citation styles</h4>
@@ -325,7 +346,7 @@ const Help = (() => {
     {id: 'privacy', icon: '🛡', title: 'Privacy & legal', html: () => `
       <ul><li>PaperShelf runs on your computer and answers only to it; requests from other websites or computers are refused.</li>
         <li>Library, private notes, highlights, profiles and settings are stored only in your library folder – and in your own private GitHub repository if you turn on sync. Public notes go only to the members of the shared label you wrote them in.</li>
-        <li>Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search). Your e-mail is never sent, except to Unpaywall if you enter it. E-mail search of researchers is disabled.</li>
+        <li>Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search, the topics you choose to watch in What's new). Reading position, reading time and stats stay on your computer. Your e-mail is never sent, except to Unpaywall if you enter it. E-mail search of researchers is disabled.</li>
         <li>University logins happen on your university's or the publisher's page; PaperShelf never sees credentials.</li>
         <li>Only official interfaces and legal open-access sources are used. Google Scholar is never queried automatically – only the page you choose to import.</li>
         <li>PDFs obtained through subscriptions are for personal use: keep a synced repository private and don't share them.</li>

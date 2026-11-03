@@ -94,10 +94,37 @@ const Updates = (() => {
   function progress(msg) { if (dialog) $('#up-progress', dialog.el).innerHTML = msg; }
   function lock(on) { if (dialog) $$('.up-actions button', dialog.el).forEach(b => { b.disabled = on; }); }
 
+  const mb = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0);
+  const STAGES = {start: ['Contacting GitHub…', 2], download: ['Downloading', 4], unpack: ['Checking the new version…', 80],
+    backup: ['Keeping a backup of the current version…', 84], git: ['Updating with git…', 60],
+    files: ['Replacing the app files', 88], libraries: ['Installing new libraries… (can take a minute)', 97], done: ['Finishing…', 100]};
+
+  function bar(p) {
+    const [label, base] = STAGES[p.stage] || ['Working…', 2];
+    let pct = base, text = label, indet = false;
+    if (p.stage === 'download') {
+      if (p.total) { pct = 4 + 74 * Math.min(1, p.done / p.total); text = `Downloading PaperShelf ${esc(p.latest || '')} – ${mb(p.done)} of ${mb(p.total)} MB`; }
+      else { indet = true; text = `Downloading PaperShelf ${esc(p.latest || '')} – ${mb(p.done || 0)} MB`; }
+    } else if (p.stage === 'files' && p.total) {
+      pct = 88 + 8 * (p.done / p.total); text = `Replacing the app files (${p.done} of ${p.total})`;
+    } else if (p.stage === 'libraries' || p.stage === 'git' || p.stage === 'start') indet = true;
+    return `<div class="up-bar${indet ? ' indet' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}"><i style="width:${indet ? 100 : pct.toFixed(1)}%"></i></div>
+      <div class="up-bar-text">${text}${indet ? '' : ` <b>${Math.round(pct)}%</b>`}</div>`;
+  }
+
   async function install() {
-    lock(true); progress('Downloading and installing… (this takes a few seconds)');
-    try { finish(await api('/api/update/install', {method: 'POST'})); }
-    catch (err) { lock(false); progress(`<span class="up-err">✗ ${esc(err.message)}</span>`); }
+    lock(true); progress(bar({stage: 'start'}));
+    try {
+      const r = await api('/api/update/install?background=1', {method: 'POST'});
+      if (!r.started) { finish(r); return; }   // an older server answered directly
+      for (;;) {
+        await new Promise(res => setTimeout(res, 250));
+        const p = await api('/api/update/progress');
+        if (p.error) throw new Error(p.error);
+        if (p.result) { progress(bar({stage: 'done'})); finish(p.result); return; }
+        progress(bar(p));
+      }
+    } catch (err) { lock(false); progress(`<span class="up-err">✗ ${esc(err.message)}</span>`); }
   }
 
   async function installFile(file) {
@@ -110,7 +137,7 @@ const Updates = (() => {
   async function finish(res) {
     info = null; badge();
     const n = (res.changed || []).length;
-    progress(`✓ Version ${esc(res.installed)} installed${n ? ` (${n} files updated)` : ''}. ${res.warning ? `<br><span class="up-err">${esc(res.warning)}</span>` : ''}<br>Restarting PaperShelf…`);
+    progress(`<div class="up-bar done"><i style="width:100%"></i></div>✓ Version ${esc(res.installed)} installed${n ? ` (${n} files updated)` : ''}. ${res.warning ? `<br><span class="up-err">${esc(res.warning)}</span>` : ''}<br>Restarting PaperShelf…`);
     if (!res.restart) { lock(false); return; }
     try { await api('/api/update/restart', {method: 'POST'}); }
     catch (err) { progress(`✓ Version ${esc(res.installed)} installed. ${esc(err.message)}`); return; }

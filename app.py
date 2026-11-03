@@ -24,7 +24,7 @@ import time
 import uuid
 import webbrowser
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -33,6 +33,7 @@ from flask import Flask, Response, g, jsonify, redirect, request, send_file
 import citations
 import coauth
 import fulltext
+import insights
 import journals
 import metadata
 import pdffinder
@@ -133,6 +134,10 @@ CREATE TABLE IF NOT EXISTS paper_shares (
 CREATE TABLE IF NOT EXISTS note_hidden (share_id TEXT NOT NULL, note_id TEXT NOT NULL, PRIMARY KEY (share_id, note_id));
 CREATE TABLE IF NOT EXISTS share_dismissed (share_id TEXT NOT NULL, item_key TEXT NOT NULL, lamport INTEGER NOT NULL,
     PRIMARY KEY (share_id, item_key));
+CREATE TABLE IF NOT EXISTS reading_log (day TEXT NOT NULL, paper_id INTEGER NOT NULL, seconds INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (day, paper_id));
+CREATE TABLE IF NOT EXISTS feed (id TEXT PRIMARY KEY, data TEXT NOT NULL, why TEXT NOT NULL DEFAULT '{}',
+    pub_date TEXT NOT NULL DEFAULT '', found_at TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'new');
 CREATE TABLE IF NOT EXISTS people (
     id INTEGER PRIMARY KEY AUTOINCREMENT, orcid TEXT, openalex_id TEXT, name TEXT NOT NULL DEFAULT '',
     data TEXT NOT NULL DEFAULT '{}', overrides TEXT NOT NULL DEFAULT '{}', excluded TEXT NOT NULL DEFAULT '[]',
@@ -144,8 +149,14 @@ NEW_PAPER_COLUMNS = {
     "uid": "TEXT", "journal_abbr": "TEXT NOT NULL DEFAULT ''", "openalex_id": "TEXT NOT NULL DEFAULT ''",
     "refs": "TEXT NOT NULL DEFAULT '[]'", "related": "TEXT NOT NULL DEFAULT '[]'", "cited_by_count": "INTEGER",
     "citations_at": "TEXT NOT NULL DEFAULT ''", "note_list": "TEXT NOT NULL DEFAULT '[]'",
+    # 2.5: when the status last changed / when it was finished, where you stopped reading,
+    # retraction & correction notices, the published version of a preprint, last check
+    "status_at": "TEXT NOT NULL DEFAULT ''", "read_at": "TEXT NOT NULL DEFAULT ''", "read_page": "INTEGER",
+    "read_pages": "INTEGER", "alerts": "TEXT NOT NULL DEFAULT ''", "published": "TEXT NOT NULL DEFAULT ''",
+    "checked_at": "TEXT NOT NULL DEFAULT ''",
 }
-NEW_GROUP_COLUMNS = {"uid": "TEXT", "updated_at": "TEXT NOT NULL DEFAULT ''", "color": "TEXT NOT NULL DEFAULT ''"}
+NEW_GROUP_COLUMNS = {"uid": "TEXT", "updated_at": "TEXT NOT NULL DEFAULT ''", "color": "TEXT NOT NULL DEFAULT ''",
+                     "review": "TEXT NOT NULL DEFAULT ''"}
 LABEL_COLORS = {"", "red", "coral", "orange", "amber", "yellow", "olive", "lime", "green", "mint", "teal", "cyan", "sky", "blue",
                 "navy", "indigo", "violet", "purple", "magenta", "pink", "rose", "brown", "sand", "grey", "slate"}
 NEW_PEOPLE_COLUMNS = {"scholar": "TEXT NOT NULL DEFAULT ''", "roles_extra": "TEXT NOT NULL DEFAULT '{}'"}
@@ -181,8 +192,12 @@ def init_db():
             continue
         for (rid,) in db.execute(f"SELECT id FROM {table} WHERE uid IS NULL OR uid = ''").fetchall():
             db.execute(f"UPDATE {table} SET uid=? WHERE id=?", (uuid.uuid4().hex, rid))
-    if "color" not in {r[1] for r in db.execute("PRAGMA table_info(shares)")}:
+    have_sh = {r[1] for r in db.execute("PRAGMA table_info(shares)")}
+    if "color" not in have_sh:
         db.execute("ALTER TABLE shares ADD COLUMN color TEXT NOT NULL DEFAULT ''")  # your own colour for a shared label
+    if "review" not in have_sh:
+        db.execute("ALTER TABLE shares ADD COLUMN review TEXT NOT NULL DEFAULT ''")  # your review table (local)
+    db.execute("UPDATE papers SET status_at=added_at WHERE status_at=''")
     # notes became a list of separate notes (version 1.14): the old single text becomes the first note
     for r in db.execute("SELECT id, notes, added_at, updated_at FROM papers WHERE notes != '' AND (note_list = '[]' OR note_list = '')").fetchall():
         db.execute("UPDATE papers SET note_list=? WHERE id=?", (json.dumps([{"id": uuid.uuid4().hex[:16], "body": r["notes"],
@@ -246,13 +261,14 @@ def get_settings(db=None, secrets=True) -> dict:
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
          "update_auto": "1", "just_updated": "", "own_window": "1",
          "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
-         "display_name": "", "list_checkboxes": "", "start_page": "reading"}
+         "display_name": "", "list_checkboxes": "", "start_page": "reading", "stale_days": "60",
+         "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]"}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
                                                 "update_check", "update_cache", "update_auto", "just_updated", "own_window",
                                                 "share_repo", "share_token", "share_auto", "share_user", "share_gist", "display_name",
-                                                "list_checkboxes"):
+                                                "list_checkboxes", "stale_days", "lib_check"):
             s[row["key"]] = row["value"]
     try:
         s["proxies"] = json.loads(s["proxies"] or "[]")
@@ -304,6 +320,8 @@ def row_to_paper(row, gmap, acounts=None, smap=None) -> dict:
             p[f] = json.loads(p.get(f) or "[]")
         except ValueError:
             p[f] = []
+    for f in ("alerts", "published"):
+        p[f] = insights.json_or(p.get(f), None)
     p["starred"] = bool(p["starred"])
     p["group_ids"] = gmap.get(p["id"], [])
     p["share_ids"] = (smap or {}).get(p["id"], [])
@@ -405,11 +423,11 @@ def insert_paper(db, meta, group_id=None):
         vals = {f: str(meta.get(f) or "") for f in TEXT_FIELDS}
         vals["type"] = vals["type"] or "article"
         vals["status"] = vals["status"] if vals["status"] in STATUSES else "to_read"
-        cols = TEXT_FIELDS + ["uid", "authors", "keywords", "year", "starred", "added_at", "updated_at"]
+        cols = TEXT_FIELDS + ["uid", "authors", "keywords", "year", "starred", "added_at", "updated_at", "status_at"]
         values = [vals[f] for f in TEXT_FIELDS] + [
             new_uid(), json.dumps(meta.get("authors") or [], ensure_ascii=False),
             json.dumps(meta.get("keywords") or [], ensure_ascii=False),
-            _int(meta.get("year")), 1 if meta.get("starred") else 0, ts, ts]
+            _int(meta.get("year")), 1 if meta.get("starred") else 0, ts, ts, ts]
         cur = db.execute(f"INSERT INTO papers ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", values)
         pid, duplicate = cur.lastrowid, False
         if vals["notes"].strip():
@@ -456,6 +474,17 @@ def apply_changes(db, pid, body: dict):
     if "pdf_path" in body and not body["pdf_path"]:
         sets.append("pdf_path=?")
         vals.append("")
+    if body.get("status") in STATUSES:
+        cur = db.execute("SELECT status FROM papers WHERE id=?", (pid,)).fetchone()
+        if cur and cur["status"] != body["status"]:
+            sets.append("status_at=?")
+            vals.append(now())
+            if body["status"] == "read":   # finished (or only put away: "shelve")
+                sets.append("read_at=?")
+                vals.append("" if body.get("shelve") else now())
+    if body.get("snooze") and "status_at=?" not in sets:   # "still want to read it": remind me later
+        sets.append("status_at=?")
+        vals.append(now())
     if "group_ids" in body and isinstance(body["group_ids"], list):
         db.execute("DELETE FROM paper_collections WHERE paper_id=?", (pid,))
         for gid in body["group_ids"]:
@@ -1853,7 +1882,7 @@ def write_settings():
     if body.get("clear_sync_token"):
         set_setting(db, "sync_token", "")
     for key in ("sync_pdfs", "sync_auto", "auto_import", "remove_downloads", "sjr_auto", "update_check", "update_auto", "own_window", "share_auto",
-                "list_checkboxes"):
+                "list_checkboxes", "lib_check"):
         if key in body:
             set_setting(db, key, "1" if body[key] else "")
     if body.get("openalex_key") is not None and body.get("openalex_key") != "":
@@ -1864,6 +1893,9 @@ def write_settings():
         set_setting(db, "core_key", body["core_key"].strip())
     if body.get("clear_core_key"):
         set_setting(db, "core_key", "")
+    if "stale_days" in body:
+        sd = _int(body.get("stale_days"))
+        set_setting(db, "stale_days", str(sd) if sd and 7 <= sd <= 730 else "")
     if body.get("start_page") in ("reading", "library", "people"):
         set_setting(db, "start_page", body["start_page"])
     if "display_name" in body:
@@ -2033,6 +2065,374 @@ def open_folder():
 
 
 # --------------------------------------------------------------------------- #
+# Smart tools (see insights.py): library check, What's new, reading, labels, review tables
+# --------------------------------------------------------------------------- #
+CHECK_DAYS = 7          # each paper is checked again (retractions, published version) after a week
+REVIEW_COLS = ["Question / aim", "Method", "Data / sample", "Main result", "Limitations"]
+
+
+def _ago(days: float) -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+@app.post("/api/checks/run")
+def run_checks():
+    """Look for retraction / correction notices and for the published version of preprints."""
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    force, ids = bool(b.get("force")), {int(i) for i in b.get("ids") or []}
+    if not force and not ids and get_settings(db).get("lib_check") != "1":
+        return jsonify(skipped=True)
+    papers = [row_to_paper(r, {}) for r in db.execute("SELECT * FROM papers ORDER BY checked_at, id")]
+    if ids:
+        papers = [p for p in papers if p["id"] in ids]
+    elif not force:
+        papers = [p for p in papers if (p["checked_at"] or "") < _ago(CHECK_DAYS)]
+    papers = [p for p in papers if p["doi"] or p["arxiv_id"]][:500 if force else 150]   # the rest on the next ⟳ (oldest first)
+    errors, alerts, pubs, cr = [], None, None, {}
+    dois = [p["doi"].lower() for p in papers if p["doi"] and not p["doi"].lower().startswith("10.48550/")]
+    if papers:
+        try:
+            cr = insights.crossref_works(dois) if dois else {}
+            alerts = insights.check_alerts(papers, cr)
+        except metadata.MetadataError as exc:
+            errors.append(str(exc))
+        try:
+            pubs = insights.check_published(papers, cr)
+        except metadata.MetadataError as exc:
+            errors.append(str(exc))
+    new_alerts, new_pub, changed, ts = [], [], set(), now()
+    for p in papers:
+        sets = {}
+        if alerts is not None and p["id"] in alerts:
+            new, old = alerts[p["id"]], p["alerts"] or {}
+            if new:
+                if old.get("dismissed") == new["level"]:
+                    new["dismissed"] = new["level"]
+                if insights.LEVEL[new["level"]] > insights.LEVEL.get(old.get("level"), 0):
+                    new_alerts.append(p["id"])
+            new_txt = json.dumps(new, ensure_ascii=False) if new else ""
+            if new_txt != (json.dumps(p["alerts"], ensure_ascii=False) if p["alerts"] else ""):
+                sets["alerts"] = new_txt
+        if pubs is not None and p["id"] in pubs and not (p["published"] or {}).get("switched"):
+            new, old = pubs[p["id"]], p["published"] or {}
+            same = (old.get("doi") or "").lower() == new["doi"].lower()
+            if same:
+                new["dismissed"], new["found"] = bool(old.get("dismissed")), old.get("found") or new["found"]
+            else:
+                new_pub.append(p["id"])
+            if new != old:
+                sets["published"] = json.dumps(new, ensure_ascii=False)
+        if alerts is not None and pubs is not None:
+            sets["checked_at"] = ts
+        if sets:
+            db.execute(f"UPDATE papers SET {', '.join(k + '=?' for k in sets)} WHERE id=?", [*sets.values(), p["id"]])
+            if set(sets) - {"checked_at"}:
+                changed.add(p["id"])
+    db.commit()
+    if errors and not changed and alerts is None and pubs is None:
+        return error("The library check could not reach Crossref / arXiv / OpenAlex: " + errors[0], 502)
+    flagged = db.execute("SELECT COUNT(*) FROM papers WHERE alerts != ''").fetchone()[0]
+    return jsonify(checked=len(papers), new_alerts=new_alerts, new_published=new_pub, flagged=flagged,
+                   papers=load_papers(db, sorted(changed)), errors=errors)
+
+
+@app.post("/api/papers/<int:pid>/dismiss")
+def dismiss_notice(pid):
+    """Hide the badge of a correction notice or of a published version (it stays in the details)."""
+    db = get_db()
+    p = load_paper(db, pid)
+    if not p:
+        return error("Paper not found", 404)
+    what = (request.get_json(silent=True) or {}).get("what")
+    if what == "alert" and p["alerts"]:
+        p["alerts"]["dismissed"] = p["alerts"]["level"]
+        db.execute("UPDATE papers SET alerts=? WHERE id=?", (json.dumps(p["alerts"], ensure_ascii=False), pid))
+    elif what == "published" and p["published"]:
+        p["published"]["dismissed"] = True
+        db.execute("UPDATE papers SET published=? WHERE id=?", (json.dumps(p["published"], ensure_ascii=False), pid))
+    db.commit()
+    return jsonify(paper=load_paper(db, pid))
+
+
+@app.post("/api/papers/<int:pid>/use-published")
+def use_published(pid):
+    """Turn a preprint into its published version: new DOI, journal, pages… – labels, notes,
+    highlights, PDF and status stay."""
+    db = get_db()
+    p = load_paper(db, pid)
+    if not p or not (p["published"] or {}).get("doi"):
+        return error("No published version is known for this paper.", 404)
+    info = p["published"]
+    other = db.execute("SELECT id FROM papers WHERE lower(doi)=? AND id!=?", (info["doi"].lower(), pid)).fetchone()
+    if other:
+        return error("The published version is already in your library as a separate paper.", 409, other_id=other["id"])
+    try:
+        meta = metadata.from_doi(info["doi"], get_settings(db)["email"])
+    except metadata.MetadataError as exc:
+        return lookup_error(exc)
+    changes = {k: meta[k] for k in META_FIELDS if meta.get(k) not in (None, "", []) and k not in ("arxiv_id", "pdf_url")}
+    changes["keywords"] = metadata.merge_keywords(p["keywords"], meta.get("keywords"), limit=30)
+    apply_changes(db, pid, changes)
+    store_citation_data(db, pid, meta)
+    info.update(switched=True, dismissed=True, preprint_doi=p["doi"], preprint_journal=p["journal"], switched_at=now())
+    db.execute("UPDATE papers SET published=?, alerts='', checked_at='' WHERE id=?", (json.dumps(info, ensure_ascii=False), pid))
+    db.commit()
+    return jsonify(paper=load_paper(db, pid))
+
+
+# ---------------------------------------------------------------- What's new
+def _feed_payload(db, new=None):
+    s = get_settings(db)
+    rows = db.execute("SELECT * FROM feed WHERE state='new' ORDER BY pub_date DESC, found_at DESC LIMIT 400").fetchall()
+    items = [dict(insights.json_or(r["data"], {}), why=insights.json_or(r["why"], []), found_at=r["found_at"]) for r in rows]
+    muted = set(insights.json_or(s.get("feed_muted"), []))
+    followed = [{"id": r["id"], "name": r["name"], "muted": r["id"] in muted} for r in db.execute(
+        "SELECT id, name FROM people WHERE is_me=0 AND openalex_id IS NOT NULL AND openalex_id != '' ORDER BY name COLLATE NOCASE")]
+    return jsonify(items=items, count=len(items), topics=insights.json_or(s.get("feed_topics"), []), followed=followed,
+                   last=s.get("feed_last", ""), new=new)
+
+
+@app.get("/api/feed")
+def feed_list():
+    return _feed_payload(get_db())
+
+
+@app.post("/api/feed/check")
+def feed_check():
+    db = get_db()
+    s = get_settings(db)
+    muted = set(insights.json_or(s.get("feed_muted"), []))
+    authors = {r["openalex_id"].upper(): r["name"] for r in db.execute(
+        "SELECT id, openalex_id, name FROM people WHERE is_me=0 AND openalex_id IS NOT NULL AND openalex_id != ''")
+        if r["id"] not in muted}
+    topics = insights.json_or(s.get("feed_topics"), [])
+    if not authors and not topics:
+        return _feed_payload(db, 0)
+    today = datetime.now().date()
+    try:
+        last = datetime.fromisoformat(s["feed_last"]).date() if s.get("feed_last") else None
+    except ValueError:
+        last = None
+    since = max(today - timedelta(days=120), (last - timedelta(days=14)) if last else today - timedelta(days=30))
+    try:
+        found = insights.fetch_new(authors, topics, since.isoformat())
+    except metadata.MetadataError as exc:
+        return lookup_error(exc)
+    owned_oa = {r[0] for r in db.execute("SELECT openalex_id FROM papers WHERE openalex_id != ''")}
+    owned_doi = {r[0].lower() for r in db.execute("SELECT doi FROM papers WHERE doi != ''")}
+    known = {r[0] for r in db.execute("SELECT id FROM feed")}
+    merged: dict[str, tuple] = {}
+    for it, why in found:
+        if it["id"] in merged:
+            merged[it["id"]][1].append(why)
+        else:
+            merged[it["id"]] = (it, [why])
+    n, ts = 0, now()
+    for wid, (it, whys) in merged.items():
+        if wid in known or wid in owned_oa or (it.get("doi") or "").lower() in owned_doi or n >= 200:
+            continue
+        db.execute("INSERT OR IGNORE INTO feed (id, data, why, pub_date, found_at) VALUES (?, ?, ?, ?, ?)",
+                   (wid, json.dumps(it, ensure_ascii=False), json.dumps(whys, ensure_ascii=False), it.get("date") or "", ts))
+        n += 1
+    set_setting(db, "feed_last", today.isoformat())
+    db.commit()
+    return _feed_payload(db, n)
+
+
+@app.post("/api/feed/state")
+def feed_state():
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    st = b.get("state") if b.get("state") in ("new", "dismissed", "added") else "dismissed"
+    ids = [str(i) for i in b.get("ids") or []] if not b.get("all") else [r[0] for r in db.execute("SELECT id FROM feed WHERE state='new'")]
+    for i in ids:
+        db.execute("UPDATE feed SET state=? WHERE id=?", (st, i))
+    db.commit()
+    return _feed_payload(db)
+
+
+@app.put("/api/feed/muted")
+def feed_muted():
+    """Researchers whose new papers you don't want in What's new (their profile stays)."""
+    ids = sorted({int(i) for i in (request.get_json(silent=True) or {}).get("ids") or [] if str(i).isdigit()})
+    db = get_db()
+    set_setting(db, "feed_muted", json.dumps(ids))
+    db.commit()
+    return _feed_payload(db)
+
+
+@app.put("/api/feed/topics")
+def feed_topics():
+    b = request.get_json(silent=True) or {}
+    topics = []
+    for t in b.get("topics") or []:
+        t = " ".join(str(t).split())[:80]
+        if t and t.lower() not in {x.lower() for x in topics}:
+            topics.append(t)
+    db = get_db()
+    set_setting(db, "feed_topics", json.dumps(topics[:15], ensure_ascii=False))
+    db.commit()
+    return _feed_payload(db)
+
+
+# ---------------------------------------------------------------- reading
+@app.post("/api/papers/<int:pid>/position")
+def save_position(pid):
+    b = request.get_json(silent=True) or {}
+    page, pages = _int(b.get("page")), _int(b.get("pages"))
+    if not page or not pages or page > pages:
+        return error("Invalid page")
+    db = get_db()
+    db.execute("UPDATE papers SET read_page=?, read_pages=? WHERE id=?", (page, pages, pid))  # not an edit: no sync stamp
+    db.commit()
+    return jsonify(ok=True)
+
+
+@app.post("/api/reading-time")
+def reading_time():
+    b = request.get_json(silent=True) or {}
+    pid, sec = _int(b.get("paper_id")), _int(b.get("seconds"))
+    if not pid or not sec or sec < 1:
+        return jsonify(ok=False)
+    db = get_db()
+    day = datetime.now().date().isoformat()   # this computer only, never synced or shared
+    db.execute("INSERT INTO reading_log (day, paper_id, seconds) VALUES (?, ?, ?) "
+               "ON CONFLICT(day, paper_id) DO UPDATE SET seconds = seconds + excluded.seconds", (day, pid, min(sec, 300)))
+    db.commit()
+    return jsonify(ok=True)
+
+
+@app.get("/api/stats")
+def reading_stats():
+    db = get_db()
+    papers = [dict(r) for r in db.execute("SELECT id, title, status, added_at, read_at FROM papers")]
+    log = [(r[0], r[1], r[2]) for r in db.execute("SELECT day, paper_id, seconds FROM reading_log")]
+    names = {r["id"]: r["name"] for r in db.execute("SELECT id, name FROM collections")}
+    labels: dict[int, list] = {}
+    for r in db.execute("SELECT paper_id, collection_id FROM paper_collections"):
+        if r[1] in names:
+            labels.setdefault(r[0], []).append(names[r[1]])
+    return jsonify(insights.reading_stats(papers, log, labels))
+
+
+# ---------------------------------------------------------------- labels
+_SUGG_CACHE: dict = {}
+
+
+@app.get("/api/papers/<int:pid>/label-suggestions")
+def label_suggestions(pid):
+    db = get_db()
+    sig = tuple(db.execute("SELECT COUNT(*), MAX(updated_at) FROM papers").fetchone()) + \
+        tuple(db.execute("SELECT COUNT(*), SUM(collection_id) FROM paper_collections").fetchone())
+    if _SUGG_CACHE.get("sig") != sig:
+        rows = db.execute("SELECT id, title, abstract, keywords, refs, openalex_id FROM papers").fetchall()
+        papers = []
+        for r in rows:
+            d = dict(r)
+            d["keywords"], d["refs"] = insights.json_or(d["keywords"], []), insights.json_or(d["refs"], [])
+            papers.append(d)
+        members: dict[int, set] = {}
+        for r in db.execute("SELECT paper_id, collection_id FROM paper_collections"):
+            members.setdefault(r[1], set()).add(r[0])
+        _SUGG_CACHE.clear()
+        _SUGG_CACHE.update(sig=sig, papers=papers, members=members, res={})
+    if pid not in _SUGG_CACHE["res"]:
+        target = next((p for p in _SUGG_CACHE["papers"] if p["id"] == pid), None)
+        if not target:
+            return error("Paper not found", 404)
+        _SUGG_CACHE["res"][pid] = insights.suggest_labels(target, _SUGG_CACHE["papers"], _SUGG_CACHE["members"])
+    return jsonify(suggestions=_SUGG_CACHE["res"][pid])
+
+
+def _scope_ids(db, args) -> set | None:
+    gid, sid = _int(args.get("group")), (args.get("share") or "").strip()
+    if gid:
+        ids = group_descendants(db, gid) if str(args.get("sub", "1")) == "1" else {gid}
+        return {r[0] for r in db.execute(
+            f"SELECT paper_id FROM paper_collections WHERE collection_id IN ({','.join('?' * len(ids))})", list(ids))}
+    if sid:
+        return {r[0] for r in db.execute("SELECT paper_id FROM paper_shares WHERE share_id=?", (sid,))}
+    return None
+
+
+@app.get("/api/gaps")
+def citation_gaps():
+    """How many works are cited by several papers of a label but are not in the library (computed
+    from the citation data already stored – nothing is looked up online)."""
+    db = get_db()
+    scope = _scope_ids(db, request.args)
+    rows = db.execute("SELECT id, refs, openalex_id FROM papers").fetchall()
+    owned = {r["openalex_id"] for r in rows if r["openalex_id"]}
+    refs = [insights.json_or(r["refs"], []) for r in rows if (scope is None or r["id"] in scope) and r["openalex_id"]]
+    refs = [x for x in refs if x]
+    if len(refs) < 3:
+        return jsonify(count=0, with_data=len(refs))
+    need = 2 if len(refs) <= 12 else 3
+    c = Counter(x for lst in refs for x in set(lst) if x not in owned)
+    return jsonify(count=sum(1 for _, n in c.items() if n >= need), min_count=need, with_data=len(refs))
+
+
+# ---------------------------------------------------------------- review tables
+def _review_row(db, args):
+    gid, sid = _int(args.get("group")), (args.get("share") or "").strip()
+    if gid:
+        return "collections", gid, db.execute("SELECT id, review FROM collections WHERE id=?", (gid,)).fetchone()
+    if sid:
+        return "shares", sid, db.execute("SELECT id, review FROM shares WHERE id=?", (sid,)).fetchone()
+    return None, None, None
+
+
+def _review_data(raw) -> dict:
+    d = insights.json_or(raw, {})
+    cols = d.get("cols") if isinstance(d.get("cols"), list) else None
+    if cols is None:
+        cols = [{"id": f"c{i}", "name": n} for i, n in enumerate(REVIEW_COLS, 1)]
+    return {"cols": cols, "cells": d.get("cells") if isinstance(d.get("cells"), dict) else {},
+            "widths": d.get("widths") if isinstance(d.get("widths"), dict) else {}}
+
+
+@app.get("/api/review")
+def get_review():
+    db = get_db()
+    table, key, row = _review_row(db, request.args)
+    if not row:
+        return error("Choose a label first.", 404)
+    return jsonify(_review_data(row["review"]))
+
+
+@app.put("/api/review")
+def put_review():
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    table, key, row = _review_row(db, b)
+    if not row:
+        return error("Choose a label first.", 404)
+    cols = []
+    for c in (b.get("cols") or [])[:24]:
+        cid = re.sub(r"[^a-z0-9]", "", str((c or {}).get("id") or ""))[:12]
+        if cid and cid not in {x["id"] for x in cols}:
+            cols.append({"id": cid, "name": " ".join(str(c.get("name") or "").split())[:60] or "Column"})
+    ids = {c["id"] for c in cols}
+    cells = {}
+    for uid, vals in (b.get("cells") or {}).items():
+        if isinstance(vals, dict) and re.fullmatch(r"[0-9a-f]{8,40}", str(uid)):
+            v = {k: str(t)[:5000] for k, t in vals.items() if k in ids and str(t).strip()}
+            if v:
+                cells[uid] = v
+    widths = {k: max(80, min(800, _int(v) or 0)) for k, v in (b.get("widths") or {}).items() if k in ids | {"paper"} and _int(v)}
+    data = json.dumps({"cols": cols, "cells": cells, "widths": widths}, ensure_ascii=False)
+    if len(data) > 3_000_000:
+        return error("This review table is too large to save.")
+    if table == "collections":   # private labels travel with your personal sync
+        db.execute("UPDATE collections SET review=?, updated_at=? WHERE id=?", (data, now(), key))
+    else:                        # shared labels: your table stays on this computer
+        db.execute("UPDATE shares SET review=? WHERE id=?", (data, key))
+    db.commit()
+    return jsonify(ok=True)
+
+
+# --------------------------------------------------------------------------- #
 # Updates (see updater.py)
 # --------------------------------------------------------------------------- #
 UPDATE_CACHE_HOURS = 12
@@ -2085,15 +2485,55 @@ def _after_install(res, notes=""):
     return jsonify(res)
 
 
+UPDATE_JOB = {"running": False, "result": None, "error": None}
+
+
+def _update_job(info):
+    try:
+        res = updater.install(info, BACKUP_DIR)
+        db = connect()
+        try:
+            _remember_update(db, res, info.get("notes", ""))
+            set_setting(db, "update_cache", "")
+            db.commit()
+        finally:
+            db.close()
+        res["restart"] = res.get("installed") != APP_VERSION or bool(res.get("git"))
+        UPDATE_JOB["result"] = res
+    except updater.UpdateError as exc:
+        UPDATE_JOB["error"] = str(exc)
+    except Exception as exc:  # noqa: BLE001 - shown in the Updates window
+        UPDATE_JOB["error"] = f"The update failed: {exc}"
+    finally:
+        updater._progress("done")
+        UPDATE_JOB["running"] = False
+
+
 @app.post("/api/update/install")
 def update_install():
+    """Install the newest version. With ?background=1 it runs in the background and the Updates window
+    follows it with /api/update/progress (progress bar); otherwise it answers when it's done."""
+    if UPDATE_JOB["running"]:
+        return jsonify(started=True, already=True)
     try:
         info = updater.check(current=APP_VERSION)
         if not info.get("available") and not info.get("git"):
             return error(f"You already have the latest version ({APP_VERSION}).")
+        if request.args.get("background") == "1":
+            updater.PROGRESS.clear()
+            updater._progress("start")
+            UPDATE_JOB.update(running=True, result=None, error=None, latest=info.get("latest"))
+            threading.Thread(target=_update_job, args=(info,), daemon=True).start()
+            return jsonify(started=True, latest=info.get("latest"))
         return _after_install(updater.install(info, BACKUP_DIR), info.get("notes", ""))
     except updater.UpdateError as exc:
         return error(str(exc), 502)
+
+
+@app.get("/api/update/progress")
+def update_progress():
+    return jsonify(running=UPDATE_JOB["running"], result=UPDATE_JOB["result"], error=UPDATE_JOB["error"],
+                   latest=UPDATE_JOB.get("latest"), **{k: v for k, v in updater.PROGRESS.items() if k != "t"})
 
 
 @app.post("/api/update/upload")

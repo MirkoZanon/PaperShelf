@@ -2,6 +2,30 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.5 – 2026-11-03
+
+- **✨ What's new** – a bell at the top lists recent papers by the researchers you follow (Researchers
+  tab) and on topics you choose to watch; checked with ⟳. *＋ Reading list* adds one, *✕* drops it.
+- **Retraction and correction alerts** – with ⟳, each paper is checked about once a week against
+  Crossref (journal notices and the Retraction Watch database) and OpenAlex. Retracted papers get a red
+  badge, corrected ones an amber one; the details panel links to the notice.
+- **Preprint → published version** – arXiv, bioRxiv, medRxiv… papers that came out in a journal get a
+  *📰 Published* badge; *Use the published version* updates title, journal, DOI and pages and keeps
+  labels, notes, highlights and the PDF.
+- **Needs attention** – a sidebar view with all the papers that have a badge. Logo menu → *Check my
+  library* checks everything now (can be turned off in Settings → General).
+- **Resume reading** – the reader reopens a PDF on the page where you stopped; papers you are reading
+  show a small progress bar in the list.
+- **Reading-list reminders** – papers waiting for more than 2 months are pointed out: keep, mark as read
+  or move to the Library without reading (delay in Settings → General).
+- **📊 Reading stats** – papers read per month, minutes of reading per week, streak, most-read papers and
+  labels. Only on your computer.
+- **Label suggestions** – the details panel suggests labels whose papers are similar (computed locally).
+- **Key references you don't have** – under a label's title, with a link to Discover.
+- **▦ Review table** – in the Library, a label as a table: one row per paper, your own columns, export to
+  CSV or Markdown; private labels' tables travel with your personal sync.
+- **Updates: progress bar** while the new version is downloaded and installed.
+
 ## 2.4.5 – 2026-11-03
 
 - **Windows: no more black windows flashing** over PaperShelf when it is started from its icon. The

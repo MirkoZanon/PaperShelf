@@ -7,6 +7,8 @@ const Reader = (() => {
   let pdfjs = null, doc = null, paper = null, scale = 1.2, anns = [], pages = {}, color = 'yellow';
   let noteTargets = [], noteTo = '-';  // where a highlight's note is also copied (paper notes)
   let isOpen = false, observer = null, token = 0, sizes = [];
+  // where you stopped (saved for "resume reading") and time spent reading (reading stats, this computer only)
+  let curPage = 1, savedPage = 0, posTimer = null, active = 0, secs = 0, tick = null, lastTick = 0;
 
   async function lib() {
     if (!pdfjs) {
@@ -20,7 +22,10 @@ const Reader = (() => {
   async function open(id, startPage = 0) {
     paper = paperById(id);
     if (!paper?.pdf_exists) { toast('There is no PDF for this paper yet.', 'error'); return; }
+    if (isOpen) flush();
     isOpen = true; anns = []; pages = {}; token++;
+    curPage = 1; savedPage = paper.read_page || 0; secs = 0; active = lastTick = Date.now();
+    clearInterval(tick); tick = setInterval(countTime, 15000);
     try { color = localStorage.getItem('papershelf-hl-color') || 'yellow'; } catch (e) { /* ignore */ }
     const r = root();
     r.innerHTML = `
@@ -28,7 +33,7 @@ const Reader = (() => {
         <button class="btn small" id="r-close" title="Close (Esc)">✕ Close</button>
         <div class="r-title" title="${esc(paper.title)}">${esc(paper.title)}</div>
         <div class="r-tools">
-          <span class="muted small" id="r-pageinfo"></span>
+          <span class="r-resume" id="r-resume"></span><span class="muted small" id="r-pageinfo"></span>
           <button class="btn small" id="r-zoom-out" title="Zoom out">−</button><span id="r-zoom" class="small r-zoom"></span><button class="btn small" id="r-zoom-in" title="Zoom in">+</button>
           <button class="btn small" id="r-fit">Fit width</button>
           <span class="r-colors" title="Highlight color">${Object.entries(COLORS).map(([k, v]) => `<button class="r-color ${k === color ? 'on' : ''}" data-color="${k}" style="background:${v}" title="${k}"></button>`).join('')}</span>
@@ -64,13 +69,39 @@ const Reader = (() => {
       fitWidth(false);
       layout(); list();
       if (startPage > 1 && startPage <= n) setTimeout(() => goTo({page: startPage, rects: [], id: 0}), 150);
+      else if (!startPage && savedPage > 1 && savedPage <= n && paper.status !== 'read') {   // resume where you stopped
+        setTimeout(() => goTo({page: savedPage, rects: [], id: 0}, {instant: true}), 150);
+        $('#r-resume').innerHTML = `<span class="muted small">Resumed on page ${savedPage}</span> <button class="linklike small" id="r-fromstart">from the start</button>`;
+        $('#r-fromstart').onclick = () => { $('#r-pages').scrollTo({top: 0}); $('#r-resume').innerHTML = ''; };
+        setTimeout(() => { const r = $('#r-resume'); if (r) r.innerHTML = ''; }, 12000);
+      }
     } catch (err) {
       $('#r-pages').innerHTML = `<div class="r-loading">Could not open this PDF: ${esc(err.message || String(err))}</div>`;
     }
   }
 
+  function countTime() {   // counts while the reader is visible and you did something in the last 2 minutes
+    const t = Date.now(), el = (t - lastTick) / 1000; lastTick = t;
+    if (isOpen && document.visibilityState === 'visible' && t - active < 120000) secs += Math.min(el, 20);
+    if (secs >= 60) sendTime();
+  }
+  function sendTime() {
+    if (!paper || secs < 5) return;
+    const body = JSON.stringify({paper_id: paper.id, seconds: Math.round(secs)}); secs = 0;
+    fetch('/api/reading-time', {method: 'POST', headers: {'Content-Type': 'application/json'}, body, keepalive: true}).catch(() => {});
+  }
+  function savePos() {
+    clearTimeout(posTimer);
+    if (!paper || !doc || curPage === savedPage) return;
+    savedPage = curPage; const p = paper;
+    p.read_page = curPage; p.read_pages = doc.numPages;
+    fetch(`/api/papers/${p.id}/position`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({page: curPage, pages: doc.numPages}), keepalive: true}).catch(() => {});
+  }
+  function flush() { savePos(); countTime(); sendTime(); }
+
   function close() {
     if (!isOpen) return;
+    flush(); clearInterval(tick);
     isOpen = false; token++;
     observer?.disconnect(); observer = null;
     try { doc?.destroy(); } catch (e) { /* ignore */ }
@@ -288,13 +319,13 @@ const Reader = (() => {
   function asText() {
     return `${paper.title}\n\n` + sorted().map(a => `p. ${a.page}: “${a.text}”${a.note ? `\n   Note: ${a.note}` : ''}`).join('\n\n');
   }
-  async function goTo(a) {
+  async function goTo(a, {instant = false} = {}) {
     const shell = $(`.r-page[data-page="${a.page}"]`); if (!shell) return;
     const box = $('#r-pages');
-    await renderPage(a.page);
+    if (!instant) await renderPage(a.page);
     const vp = pages[a.page]?.vp;
     const top = vp && a.rects[0] ? vpRect(vp, a.rects[0]).top : 0;
-    box.scrollTo({top: shell.offsetTop + top - 120, behavior: 'smooth'});
+    box.scrollTo({top: shell.offsetTop + top - (a.rects[0] ? 120 : 8), behavior: instant ? 'auto' : 'smooth'});
     setTimeout(() => { $$(`.hl[data-ann="${a.id}"]`).forEach(h => { h.classList.add('flash'); setTimeout(() => h.classList.remove('flash'), 1200); }); }, 350);
   }
 
@@ -304,6 +335,7 @@ const Reader = (() => {
     let cur = 1;
     for (const s of $$('.r-page', box)) { if (s.offsetTop <= mid) cur = +s.dataset.page; else break; }
     $('#r-pageinfo').textContent = `Page ${cur} / ${doc.numPages}`;
+    if (cur !== curPage) { curPage = cur; clearTimeout(posTimer); posTimer = setTimeout(savePos, 2500); }
   }
 
   function bind() {
@@ -312,7 +344,8 @@ const Reader = (() => {
     $('#r-zoom-out').onclick = () => zoom(1 / 1.15);
     $('#r-fit').onclick = () => fitWidth(true);
     $('.r-bar .r-colors').onclick = e => { const b = e.target.closest('[data-color]'); if (b) setColor(b.dataset.color); };
-    $('#r-pages').addEventListener('scroll', () => { hidePop(); pageInfo(); }, {passive: true});
+    $('#r-pages').addEventListener('scroll', () => { hidePop(); pageInfo(); active = Date.now(); }, {passive: true});
+    if (!root().dataset.act) { root().dataset.act = '1'; ['mousemove', 'keydown', 'mousedown', 'wheel'].forEach(ev => root().addEventListener(ev, () => { active = Date.now(); }, {passive: true})); }
     $('#r-pages').addEventListener('mouseup', e => {
       setTimeout(() => {
         if (selectionPopup()) return;
@@ -340,5 +373,7 @@ const Reader = (() => {
     return null;
   }
 
+  window.addEventListener('pagehide', () => { if (isOpen) flush(); });
+  document.addEventListener('visibilitychange', () => { if (isOpen && document.visibilityState === 'hidden') flush(); });
   return {open, close, isOpen: () => isOpen};
 })();

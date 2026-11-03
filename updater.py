@@ -52,6 +52,14 @@ class UpdateError(Exception):
     """Shown to the user as is."""
 
 
+# What the install running in the background is doing, for the progress bar in the Updates window.
+PROGRESS: dict = {}
+
+
+def _progress(stage: str, done: int | None = None, total: int | None = None):
+    PROGRESS.update(stage=stage, done=done, total=total, t=time.time())
+
+
 # --------------------------------------------------------------------------- versions
 def read_version(folder: Path = APP_DIR) -> str:
     try:
@@ -160,9 +168,15 @@ def download(url: str) -> bytes:
     r = _get(url, accept="application/octet-stream", timeout=120, stream=True)
     if r.status_code != 200:
         raise UpdateError(f"The download failed (GitHub answered {r.status_code}).")
+    try:
+        total = int(r.headers.get("Content-Length") or 0) or None
+    except ValueError:
+        total = None
     buf = io.BytesIO()
-    for chunk in r.iter_content(256 * 1024):
+    _progress("download", 0, total)
+    for chunk in r.iter_content(64 * 1024):
         buf.write(chunk)
+        _progress("download", buf.tell(), total)
         if buf.tell() > MAX_ZIP:
             raise UpdateError("The download is unexpectedly large – stopped.")
     return buf.getvalue()
@@ -239,7 +253,9 @@ def _replace(tmp: Path, dest: Path, tries: int = 25):
 
 def _replace_files(src: Path, dst: Path) -> list[str]:
     changed = []
-    for rel in _app_files(src):
+    files = list(_app_files(src))
+    for i, rel in enumerate(files):
+        _progress("files", i, len(files))
         s, d = src / rel, dst / rel
         if d.exists() and d.is_file() and _digest(s) == _digest(d):
             continue
@@ -257,6 +273,7 @@ def _install_requirements(folder: Path, before: bytes | None) -> str:
     req = folder / "requirements.txt"
     if not req.exists() or req.read_bytes() == before:
         return ""
+    _progress("libraries")
     r = subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-r", str(req)],
                        capture_output=True, text=True, timeout=600)
     if r.returncode != 0:
@@ -272,10 +289,12 @@ def install_zip(data: bytes, backup_dir: Path, *, folder: Path = APP_DIR, allow_
     current = read_version(folder)
     req_before = (folder / "requirements.txt").read_bytes() if (folder / "requirements.txt").exists() else None
     with tempfile.TemporaryDirectory(prefix="papershelf-update-") as tmp:
+        _progress("unpack")
         src = _extract(data, Path(tmp))
         new = read_version(src)
         if not is_newer(new, current) and not (allow_same and new == current):
             raise UpdateError(f"This is version {new}; you already have {current}. Nothing to do.")
+        _progress("backup")
         bk = backup(backup_dir, current, folder)
         changed = _replace_files(src, folder)
     warn = _install_requirements(folder, req_before)
@@ -287,7 +306,9 @@ def install_git(backup_dir: Path, folder: Path = APP_DIR) -> dict:
     if not shutil.which("git"):
         raise UpdateError("This app folder is a git copy but git isn't available – run “git pull” yourself.")
     req_before = (folder / "requirements.txt").read_bytes() if (folder / "requirements.txt").exists() else None
+    _progress("backup")
     bk = backup(backup_dir, current, folder)
+    _progress("git")
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
     r = subprocess.run(["git", "pull", "--ff-only"], cwd=folder, capture_output=True, text=True, env=env, timeout=180)
     if r.returncode != 0:
