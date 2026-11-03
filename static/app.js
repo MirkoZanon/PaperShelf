@@ -406,7 +406,9 @@ function rowHtml(p) {
     .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${labelIcon(G?.color, 'tag')}${esc(G?.name || '')}</span>`; }).join('')
     + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id) && !(rowHideS && rowHideS.has(sid)))
       .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Shared label: ${esc(sh.name)}">${labelIcon(sh.color, sh.role === 'member' ? 'link' : 'inbox')}${esc(sh.name)}</span>` : ''; }).join('');
-  return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''} ${p.status === 'reading' ? 'is-reading' : ''}" data-id="${p.id}" draggable="true">
+  // papers being read are marked in the app's green – or in the colour of their label
+  const rc = p.status === 'reading' && !rowHide && !rowHideS ? p.group_ids.map(g => lcol(state.groups.find(x => x.id === g)?.color)).find(Boolean) : '';
+  return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''} ${p.status === 'reading' ? 'is-reading' : ''}" data-id="${p.id}" draggable="true"${rc ? ` style="--rc:${rc}"` : ''}>
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
     <button class="star ${p.starred ? 'on' : ''}" title="${p.starred ? 'Unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
     <div><div class="row-title">${esc(p.title || 'Untitled')}</div>${meta ? `<div class="row-meta">${meta}</div>` : ''}${ftSnippet(p)}${chips || groups ? `<div class="row-chips">${groups}${chips}</div>` : ''}</div>
@@ -492,15 +494,17 @@ function groupedHtml(list) {
   };
   const scol = sid => lcol((state.shares || []).find(x => x.id === sid)?.color) || NOCOL;
   const stripe = cols => cols.length <= 1 ? (cols[0] || NOCOL) : `linear-gradient(to bottom, ${cols.map((c, i) => `${c} ${i * 100 / cols.length}% ${(i + 1) * 100 / cols.length}%`).join(', ')})`;
-  const section = (key, title, icon, arr, {depth = 0, sub = '', inner = '', count = null, cols = []} = {}) => {
+  const nRead = arr => arr.filter(p => p.status === 'reading').length;
+  const section = (key, title, icon, arr, {depth = 0, sub = '', inner = '', count = null, cols = [], rd = 0} = {}) => {
     if (!arr.length && !inner) return '';
     const closed = C.has(key), n = count ?? arr.length;
     const body = closed ? '' : (arr.length ? `<div class="grp-rows">${readingFirst(arr).map(p => rowHtml(p)).join('')}</div>` : '') + inner;
-    return `<div class="grp ${closed ? 'closed' : ''} ${depth ? 'nested' : ''}" style="--gc:${cols[0] || NOCOL};--stripe:${stripe(cols)}"><div class="grp-head" data-grp="${esc(key)}" draggable="true" title="Click to fold · drag to move this group"><span class="grp-car">${closed ? '▸' : '▾'}</span>${icon}<span class="grp-name">${title}</span><span class="grp-n">${n}</span>${sub ? `<span class="grp-sub">${sub}</span>` : ''}</div>${body}</div>`;
+    return `<div class="grp ${closed ? 'closed' : ''} ${depth ? 'nested' : ''}" style="--gc:${cols[0] || NOCOL};--stripe:${stripe(cols)};--rc:${cols[0] && cols[0] !== NOCOL ? cols[0] : 'var(--accent)'}"><div class="grp-head" data-grp="${esc(key)}" draggable="true" title="Click to fold · drag to move this group"><span class="grp-car">${closed ? '▸' : '▾'}</span>${icon}<span class="grp-name">${title}</span><span class="grp-n">${n}</span>${rd ? `<span class="grp-rd" title="Papers you are reading in this group">📖 ${rd} reading</span>` : ''}${sub ? `<span class="grp-sub">${sub}</span>` : ''}</div>${body}</div>`;
   };
   // your own order (dragging a group's title) first, then the natural one
   const R = state.grpRank || (state.grpRank = {});
-  const ranked = items => items.map((it, i) => ({...it, i})).sort((a, b) => (R[a.key] ?? 1e6 + a.i) - (R[b.key] ?? 1e6 + b.i)).map(it => it.html).join('');
+  const def = it => 1e6 + (it.rd ? 0 : 1e5) + it.i;  // groups with papers you are reading come first
+  const ranked = items => items.map((it, i) => ({...it, i})).sort((a, b) => (R[a.key] ?? def(a)) - (R[b.key] ?? def(b))).map(it => it.html).join('');
   const scope = state.view.type === 'group' ? state.view.id : null;  // inside a label: its sub-labels
   // shared labels are groups too, except when you are already looking at one label
   const withShares = !['group', 'share'].includes(state.view.type) && (state.shares || []).length;
@@ -530,7 +534,8 @@ function groupedHtml(list) {
       const title = parts.length ? parts.join('<span class="grp-plus">+</span>') : esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels');
       rowHide = new Set(gs); rowHideS = new Set(ss);
       const key = 'c:' + (scope || '') + ':' + k;
-      items.push({key, html: section(key, title, '', papers, {cols: shown.map(gcol).concat(ss.map(scol))})});
+      const rd = nRead(papers);
+      items.push({key, rd, html: section(key, title, '', papers, {cols: shown.map(gcol).concat(ss.map(scol)), rd})});
     }
     html = ranked(items);
   } else {
@@ -544,7 +549,8 @@ function groupedHtml(list) {
       const inner = kids.length ? ranked(drawItems(g.id, depth + 1)) : '';
       rowHide = new Set([g.id]); rowHideS = null;
       const multi = all.filter(p => p.group_ids.some(x => !ids.has(x)) || shareIds(p).length).length;
-      return {key: 'g:' + g.id, html: section('g:' + g.id, esc(g.name), labelIcon(g.color, 'tag'), direct, {depth, inner, count: all.length, cols: [gcol(g.id)],
+      const rd = nRead(all);
+      return {key: 'g:' + g.id, rd, html: section('g:' + g.id, esc(g.name), labelIcon(g.color, 'tag'), direct, {depth, inner, count: all.length, cols: [gcol(g.id)], rd,
         sub: [kids.length ? 'with its sub-labels' : '', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')})};
     }).filter(Boolean);
     const items = drawItems(scope, 0);
@@ -552,14 +558,14 @@ function groupedHtml(list) {
       const arr = list.filter(p => (p.share_ids || []).includes(x.id)); if (!arr.length) continue;
       rowHide = null; rowHideS = new Set([x.id]); push(arr);
       const multi = arr.filter(p => p.group_ids.length || shareIds(p).length > 1).length;
-      items.push({key: 's:' + x.id, html: section('s:' + x.id, esc(x.name), shareIcon(x.id), arr, {cols: [scol(x.id)], sub: ['shared label', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')})});
+      items.push({key: 's:' + x.id, rd: nRead(arr), html: section('s:' + x.id, esc(x.name), shareIcon(x.id), arr, {cols: [scol(x.id)], rd: nRead(arr), sub: ['shared label', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')})});
     }
     const scopeIds = scope ? descendants(scope) : null;
     const none = list.filter(p => scope ? !p.group_ids.some(x => x !== scope && scopeIds.has(x)) : !p.group_ids.length && !shareIds(p).length);
     rowHide = scope ? new Set([scope]) : null; rowHideS = null; push(none);
     const nk = 'g:none:' + (scope || '');
-    const nh = section(nk, esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels'), '', none);
-    if (nh) items.push({key: nk, html: nh});
+    const nh = section(nk, esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels'), '', none, {rd: nRead(none)});
+    if (nh) items.push({key: nk, rd: nRead(none), html: nh});
     html = ranked(items);
   }
   rowHide = null; rowHideS = null;

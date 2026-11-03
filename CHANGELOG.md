@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.4.3 – 2026-11-03
+
+- Papers you are reading are marked in the app's green – or in the colour of their label (in the
+  grouped view, the colour of the group).
+- Grouped view: groups with papers you are reading come first, with a *📖 n reading* badge (your own
+  order, if you moved groups, still wins).
+
 ## 2.4.2 – 2026-11-03
 
 - Grouped view: **drag a group's title** to move the group up or down (sub-labels move inside their
