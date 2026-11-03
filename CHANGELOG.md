@@ -2,6 +2,14 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.4 – 2026-11-03
+
+- **Papers grouped by label** (optional, Reading list and Library): the menu above the list offers
+  *Group by label* – a section per label with its sub-labels nested, papers with several labels in
+  each of them – or *Group by label combination* – each paper once, under the exact set of its
+  labels. Groups fold with a click; inside a selected label the groups are its sub-labels. The plain
+  list stays the default, and each page remembers its choice.
+
 ## 2.3.1 – 2026-10-30
 
 - **Researcher overview reorganised**: one *At a glance* card with impact (citations, h-index, i10,
