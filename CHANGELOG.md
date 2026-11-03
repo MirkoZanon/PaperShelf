@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.4.1 – 2026-11-03
+
+- Grouped view: **shared labels are groups too** (and part of the combinations), and every group is
+  now a **card in its label's colour** – tinted header, coloured edge (all the colours of a
+  combination), nested cards for sub-labels – so the groups are clearly separated.
+
 ## 2.4 – 2026-11-03
 
 - **Papers grouped by label** (optional, Reading list and Library): the menu above the list offers

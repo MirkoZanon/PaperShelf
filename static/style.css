@@ -936,17 +936,23 @@ body.tab-people:not(.side-auto) #people-main { padding-left: 64px; }
 .ho-headline { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; margin-bottom: 6px; }
 .ho-chart { width: 100%; max-width: 380px; height: auto; }
 
-/* ---------- 2.4: papers grouped by label */
+/* ---------- 2.4: papers grouped by label (2.4.1: cards in the label's colour) */
 #arr-sel { font-size: 13px; }
-.grp-bar { padding: 6px 10px 2px; }
-.grp { margin-left: calc(var(--d, 0) * 18px); }
-.grp-head { display: flex; align-items: center; gap: 7px; padding: 10px 10px 6px; cursor: pointer; user-select: none; border-bottom: 1px solid var(--border-soft); margin-bottom: 4px; }
-.grp-head:hover .grp-name { color: var(--accent); }
+.grp-bar { padding: 6px 4px 2px; }
+.grp { position: relative; margin: 10px 0 12px; border: 1px solid var(--border-soft); border-radius: 12px; overflow: hidden;
+  background: color-mix(in srgb, var(--gc) 4%, var(--panel)); }
+.grp::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--stripe); }
+.grp.nested { margin: 8px 8px 8px 22px; }
+.grp-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px 9px 16px; cursor: pointer; user-select: none;
+  background: color-mix(in srgb, var(--gc) 13%, var(--panel)); }
+.grp.nested > .grp-head { background: color-mix(in srgb, var(--gc) 8%, var(--panel)); padding-top: 7px; padding-bottom: 7px; }
+.grp-head:hover { filter: brightness(.98); }
 .grp-car { width: 12px; font-size: 11px; color: var(--muted); }
-.grp-name { font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.grp[style*="--d:1"] .grp-name, .grp[style*="--d:2"] .grp-name { font-size: 13px; }
-.grp-n { font-size: 12px; color: var(--faint); font-weight: 600; }
+.grp-name { font-weight: 700; font-size: 14.5px; display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.grp.nested .grp-name { font-size: 13.5px; }
+.grp-n { font-size: 12px; font-weight: 700; color: var(--muted); background: color-mix(in srgb, var(--gc) 18%, transparent); border-radius: 10px; padding: 0 7px; }
 .grp-sub { font-size: 11.5px; color: var(--muted); margin-left: auto; }
 .grp-part { display: inline-flex; align-items: center; gap: 4px; }
 .grp-plus { color: var(--faint); margin: 0 4px; font-weight: 400; }
-.grp.closed > .grp-head { border-bottom-color: transparent; margin-bottom: 0; }
+.grp-rows { padding: 4px 6px 4px 10px; }
+.grp-rows .row:hover, .grp-rows .row.open { background: var(--panel); }

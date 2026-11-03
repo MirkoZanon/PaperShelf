@@ -397,14 +397,14 @@ async function quickPdf(id, btn) {
     if (p.doi || p.url) openForLogin(id); else showPdfFail(id, err);
   }
 }
-let rowHide = null;  // while drawing a label's section, the chips of that section's labels are left out of its rows
+let rowHide = null, rowHideS = null;  // while drawing a label's section, the chips of that section's labels are left out of its rows
 function rowHtml(p) {
   const sel = state.selected.has(p.id);
   const chips = !state.details ? '' : p.keywords.slice(0, 5).map(k => `<span class="chip" data-kw="${esc(k.toLowerCase())}">${esc(k)}</span>`).join('');
   const meta = [shortAuthors(p), p.journal, p.year].filter(Boolean).map(esc).join(' · ');
   const groups = p.group_ids.filter(g => !(state.view.type === 'group' && g === state.view.id) && !(rowHide && [...rowHide].some(h => descendants(g).has(h))))
     .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${labelIcon(G?.color, 'tag')}${esc(G?.name || '')}</span>`; }).join('')
-    + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id))
+    + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id) && !(rowHideS && rowHideS.has(sid)))
       .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Shared label: ${esc(sh.name)}">${labelIcon(sh.color, sh.role === 'member' ? 'link' : 'inbox')}${esc(sh.name)}</span>` : ''; }).join('');
   return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''} ${p.status === 'reading' ? 'is-reading' : ''}" data-id="${p.id}" draggable="true">
     <input type="checkbox" class="sel" ${sel ? 'checked' : ''} aria-label="Select">
@@ -484,58 +484,76 @@ function groupedHtml(list) {
   const order = [], seen = new Set();
   const push = arr => arr.forEach(p => { if (!seen.has(p.id)) { seen.add(p.id); order.push(p.id); } });
   const C = state.grpClosed || (state.grpClosed = new Set());
-  const section = (key, title, icon, arr, {depth = 0, sub = '', inner = '', count = null} = {}) => {
+  const NOCOL = 'var(--faint)';
+  const gcol = g => {  // a sub-label without its own colour takes its parent's
+    let x = state.groups.find(y => y.id === g), guard = 0;
+    while (x && guard++ < 20) { if (lcol(x.color)) return lcol(x.color); x = state.groups.find(y => y.id === x.parent_id); }
+    return NOCOL;
+  };
+  const scol = sid => lcol((state.shares || []).find(x => x.id === sid)?.color) || NOCOL;
+  const stripe = cols => cols.length <= 1 ? (cols[0] || NOCOL) : `linear-gradient(to bottom, ${cols.map((c, i) => `${c} ${i * 100 / cols.length}% ${(i + 1) * 100 / cols.length}%`).join(', ')})`;
+  const section = (key, title, icon, arr, {depth = 0, sub = '', inner = '', count = null, cols = []} = {}) => {
     if (!arr.length && !inner) return '';
     const closed = C.has(key), n = count ?? arr.length;
-    const body = closed ? '' : (arr.length ? readingFirst(arr).map(p => rowHtml(p)).join('') : '') + inner;
-    return `<div class="grp ${closed ? 'closed' : ''}" style="--d:${depth}"><div class="grp-head" data-grp="${esc(key)}"><span class="grp-car">${closed ? '▸' : '▾'}</span>${icon}<span class="grp-name">${title}</span><span class="grp-n">${n}</span>${sub ? `<span class="grp-sub">${sub}</span>` : ''}</div>${body}</div>`;
+    const body = closed ? '' : (arr.length ? `<div class="grp-rows">${readingFirst(arr).map(p => rowHtml(p)).join('')}</div>` : '') + inner;
+    return `<div class="grp ${closed ? 'closed' : ''} ${depth ? 'nested' : ''}" style="--gc:${cols[0] || NOCOL};--stripe:${stripe(cols)}"><div class="grp-head" data-grp="${esc(key)}"><span class="grp-car">${closed ? '▸' : '▾'}</span>${icon}<span class="grp-name">${title}</span><span class="grp-n">${n}</span>${sub ? `<span class="grp-sub">${sub}</span>` : ''}</div>${body}</div>`;
   };
   const scope = state.view.type === 'group' ? state.view.id : null;  // inside a label: its sub-labels
-  const inTree = gid => descendants(gid);
+  // shared labels are groups too, except when you are already looking at one label
+  const withShares = !['group', 'share'].includes(state.view.type) && (state.shares || []).length;
+  const shareName = sid => (state.shares || []).find(x => x.id === sid)?.name || 'Shared label';
+  const shareIcon = sid => { const x = (state.shares || []).find(y => y.id === sid); return labelIcon(x?.color, x?.role === 'member' ? 'link' : 'inbox'); };
+  const shareIds = p => withShares ? (p.share_ids || []).filter(sid => (state.shares || []).some(x => x.id === sid)) : [];
   let html = '';
   if (state.grpMode === 'combo') {
-    // each paper once, under the exact combination of its labels (only labels inside the scope)
+    // each paper once, under the exact combination of its labels (personal + shared)
     const allowed = scope ? descendants(scope) : null;
     const buckets = new Map();
     for (const p of list) {
       const gs = p.group_ids.filter(g => (!allowed || allowed.has(g)) && g !== scope).sort((a, b) => groupPath(a).localeCompare(groupPath(b)));
-      const k = gs.join(',');
-      if (!buckets.has(k)) buckets.set(k, []);
-      buckets.get(k).push(p);
+      const ss = shareIds(p).sort((a, b) => shareName(a).localeCompare(shareName(b)));
+      const k = gs.join(',') + '|' + ss.join(',');
+      if (!buckets.has(k)) buckets.set(k, {gs, ss, papers: []});
+      buckets.get(k).papers.push(p);
     }
-    const keys = [...buckets.keys()].sort((a, b) => (a === '') - (b === '') || buckets.get(b).length - buckets.get(a).length);
+    const keys = [...buckets.keys()].sort((a, b) => (a === '|') - (b === '|') || buckets.get(b).papers.length - buckets.get(a).papers.length);
     for (const k of keys) {
-      const arr = buckets.get(k); push(arr);
-      const gs = k ? k.split(',').map(Number) : [];
+      const {gs, ss, papers} = buckets.get(k); push(papers);
       // a label and its own sub-label read as one: "Thesis › Methods"
       const shown = gs.filter(g => !gs.some(o => o !== g && descendants(g).has(o)));
-      const title = shown.length ? shown.map(g => `<span class="grp-part">${labelIcon(state.groups.find(x => x.id === g)?.color, 'tag')}${esc(groupPath(g).replace(/ \/ /g, ' › '))}</span>`).join('<span class="grp-plus">+</span>')
-        : esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels');
-      rowHide = new Set(gs);
-      html += section('c:' + (scope || '') + ':' + k, title, '', arr);
+      const parts = shown.map(g => `<span class="grp-part">${labelIcon(state.groups.find(x => x.id === g)?.color, 'tag')}${esc(groupPath(g))}</span>`)
+        .concat(ss.map(sid => `<span class="grp-part">${shareIcon(sid)}${esc(shareName(sid))}</span>`));
+      const title = parts.length ? parts.join('<span class="grp-plus">+</span>') : esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels');
+      rowHide = new Set(gs); rowHideS = new Set(ss);
+      html += section('c:' + (scope || '') + ':' + k, title, '', papers, {cols: shown.map(gcol).concat(ss.map(scol))});
     }
   } else {
     const draw = (pid, depth) => childrenOf(pid).map(g => {
-      const ids = inTree(g.id);
+      const ids = descendants(g.id);
       const all = list.filter(p => p.group_ids.some(x => ids.has(x)));
       if (!all.length) return '';
       const kids = childrenOf(g.id);
       const direct = kids.length ? all.filter(p => !p.group_ids.some(x => x !== g.id && ids.has(x))) : all;
-      rowHide = new Set([g.id]); push(direct);
-      const rows = direct;
+      rowHide = new Set([g.id]); rowHideS = null; push(direct);
       const inner = kids.length ? draw(g.id, depth + 1) : '';
-      rowHide = new Set([g.id]);
-      const multi = all.filter(p => p.group_ids.filter(x => !ids.has(x)).length).length;
-      return section('g:' + g.id, esc(g.name), labelIcon(g.color, 'tag'), rows, {depth, inner, count: all.length,
+      rowHide = new Set([g.id]); rowHideS = null;
+      const multi = all.filter(p => p.group_ids.some(x => !ids.has(x)) || shareIds(p).length).length;
+      return section('g:' + g.id, esc(g.name), labelIcon(g.color, 'tag'), direct, {depth, inner, count: all.length, cols: [gcol(g.id)],
         sub: [kids.length ? 'with its sub-labels' : '', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')});
     }).join('');
     html = draw(scope, 0);
+    if (withShares) for (const x of [...state.shares].sort((a, b) => a.name.localeCompare(b.name))) {
+      const arr = list.filter(p => (p.share_ids || []).includes(x.id)); if (!arr.length) continue;
+      rowHide = null; rowHideS = new Set([x.id]); push(arr);
+      const multi = arr.filter(p => p.group_ids.length || shareIds(p).length > 1).length;
+      html += section('s:' + x.id, esc(x.name), shareIcon(x.id), arr, {cols: [scol(x.id)], sub: ['shared label', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')});
+    }
     const scopeIds = scope ? descendants(scope) : null;
-    const none = list.filter(p => scope ? !p.group_ids.some(x => x !== scope && scopeIds.has(x)) : !p.group_ids.length);
-    rowHide = scope ? new Set([scope]) : null; push(none);
+    const none = list.filter(p => scope ? !p.group_ids.some(x => x !== scope && scopeIds.has(x)) : !p.group_ids.length && !shareIds(p).length);
+    rowHide = scope ? new Set([scope]) : null; rowHideS = null; push(none);
     html += section('g:none:' + (scope || ''), esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels'), '', none);
   }
-  rowHide = null;
+  rowHide = null; rowHideS = null;
   state.visible = order;
   return `<div class="grp-bar muted small">${list.length} paper${list.length === 1 ? '' : 's'} in ${state.grpMode === 'combo' ? 'groups of labels – each paper once' : 'labels – a paper with several labels appears in each'} · <button class="linklike" data-grp-all="close">fold all</button> · <button class="linklike" data-grp-all="open">unfold all</button></div>` + html;
 }
