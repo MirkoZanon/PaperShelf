@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.4.5 – 2026-11-03
+
+- **Windows: no more black windows flashing** over PaperShelf when it is started from its icon. The
+  commands it runs in the background (git for sync, pip, PowerShell…) now run hidden, so the
+  PaperShelf window stays in front during updates and syncs.
+
 ## 2.4.4 – 2026-11-03
 
 - **Windows: updating restarts PaperShelf by itself again.** The new version now starts as its own

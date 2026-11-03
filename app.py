@@ -57,6 +57,17 @@ DEFAULT_PDF_DIR = HOME / "PDFs"
 PORT = int(os.environ.get("PAPERSHELF_PORT", "5055"))
 LOG_PATH = HOME / "papershelf.log"
 
+if os.name == "nt" and (sys.stdout is None or sys.__stdout__ is None):
+    # Started from the icon (pythonw, no console): every command PaperShelf runs in the background
+    # (git for sync, pip, PowerShell…) would otherwise flash a black console window over the app.
+    _popen_init = subprocess.Popen.__init__
+
+    def _no_console_window(self, *a, **k):
+        if not k.get("creationflags"):
+            k["creationflags"] = 0x08000000  # CREATE_NO_WINDOW
+        _popen_init(self, *a, **k)
+    subprocess.Popen.__init__ = _no_console_window
+
 if sys.stdout is None or sys.stderr is None:  # started without a console (Windows icon, pythonw)
     try:
         HOME.mkdir(parents=True, exist_ok=True)
