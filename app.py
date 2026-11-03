@@ -3176,6 +3176,12 @@ def main():
     args = ap.parse_args()
     url = f"http://127.0.0.1:{args.port}"
 
+    if os.environ.pop("PAPERSHELF_WAIT_PORT", ""):  # started by an update: the old version is still closing
+        for _ in range(150):
+            if not _port_in_use(args.port):
+                break
+            time.sleep(0.2)
+        print(f"[{now()}] PaperShelf {APP_VERSION}: started after an update")
     if _port_in_use(args.port):
         print(f"PaperShelf already seems to be running - opening {url}")
         launcher.open_ui(url, _own_window_setting())
@@ -3219,6 +3225,11 @@ def main():
         print("\n  PaperShelf has stopped. You can close this window.\n")
     if SERVER["restart"]:
         print("\n  Restarting PaperShelf with the new version...\n")
+        if os.name == "nt" and updater.spawn_detached():
+            # Windows: the new version runs as its own background process; this one ends here
+            print("  PaperShelf restarted in the background with the new version – you can close this window.\n")
+            sys.stdout.flush()
+            os._exit(0)
         updater.relaunch()
 
 

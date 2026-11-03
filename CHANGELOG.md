@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.4.4 – 2026-11-03
+
+- **Windows: updating restarts PaperShelf by itself again.** The new version now starts as its own
+  background process that waits for the old one to close, instead of being started from inside the
+  closing one (which on Windows could leave the update window waiting forever).
+- Windows: replacing the app's files is patient when an antivirus scan briefly locks a file.
+
 ## 2.4.3 – 2026-11-03
 
 - Papers you are reading are marked in the app's green – or in the colour of their label (in the

@@ -223,6 +223,20 @@ def _digest(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
+def _replace(tmp: Path, dest: Path, tries: int = 25):
+    """os.replace, patient on Windows: an antivirus scanning the file just written (or a window
+    showing it) can lock it for a moment."""
+    for i in range(tries):
+        try:
+            os.replace(tmp, dest)
+            return
+        except PermissionError:
+            if i == tries - 1:
+                raise UpdateError(f"Windows didn't let PaperShelf replace {dest.name} (the file is in use – "
+                                  "maybe by an antivirus scan). Try again in a minute.")
+            time.sleep(0.4)
+
+
 def _replace_files(src: Path, dst: Path) -> list[str]:
     changed = []
     for rel in _app_files(src):
@@ -234,7 +248,7 @@ def _replace_files(src: Path, dst: Path) -> list[str]:
         shutil.copyfile(s, tmp)
         if rel.suffix in (".command", ".sh") or rel.name == "app.py":
             tmp.chmod(0o755)
-        os.replace(tmp, d)   # new file, so a launcher that is still running keeps reading its old copy
+        _replace(tmp, d)   # new file, so a launcher that is still running keeps reading its old copy
         changed.append(rel.as_posix())
     return changed
 
@@ -300,6 +314,25 @@ def install(info: dict, backup_dir: Path) -> dict:
 def restart_command(argv=None, browser=False) -> list[str]:
     args = [a for a in (argv if argv is not None else sys.argv[1:]) if a != "--no-browser"]
     return [sys.executable, str(APP_DIR / "app.py"), *args] + ([] if browser else ["--no-browser"])
+
+
+def spawn_detached(argv=None, browser=False) -> bool:
+    """Windows: start the new version as its own process (no console, not tied to this one) that
+    waits until this one has freed the port. This process can then simply exit."""
+    cmd = restart_command(argv, browser)
+    exe = Path(sys.executable)
+    pyw = exe.with_name("pythonw.exe")
+    if pyw.exists():
+        cmd[0] = str(pyw)
+    flags = getattr(subprocess, "DETACHED_PROCESS", 0x8) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+    env = dict(os.environ, PAPERSHELF_WAIT_PORT="1")
+    try:
+        subprocess.Popen(cmd, cwd=str(APP_DIR), env=env, creationflags=flags, close_fds=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
+    except OSError as exc:
+        print(f"  Could not start the new version by itself: {exc}")
+        return False
 
 
 def relaunch(argv=None, browser=False):

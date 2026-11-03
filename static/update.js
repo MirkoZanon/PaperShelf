@@ -123,7 +123,7 @@ const Updates = (() => {
       } catch (e) { /* still restarting */ }
       await new Promise(r => setTimeout(r, 1000));
     }
-    progress('The new version is installed but PaperShelf did not come back by itself: close its window and open the start file again.');
+    progress('The new version is installed but PaperShelf did not come back by itself. Open PaperShelf again from its icon (or the start file) – it will start with the new version. If this happens every time, send the file <code>papershelf.log</code> from your library folder.');
   }
 
   // after an update: say so once, with what's new
