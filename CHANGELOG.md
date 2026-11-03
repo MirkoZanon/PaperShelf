@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.4.2 – 2026-11-03
+
+- Grouped view: **drag a group's title** to move the group up or down (sub-labels move inside their
+  label). The order is remembered; *reset order* goes back to the usual one.
+
 ## 2.4.1 – 2026-11-03
 
 - Grouped view: **shared labels are groups too** (and part of the combinations), and every group is

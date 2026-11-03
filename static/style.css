@@ -956,3 +956,7 @@ body.tab-people:not(.side-auto) #people-main { padding-left: 64px; }
 .grp-plus { color: var(--faint); margin: 0 4px; font-weight: 400; }
 .grp-rows { padding: 4px 6px 4px 10px; }
 .grp-rows .row:hover, .grp-rows .row.open { background: var(--panel); }
+.grp.grp-dragging { opacity: .45; }
+.grp.grp-drop-before { box-shadow: 0 -4px 0 0 var(--accent); }
+.grp.grp-drop-after { box-shadow: 0 4px 0 0 var(--accent); }
+.grp-head[draggable="true"] { cursor: grab; }

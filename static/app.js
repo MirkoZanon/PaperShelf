@@ -33,11 +33,11 @@ function loadPrefs() {
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
     if (p.tab === 'people') state.tab = 'people';
-    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.arrange = p.arrange || {}; state.grpMode = p.grpMode === 'combo' ? 'combo' : 'each'; state.grpClosed = new Set(p.grpClosed || []); state.closed = new Set(p.v >= 2 ? (p.closed || []) : []); state.sidePin = p.sidePin || {};  // v2.2.1: sections open again once
+    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.arrange = p.arrange || {}; state.grpMode = p.grpMode === 'combo' ? 'combo' : 'each'; state.grpClosed = new Set(p.grpClosed || []); state.grpRank = p.grpRank || {}; state.closed = new Set(p.v >= 2 ? (p.closed || []) : []); state.sidePin = p.sidePin || {};  // v2.2.1: sections open again once
   } catch (e) { /* storage unavailable */ }
 }
 function savePrefs() {
-  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, arrange: state.arrange || {}, grpMode: state.grpMode || 'each', grpClosed: [...(state.grpClosed || [])], closed: [...(state.closed || [])], sidePin: state.sidePin || {}, v: 2})); }
+  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, arrange: state.arrange || {}, grpMode: state.grpMode || 'each', grpClosed: [...(state.grpClosed || [])], grpRank: state.grpRank || {}, closed: [...(state.closed || [])], sidePin: state.sidePin || {}, v: 2})); }
   catch (e) { /* ignore */ }
 }
 
@@ -496,8 +496,11 @@ function groupedHtml(list) {
     if (!arr.length && !inner) return '';
     const closed = C.has(key), n = count ?? arr.length;
     const body = closed ? '' : (arr.length ? `<div class="grp-rows">${readingFirst(arr).map(p => rowHtml(p)).join('')}</div>` : '') + inner;
-    return `<div class="grp ${closed ? 'closed' : ''} ${depth ? 'nested' : ''}" style="--gc:${cols[0] || NOCOL};--stripe:${stripe(cols)}"><div class="grp-head" data-grp="${esc(key)}"><span class="grp-car">${closed ? '▸' : '▾'}</span>${icon}<span class="grp-name">${title}</span><span class="grp-n">${n}</span>${sub ? `<span class="grp-sub">${sub}</span>` : ''}</div>${body}</div>`;
+    return `<div class="grp ${closed ? 'closed' : ''} ${depth ? 'nested' : ''}" style="--gc:${cols[0] || NOCOL};--stripe:${stripe(cols)}"><div class="grp-head" data-grp="${esc(key)}" draggable="true" title="Click to fold · drag to move this group"><span class="grp-car">${closed ? '▸' : '▾'}</span>${icon}<span class="grp-name">${title}</span><span class="grp-n">${n}</span>${sub ? `<span class="grp-sub">${sub}</span>` : ''}</div>${body}</div>`;
   };
+  // your own order (dragging a group's title) first, then the natural one
+  const R = state.grpRank || (state.grpRank = {});
+  const ranked = items => items.map((it, i) => ({...it, i})).sort((a, b) => (R[a.key] ?? 1e6 + a.i) - (R[b.key] ?? 1e6 + b.i)).map(it => it.html).join('');
   const scope = state.view.type === 'group' ? state.view.id : null;  // inside a label: its sub-labels
   // shared labels are groups too, except when you are already looking at one label
   const withShares = !['group', 'share'].includes(state.view.type) && (state.shares || []).length;
@@ -517,6 +520,7 @@ function groupedHtml(list) {
       buckets.get(k).papers.push(p);
     }
     const keys = [...buckets.keys()].sort((a, b) => (a === '|') - (b === '|') || buckets.get(b).papers.length - buckets.get(a).papers.length);
+    const items = [];
     for (const k of keys) {
       const {gs, ss, papers} = buckets.get(k); push(papers);
       // a label and its own sub-label read as one: "Thesis › Methods"
@@ -525,37 +529,42 @@ function groupedHtml(list) {
         .concat(ss.map(sid => `<span class="grp-part">${shareIcon(sid)}${esc(shareName(sid))}</span>`));
       const title = parts.length ? parts.join('<span class="grp-plus">+</span>') : esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels');
       rowHide = new Set(gs); rowHideS = new Set(ss);
-      html += section('c:' + (scope || '') + ':' + k, title, '', papers, {cols: shown.map(gcol).concat(ss.map(scol))});
+      const key = 'c:' + (scope || '') + ':' + k;
+      items.push({key, html: section(key, title, '', papers, {cols: shown.map(gcol).concat(ss.map(scol))})});
     }
+    html = ranked(items);
   } else {
-    const draw = (pid, depth) => childrenOf(pid).map(g => {
+    const drawItems = (pid, depth) => childrenOf(pid).map(g => {
       const ids = descendants(g.id);
       const all = list.filter(p => p.group_ids.some(x => ids.has(x)));
-      if (!all.length) return '';
+      if (!all.length) return null;
       const kids = childrenOf(g.id);
       const direct = kids.length ? all.filter(p => !p.group_ids.some(x => x !== g.id && ids.has(x))) : all;
       rowHide = new Set([g.id]); rowHideS = null; push(direct);
-      const inner = kids.length ? draw(g.id, depth + 1) : '';
+      const inner = kids.length ? ranked(drawItems(g.id, depth + 1)) : '';
       rowHide = new Set([g.id]); rowHideS = null;
       const multi = all.filter(p => p.group_ids.some(x => !ids.has(x)) || shareIds(p).length).length;
-      return section('g:' + g.id, esc(g.name), labelIcon(g.color, 'tag'), direct, {depth, inner, count: all.length, cols: [gcol(g.id)],
-        sub: [kids.length ? 'with its sub-labels' : '', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')});
-    }).join('');
-    html = draw(scope, 0);
+      return {key: 'g:' + g.id, html: section('g:' + g.id, esc(g.name), labelIcon(g.color, 'tag'), direct, {depth, inner, count: all.length, cols: [gcol(g.id)],
+        sub: [kids.length ? 'with its sub-labels' : '', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')})};
+    }).filter(Boolean);
+    const items = drawItems(scope, 0);
     if (withShares) for (const x of [...state.shares].sort((a, b) => a.name.localeCompare(b.name))) {
       const arr = list.filter(p => (p.share_ids || []).includes(x.id)); if (!arr.length) continue;
       rowHide = null; rowHideS = new Set([x.id]); push(arr);
       const multi = arr.filter(p => p.group_ids.length || shareIds(p).length > 1).length;
-      html += section('s:' + x.id, esc(x.name), shareIcon(x.id), arr, {cols: [scol(x.id)], sub: ['shared label', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')});
+      items.push({key: 's:' + x.id, html: section('s:' + x.id, esc(x.name), shareIcon(x.id), arr, {cols: [scol(x.id)], sub: ['shared label', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')})});
     }
     const scopeIds = scope ? descendants(scope) : null;
     const none = list.filter(p => scope ? !p.group_ids.some(x => x !== scope && scopeIds.has(x)) : !p.group_ids.length && !shareIds(p).length);
     rowHide = scope ? new Set([scope]) : null; rowHideS = null; push(none);
-    html += section('g:none:' + (scope || ''), esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels'), '', none);
+    const nk = 'g:none:' + (scope || '');
+    const nh = section(nk, esc(scope ? `Only “${state.groups.find(x => x.id === scope)?.name || ''}”` : 'Without labels'), '', none);
+    if (nh) items.push({key: nk, html: nh});
+    html = ranked(items);
   }
   rowHide = null; rowHideS = null;
   state.visible = order;
-  return `<div class="grp-bar muted small">${list.length} paper${list.length === 1 ? '' : 's'} in ${state.grpMode === 'combo' ? 'groups of labels – each paper once' : 'labels – a paper with several labels appears in each'} · <button class="linklike" data-grp-all="close">fold all</button> · <button class="linklike" data-grp-all="open">unfold all</button></div>` + html;
+  return `<div class="grp-bar muted small">${list.length} paper${list.length === 1 ? '' : 's'} in ${state.grpMode === 'combo' ? 'groups of labels – each paper once' : 'labels – a paper with several labels appears in each'} · <button class="linklike" data-grp-all="close">fold all</button> · <button class="linklike" data-grp-all="open">unfold all</button> · drag a group's title to move it${Object.keys(state.grpRank || {}).length ? ' · <button class="linklike" data-grp-reset>reset order</button>' : ''}</div>` + html;
 }
 
 /* ------------------------------------------------------------------ detail */
@@ -1530,7 +1539,41 @@ function bind() {
     if (v !== 'list') state.grpMode = v;
     savePrefs(); renderList();
   });
+  // moving a group: drag its title onto another group of the same level
+  let grpDrag = null;
+  const grpSiblings = head => [...head.parentElement.parentElement.children].filter(el => el.classList.contains('grp')).map(el => el.querySelector(':scope > .grp-head'));
+  $('#list').addEventListener('dragstart', e => {
+    const h = e.target.closest('.grp-head'); if (!h) return;
+    grpDrag = h; e.dataTransfer.setData('text/plain', h.dataset.grp); e.dataTransfer.effectAllowed = 'move';
+    e.stopPropagation(); h.parentElement.classList.add('grp-dragging');
+  });
+  $('#list').addEventListener('dragover', e => {
+    if (!grpDrag) return;
+    const sib = grpSiblings(grpDrag);
+    let g = e.target.closest('.grp'), h = null;
+    while (g) { const hh = g.querySelector(':scope > .grp-head'); if (sib.includes(hh)) { h = hh; break; } g = g.parentElement.closest('.grp'); }
+    $$('#list .grp-drop-before, #list .grp-drop-after').forEach(x => x.classList.remove('grp-drop-before', 'grp-drop-after'));
+    if (!h || h === grpDrag) return;
+    e.preventDefault();
+    const r = h.parentElement.getBoundingClientRect();
+    h.parentElement.classList.add(e.clientY < r.top + Math.min(r.height / 2, 40) ? 'grp-drop-before' : 'grp-drop-after');
+  });
+  $('#list').addEventListener('drop', e => {
+    if (!grpDrag) return;
+    const target = $('#list .grp-drop-before, #list .grp-drop-after'); e.preventDefault();
+    if (target) {
+      const before = target.classList.contains('grp-drop-before');
+      const keys = grpSiblings(grpDrag).map(h => h.dataset.grp).filter(k => k !== grpDrag.dataset.grp);
+      const t = target.querySelector(':scope > .grp-head').dataset.grp;
+      keys.splice(keys.indexOf(t) + (before ? 0 : 1), 0, grpDrag.dataset.grp);
+      state.grpRank = {...(state.grpRank || {})}; keys.forEach((k, i) => { state.grpRank[k] = i; });
+      savePrefs();
+    }
+    grpDrag = null; renderList();
+  });
+  $('#list').addEventListener('dragend', () => { if (grpDrag) { grpDrag = null; renderList(); } });
   $('#list').addEventListener('click', e => {
+    if (e.target.closest('[data-grp-reset]')) { state.grpRank = {}; savePrefs(); renderList(); return; }
     const h = e.target.closest('[data-grp]');
     if (h) { const k = h.dataset.grp; state.grpClosed.has(k) ? state.grpClosed.delete(k) : state.grpClosed.add(k); savePrefs(); renderList(); return; }
     const a = e.target.closest('[data-grp-all]');
