@@ -123,8 +123,8 @@ async function loadLibrary() {
   updateSyncButton();
   const ids = new Set(state.papers.map(p => p.id));
   state.selected = new Set([...state.selected].filter(i => ids.has(i)));
-  if (state.view.type === 'group' && !state.groups.some(g => g.id === state.view.id)) state.view = {type: 'all'};
-  if (state.view.type === 'share' && !state.shares.some(x => x.id === state.view.id)) state.view = {type: 'all'};
+  if (state.view.type === 'group' && !state.groups.some(g => g.id === state.view.id)) state.view = homeView();
+  if (state.view.type === 'share' && !state.shares.some(x => x.id === state.view.id)) state.view = homeView();
   if (state.openId && !ids.has(state.openId)) state.openId = null;
   renderAll();
 }
@@ -193,7 +193,7 @@ async function deleteGroup(gid) {
   if (!ok) return;
   try {
     await api(`/api/groups/${gid}`, {method: 'DELETE'});
-    if (state.view.type === 'group' && descendants(gid).has(state.view.id)) state.view = {type: 'all'};
+    if (state.view.type === 'group' && descendants(gid).has(state.view.id)) state.view = homeView();
     await loadLibrary();
   } catch (err) { toast(err.message, 'error'); }
 }
@@ -246,6 +246,7 @@ function viewTitle() {
     || (v.type === 'status' ? (v.value === 'reading' ? 'Reading now' : STATUS_LABEL[v.value]) : v.type === 'group' ? groupPath(v.id)
       : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Shared list') : 'Papers');
 }
+const homeView = () => ({type: state.area === 'reading' ? 'reading' : 'all'});   // the whole list of the page
 function setView(view) {
   state.view = view; state.selected.clear(); state.keyword = null; state.lastIndex = null;
   renderSidebar(); renderList(); renderMode(true);
@@ -289,16 +290,12 @@ async function setGroupColor(gid, color) {
 
 function renderSidebar() {
   const P = state.papers, R = areaPapers(), reading = state.area === 'reading';
-  const main = reading ? [
-    ['reading', 'Reading list', '📖', R.length],
-    ['status:reading', 'Reading now', '◐', P.filter(p => p.status === 'reading').length],
-    ['status:to_read', 'To read', '○', P.filter(p => p.status === 'to_read').length],
-    ['starred', 'Starred', '★', R.filter(p => p.starred).length],
-  ] : [
+  // the reading list's sidebar has only labels and keywords: what you are reading is already on top of the list
+  const main = reading ? [] : [
     ['all', 'All papers', '📚', P.length],
   ];
-  const nAtt = R.filter(Smart.attention).length;   // retracted / corrected papers, preprints now published
-  if (nAtt || state.view.type === 'attention') main.push(['attention', 'Needs attention', '⚠', nAtt]);
+  const nAtt = reading ? 0 : R.filter(Smart.attention).length;   // retracted / corrected papers, preprints now published
+  if (!reading && (nAtt || state.view.type === 'attention')) main.push(['attention', 'Needs attention', '⚠', nAtt]);
   const more = reading ? [] : [
     ['status:read', 'Read', '●', P.filter(p => p.status === 'read').length],
     ['starred', 'Starred', '★', P.filter(p => p.starred).length],
@@ -307,7 +304,8 @@ function renderSidebar() {
     ['unfiled', 'Without labels', '▫︎', P.filter(p => !p.group_ids.length).length],
     ['nopdf', 'Without PDF', '⌀', P.filter(p => !p.pdf_exists).length],
   ];
-  $('#nav-head').textContent = reading ? 'Reading list' : 'Library';
+  $('#nav-head').textContent = reading ? '' : 'Library';
+  $('#nav').hidden = reading;
   const key = viewKey();
   const open = state.navMore || more.some(([k]) => k === key);
   const item = ([k, label, ico, n]) => `<div class="nav-item ${key === k ? 'active' : ''}" data-view="${k}"><span class="ico">${ico}</span><span class="label">${label}</span><span class="count">${n}</span></div>`;
@@ -432,7 +430,8 @@ function emptyHtml() {
 function renderList() {
   const list = filteredPapers();
   state.visible = list.map(p => p.id);
-  $('#view-title').textContent = viewTitle();
+  $('#view-title').innerHTML = esc(viewTitle()) + (['group', 'share', 'attention'].includes(state.view.type) || state.view.type !== homeView().type && state.area === 'reading'
+    ? ` <button class="view-clear" data-view-clear title="Show the whole ${state.area === 'reading' ? 'reading list' : 'library'}">×</button>` : '');
   const total = filteredPapers({ignoreKeyword: true}).length;
   $('#view-sub').textContent = state.view.type === 'group' && state.includeSub && childrenOf(state.view.id).length
     ? 'Showing papers with this label and its sub-labels' : '';
@@ -1375,12 +1374,10 @@ async function handleEvent(e) {
 }
 function setTab(tab) {
   if (tab === 'reading' || tab === 'library') {
-    if (state.area !== tab || state.tab !== 'library') {
-      state.area = tab; state.selected.clear(); state.keyword = null; state.lastIndex = null;
-      // labels and shared labels stay selected when you switch page; the rest goes to the page's start
-      if (!['group', 'share'].includes(state.view.type)) state.view = {type: tab === 'reading' ? 'reading' : 'all'};
-      if (tab === 'reading' && state.mode === 'map') state.mode = 'list';
-    }
+    // the Reading list / Library button always shows the whole list (no label or keyword selected)
+    state.area = tab; state.selected.clear(); state.keyword = null; state.lastIndex = null;
+    state.view = homeView();
+    if (tab === 'reading') state.mode = 'list';
     state.tab = 'library';
   } else state.tab = tab;
   savePrefs();
@@ -1514,9 +1511,8 @@ function chooseNoteTarget(T, title) {
 
 /* ------------------------------------------------------------------ modes */
 function renderMode(scopeChanged = false) {
-  const mapBtn = $('#mode-seg [data-mode=map]'); if (mapBtn) mapBtn.style.display = state.area === 'reading' ? 'none' : '';
-  const tblBtn = $('#mode-seg [data-mode=table]'); if (tblBtn) tblBtn.style.display = state.area === 'reading' ? 'none' : '';
-  if (state.area === 'reading' && (state.mode === 'map' || state.mode === 'table')) state.mode = 'list';
+  $('#mode-seg').style.display = state.area === 'reading' ? 'none' : '';   // the reading list is just the list
+  if (state.area === 'reading') state.mode = 'list';
   $$('#mode-seg [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
   $('#list').style.display = state.mode === 'list' ? '' : 'none';
   $('#list-toolbar').style.display = state.mode === 'list' ? '' : 'none';
@@ -1664,10 +1660,10 @@ function bind() {
     if (e.target.closest('#kw-manage')) { manageKeywords(); return; }
     const nav = e.target.closest('[data-view]');
     if (nav) { const [type, value] = nav.dataset.view.split(':'); setView(value ? {type, value} : {type}); return; }
-    const grp = e.target.closest('[data-group]');
-    if (grp) setView({type: 'group', id: +grp.dataset.group});
+    const grp = e.target.closest('[data-group]');   // a click on the selected label deselects it
+    if (grp) { const id = +grp.dataset.group; setView(state.view.type === 'group' && state.view.id === id ? homeView() : {type: 'group', id}); }
     const sh = e.target.closest('[data-share]');
-    if (sh && !e.target.closest('button')) setView({type: 'share', id: sh.dataset.share});
+    if (sh && !e.target.closest('button')) setView(state.view.type === 'share' && state.view.id === sh.dataset.share ? homeView() : {type: 'share', id: sh.dataset.share});
   });
   $('#sidebar').addEventListener('input', e => {
     if (e.target.id !== 'kw-filter') return;
@@ -1781,6 +1777,7 @@ function bind() {
   });
   document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
   $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setMode('discover'); });
+  $('#view-title').addEventListener('click', e => { if (e.target.closest('[data-view-clear]')) setView(homeView()); });
   $('#select-all').addEventListener('change', e => {
     if (e.target.checked) state.visible.forEach(id => state.selected.add(id)); else state.selected.clear();
     renderList();

@@ -2,6 +2,14 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.5.1 – 2026-11-07
+
+- **Simpler Reading list** – it is just the list: no Map / Table / Discover buttons (they stay in the
+  Library), and its sidebar has only labels and keywords (no more Reading list / Reading now / To read /
+  Starred entries – what you are reading is already on top of the list).
+- **Back to the whole list** – click a selected label again, the **×** next to the title, or the
+  *Reading list* / *Library* button.
+
 ## 2.5 – 2026-11-03
 
 - **✨ What's new** – a bell at the top lists recent papers by the researchers you follow (Researchers

@@ -1079,3 +1079,11 @@ table.rv { border-collapse: separate; border-spacing: 0; font-size: 13px; min-wi
 .fd-person:hover { border-color: var(--accent); }
 .up-bar-text { margin-bottom: 10px; }
 .fd-topics:empty { display: none; }
+/* × next to a selected label: back to the whole list */
+.view-clear { border: 1px solid var(--border); background: var(--panel); color: var(--muted); width: 24px; height: 24px; border-radius: 50%;
+  font-size: 16px; line-height: 1; padding: 0; cursor: pointer; vertical-align: 3px; margin-left: 6px; }
+.view-clear:hover { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+#nav[hidden] { display: none; }
+/* reading list: no menu above the labels – the pin sits on the Labels row */
+body.area-reading aside > .side-head:first-child { height: 0; padding: 0; position: relative; }
+body.area-reading aside > .side-head:first-child #side-pin { position: absolute; right: 8px; top: 12px; z-index: 1; }
