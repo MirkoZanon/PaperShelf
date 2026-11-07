@@ -2,6 +2,28 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.7 – 2026-11-07
+
+- **Labels and Groups** – the sidebar has two separate sections: **Labels** (your own topics, nested if
+  you like) and **Groups** (what you share with other people – a lab, a journal club). Groups have a
+  people icon everywhere, so they don't mix with topic labels on the papers. “Shared labels” are now
+  called groups; nothing changes in how they work, and existing ones keep working.
+- **Clear roles in groups** – each person is an **editor** (adds papers and writes notes; needs a free
+  GitHub account) or a **reader** (sees papers and public notes; needs nothing). The person who invites
+  chooses.
+- **Invitations** – *＋ Invite someone*: name, optional e-mail, *Edit* (with their GitHub username) or
+  *Only read*. PaperShelf prepares a short message – the code, how to join, where to download
+  PaperShelf – and **✉ Write the e-mail** opens it in your own e-mail app, ready to send (PaperShelf
+  sends no e-mails and keeps no addresses). Or copy it.
+- **Settings, step by step** – *💻 My computers* and *👥 Groups* now show where you are (connected / not
+  set up / last error) and numbered steps in the right order, with buttons that open GitHub already
+  filled in: the private repository, and a token with the right permissions (one token for both).
+  New guides *How to create the private repository* and *How to create the GitHub token*. The General
+  tab is shorter, with the less used options folded away.
+- **Simpler logo menu** – only what isn't already in the top bar: groups, search by topic, export,
+  reading stats, library check, install as app, quit.
+- **Fix** – *Close* didn't close the Reading stats window.
+
 ## 2.6 – 2026-11-07
 
 - **New top bar** – on the left the **Reading list** with its **＋ Add a paper** box (shown on the

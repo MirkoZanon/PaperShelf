@@ -76,7 +76,7 @@ copy updates itself with `git pull` at every start.
   right-click → Options → Keep in Dock) or pin it to the taskbar (Windows). If PaperShelf isn't running
   when you open the app, it shows a **Start PaperShelf** button.
 - **Start in the background when you log in** (optional, same place): the app is then always ready,
-  and shared labels and sync keep up to date.
+  and groups and sync keep up to date.
 - **Or a simple icon**: ⚙︎ Settings → General → **🖥 Create PaperShelf icon** (Applications + Desktop
   on Mac, Desktop + Start menu on Windows); it starts PaperShelf and opens its window.
 - **Stop**: ⚙︎ Settings → **⏻ Quit** (or close the Terminal window if you used `start.command`).
@@ -124,7 +124,7 @@ list* button, to see everything). The **Library** tab has all your papers, read 
 map, review tables, Discover and statistics. Choose the start page in Settings.
 
 **Organising** – **labels** that work like tags (a paper can have many; dragging adds, never moves):
-*Personal* labels (nested, used by the map and statistics) and *Shared* labels (see below). Automatic
+your own topics, nested if you like, used by the map and statistics – kept apart from *Groups* (see below). Automatic
 keywords: the sidebar shows the most frequent ones with a filter and *Show all*, and a keyword manager
 merges variants (“fMRI” / “fmri”), renames or deletes keywords across the library. Reading status,
 stars, notes; a compact library menu (*All papers*, *To read*, *Reading*, the rest under *More*) and
@@ -141,8 +141,8 @@ PDF, and PaperShelf attaches it automatically from your Downloads folder. Option
 
 **Notes** – each paper has a small chat of notes, opened from the 📝 button on its row (the button
 shows at a glance how many notes it has: amber private, blue public). Notes are **🔒 private** by
-default (only your library); on papers of a shared label you can also write **🌐 public** notes that
-all the members see, with your name (chosen in Settings). Only the author can edit or delete a note;
+default (only your library); on papers of a group you can also write **🌐 public** notes that
+everybody in the group sees, with your name (chosen in Settings). Only the author can edit or delete a note;
 others' notes can be hidden on your own computer. Markdown with bold, italic, highlights, colours,
 lists, to-dos, quotes and links; *📝 Export notes* saves the notes of the selected papers, each under
 its reference, as Markdown, text or web page.
@@ -198,15 +198,16 @@ otherwise the cell stays empty. If scimagojr.com refuses the automatic download,
 years* lets your browser download exactly the years needed, and PaperShelf imports them automatically
 from your Downloads folder. The publication table can be sorted by any column.
 
-**Shared labels** – share labels with colleagues (journal club, lab reading list…): only titles,
-authors, year, journal and DOI travel – plus the public notes members write in the label – never
-PDFs, private notes or highlights. Each label remembers who created it. Shared labels are kept apart from your
-personal ones. Papers you receive are added to your library with the shared label and stay yours even
-if the label later drops them (only the label goes). Labels with several members stay in sync among
-everybody, also along chains of people, in any order; they update by themselves. To share, turn
-sharing on once with your GitHub token (it needs the *Gists* permission): PaperShelf keeps your shared
-labels in a secret gist it creates for you – nothing to set up by hand. Joining or following needs
-nothing. Shared labels can also be sent as `.papershelf` files. Guide in the app: **? → Shared labels**.
+**Groups** – share papers with other people (a lab, a journal club, a co-author): only titles,
+authors, year, journal and DOI travel – plus the public notes written in the group – never PDFs,
+private notes or highlights. Groups are kept apart from your labels. Each person is an **editor**
+(adds papers, writes notes – needs a free GitHub account connected once) or a **reader** (sees
+everything, needs nothing); the person who invites chooses. *＋ Invite someone* prepares a short
+invitation with the code, how to join and where to get PaperShelf, and opens it in your own e-mail app
+(PaperShelf sends no e-mails and keeps no addresses). Papers you receive stay in your library even if
+the group later drops them. Everybody's copies stay in sync, along chains of people and in any order;
+each editor's copy lives in a secret gist PaperShelf creates on their GitHub account. Groups can also
+be sent as `.papershelf` files. Guide in the app: **? → Groups**.
 
 **Citation styles** – APA 7, Nature, Science, Cell Press (Cell, Neuron, Current Biology, Cell Reports,
 iScience), Royal Society (Proc B), J Neurosci, eLife, PNAS, PLOS / Vancouver.
@@ -218,7 +219,7 @@ and labels as tags), BibTeX, CSL-JSON, CSV. In Zotero: *File → Import…*.
 
 ## 5. Optional settings
 
-All in ⚙︎ Settings (tabs *General*, *PDFs & access*, *Sync my computers*, *Sharing*, *Data sources*, *Updates*),
+All in ⚙︎ Settings (tabs *General*, *PDFs & access*, *My computers*, *Groups*, *Data sources*, *Updates*),
 stored only on this computer. PaperShelf works without them.
 
 | Setting | What for | Where to get it |
@@ -227,7 +228,7 @@ stored only on this computer. PaperShelf works without them.
 | OpenAlex key | 10× more daily lookups for map, suggestions, profiles | free account on openalex.org → settings/api |
 | CORE key | free copies from university repositories | core.ac.uk/services/api |
 | Library access address | 🏛 button opening articles through your library | your library website ("off-campus access", "EZproxy") |
-| GitHub token | library sync between computers and/or sharing labels | section 6 (one token for both) |
+| GitHub token | *My computers* (sync) and/or *Groups* | section 6 – the Settings tabs have buttons that open GitHub pre-filled (one token for both) |
 
 ---
 
@@ -244,14 +245,11 @@ test, is in the app: **? → Sync between computers**.)
 2. Go to <https://github.com/new>. Name: `papershelf-library`. Choose **Private**. Leave *Add a README*
    **unticked**. **Create repository**, then copy its address
    (e.g. `https://github.com/your-name/papershelf-library`).
-3. Create an access token (works only for this repository):
-   <https://github.com/settings/personal-access-tokens/new>
-   (or GitHub → your photo → Settings → Developer settings → Personal access tokens → Fine-grained
-   tokens → Generate new token).
-   - Name `PaperShelf`; expiration up to 1 year (note it in your calendar).
+3. Create an access token. In ⚙︎ Settings → *My computers*, **Create it on GitHub** opens the page
+   already filled in (name, 1 year, *Contents* and *Gists*: Read and write); by hand:
+   <https://github.com/settings/personal-access-tokens/new>.
    - Repository access: **Only select repositories** → `papershelf-library`.
-   - Permissions → Repository permissions → **Contents: Read and write**.
-   - To also share labels: Permissions → Account permissions → **Gists: Read and write**.
+   - Permissions: **Contents: Read and write** (and **Gists: Read and write** for groups – one token for both).
    - **Generate token** and copy it (starts with `github_pat_`; shown only once – if lost, make a new one).
 
 ### On each computer
@@ -259,7 +257,7 @@ test, is in the app: **? → Sync between computers**.)
 4. Install Git (once):
    - Mac: Terminal → `xcode-select --install` → accept (if "already installed", you're done).
    - Windows: <https://git-scm.com/download/win>, default options; then restart PaperShelf.
-5. ⚙︎ Settings → **Sync my computers**: paste token and address → **Test connection** → **Save**.
+5. ⚙︎ Settings → **💻 My computers**: paste token and address → **Test** → **Save**.
    The first sync starts by itself.
 6. On the other computer: install PaperShelf, repeat steps 4–5 with the same address.
 
@@ -317,8 +315,8 @@ Your library is never touched.
 
 - PaperShelf answers only to this computer; requests from other websites or computers are refused.
 - Library, private notes, highlights, profiles and settings are stored only in your library folder (and
-  your own private GitHub repository if you turn on sync). Public notes go only to the members of the
-  shared label they are written in, with the display name you choose.
+  your own private GitHub repository if you turn on sync). Public notes go only to the people in the
+  group they are written in, with the display name you choose.
 - Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search, the
   topics you choose to watch). Reading position, reading time and statistics never leave your computer.
   Your e-mail is never sent anywhere except to Unpaywall, if you enter it. E-mail search of
@@ -329,9 +327,10 @@ Your library is never touched.
   Unpaywall, Europe PMC, SCImago tables) and legal open-access sources are used. Google Scholar is never
   queried automatically – only the public page you choose to import. No "shadow libraries".
 - Subscription PDFs are for personal use: keep a synced repository private and don't share them.
-- Shared labels contain only bibliographic details (title, authors, year, journal, DOI) and live in a
-  secret gist on your GitHub account: anyone with a label's code can read its titles. PaperShelf
-  only reads the sharing repositories of the members of the lists you joined.
+- Groups contain only bibliographic details (title, authors, year, journal, DOI) and public notes, and
+  live in secret gists on the editors' GitHub accounts: anyone with a group's code can read it, so send
+  the code only to the people you invite. PaperShelf only reads the gists of the editors of the groups
+  you joined. Invitations open in your own e-mail app; PaperShelf sends no e-mails and stores no addresses.
 - Researcher profiles hold public professional data, kept locally; ask before publishing someone
   else's publication page.
 
@@ -379,11 +378,11 @@ fulltext.py       PDF text index (SQLite FTS5) for searching inside PDFs
 coauth.py         co-first / co-last from paper texts (Europe PMC JATS, open-access PDF, publisher page)
 insights.py       retraction / correction check, published versions of preprints, What's new,
                   label suggestions, reading statistics
-sharing.py        shared labels: order-independent merge (Lamport-stamped add/remove sets), secret gists
+sharing.py        groups: order-independent merge (Lamport-stamped add/remove sets), secret gists
 VERSION           the app version (single source of truth)
 update.json       the GitHub repository the updater checks ("owner/name")
 static/           interface: app.js, graph.js, discover.js, reader.js, people.js, help.js, update.js,
-                  suggest.js (title search under the Add box), shares.js (shared labels),
+                  suggest.js (title search under the Add box), shares.js (groups),
                   smart.js (What's new, library check, reminders, stats, review tables), style.css, icons/
 static/vendor/pdfjs   PDF.js 4.10 (Apache-2.0), bundled for offline reading
 start.command / start.bat   launchers (create .venv, install requirements, update via git if cloned)

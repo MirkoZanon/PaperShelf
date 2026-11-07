@@ -75,7 +75,8 @@ function modal(html, {wide = false} = {}) {
   document.body.appendChild(wrap);
   const m = {el: wrap, onclose: null, close() { wrap.remove(); if (m.onclose) { const f = m.onclose; m.onclose = null; f(); } }};
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) m.close(); });
-  $$('[data-close]', wrap).forEach(b => b.addEventListener('click', () => m.close()));
+  // delegated: works also for buttons added later (dialogs that rebuild their content, e.g. Reading stats)
+  wrap.addEventListener('click', e => { if (e.target.closest('[data-close]') && wrap.isConnected) m.close(); });
   setTimeout(() => $('input:not([type=radio]):not([type=checkbox]),textarea', wrap)?.focus(), 30);
   return m;
 }
@@ -244,7 +245,7 @@ function viewTitle() {
   const v = state.view;
   return {all: 'All papers', reading: 'Reading list', starred: 'Starred', unfiled: 'Unfiled papers', nopdf: 'Without PDF', attention: 'Needs attention'}[v.type]
     || (v.type === 'status' ? (v.value === 'reading' ? 'Reading now' : STATUS_LABEL[v.value]) : v.type === 'group' ? groupPath(v.id)
-      : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Shared list') : 'Papers');
+      : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Group') : 'Papers');
 }
 const homeView = () => ({type: state.area === 'reading' ? 'reading' : 'all'});   // the whole list of the page
 function setView(view) {
@@ -264,6 +265,8 @@ const LABEL_SVG = {
   tag: '<path d="M2.2 2.2h5.4l6.2 6.2-5.4 5.4-6.2-6.2z" class="li-fill"/><circle cx="5.2" cy="5.2" r="1.1" class="li-dot"/>',
   link: '<path d="M6.6 9.4l2.8-2.8" class="li-line"/><path d="M7.4 4.6l1.3-1.3a2.6 2.6 0 0 1 3.7 3.7l-1.3 1.3M8.6 11.4l-1.3 1.3a2.6 2.6 0 0 1-3.7-3.7l1.3-1.3" class="li-line"/>',
   inbox: '<path d="M2.5 9.5l1.6-6h7.8l1.6 6v3.5h-11z" class="li-fill"/><path d="M2.5 9.5h3.3l.8 1.5h2.8l.8-1.5h3.3M8 4.5v3.6M6.5 6.7L8 8.2l1.5-1.5" class="li-line"/>',
+  // a group: papers shared with other people
+  group: '<circle cx="5.6" cy="5.4" r="2.2" class="li-fill"/><path d="M1.6 13.2c.3-2.4 1.9-3.8 4-3.8s3.7 1.4 4 3.8z" class="li-fill"/><circle cx="11" cy="6" r="1.8" class="li-line"/><path d="M10.6 9.6c1.9 0 3.4 1.2 3.8 3.6h-2.6" class="li-line"/>',
 };
 const labelIcon = (c, kind = 'tag') => `<span class="licon ${c && lcol(c) ? 'colored' : ''}"${c && lcol(c) ? ` style="--lc:${lcol(c)}"` : ''}><svg viewBox="0 0 16 16" aria-hidden="true">${LABEL_SVG[kind] || LABEL_SVG.tag}</svg></span>`;
 const chipStyle = c => c && lcol(c) ? ` style="--lc:${lcol(c)}"` : '';
@@ -315,14 +318,13 @@ function renderSidebar() {
   const tn = $('#tab-reading-n'); if (tn) tn.textContent = P.filter(p => p.status !== 'read').length || '';
   // collapsible sections: Labels, and inside it Personal and Shared
   const C = state.closed || (state.closed = new Set());
-  const car = k => `<span class="sec-car">${C.has(k) ? '▸' : '▾'}</span>`;
-  const nShared = (state.shares || []).length;
-  $('#labels-head').innerHTML = `<span class="sec-toggle" data-sec="labels" title="Show / hide labels">${car('labels')} Labels${C.has('labels') ? ` <span class="sec-n">${state.groups.length + nShared}</span>` : ''}</span>`;
-  $('#groups-head .sec-label').innerHTML = `${car('personal')} Personal${C.has('personal') && state.groups.length ? ` <span class="sec-n">${state.groups.length}</span>` : ''}`;
-  $('#shares-head .sec-label').innerHTML = `${car('shared')} Shared${C.has('shared') && nShared ? ` <span class="sec-n">${nShared}</span>` : ''}`;
-  $('#labels-body').hidden = C.has('labels');
-  $('#tree').hidden = C.has('personal'); $('#sharelist').hidden = C.has('shared');
-  $('#tree').innerHTML = C.has('personal') ? '' : state.groups.length ? renderTree(null, 0)
+    const nShared = (state.shares || []).length;
+  // two separate sections: Labels (your own topics) and Groups (shared with other people)
+  const secHead = (k, label, n, tip) => `<span class="sec-car">${C.has(k) ? '▸' : '▾'}</span> ${label}${C.has(k) && n ? ` <span class="sec-n">${n}</span>` : ''}`;
+  const lh = $('#labels-head .sec-toggle'); lh.innerHTML = secHead('labels', 'Labels', state.groups.length); lh.title = 'Your own labels – topics, projects… Click to show / hide';
+  const sh = $('#shares-head .sec-toggle'); sh.innerHTML = secHead('shared', 'Groups', nShared); sh.title = 'Groups: papers and notes you share with other people. Click to show / hide';
+  $('#labels-body').hidden = C.has('labels'); $('#groups-body').hidden = C.has('shared');
+  $('#tree').innerHTML = C.has('labels') ? '' : state.groups.length ? renderTree(null, 0)
     : `<div class="empty-hint">No labels yet. Click ＋ to create one, then drag papers onto it. A paper can have many labels; hover a label to add sub-labels.</div>`;
   if (typeof Shares !== 'undefined' && !C.has('shared')) Shares.renderSidebar();
   renderKeywords();
@@ -406,7 +408,7 @@ function rowHtml(p) {
   const groups = p.group_ids.filter(g => !(state.view.type === 'group' && g === state.view.id) && !(rowHide && [...rowHide].some(h => descendants(g).has(h))))
     .map(g => { const G = state.groups.find(x => x.id === g); return `<span class="gchip ${G?.color ? 'colored' : ''}"${chipStyle(G?.color)} data-goto="${g}" title="${esc(groupPath(g))}">${labelIcon(G?.color, 'tag')}${esc(G?.name || '')}</span>`; }).join('')
     + (p.share_ids || []).filter(sid => !(state.view.type === 'share' && sid === state.view.id) && !(rowHideS && rowHideS.has(sid)))
-      .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Shared label: ${esc(sh.name)}">${labelIcon(sh.color, sh.role === 'member' ? 'link' : 'inbox')}${esc(sh.name)}</span>` : ''; }).join('');
+      .map(sid => { const sh = (state.shares || []).find(x => x.id === sid); return sh ? `<span class="schip ${sh.color ? 'colored' : ''}"${chipStyle(sh.color)} data-goto-share="${esc(sid)}" title="Group: ${esc(sh.name)}${sh.role === 'member' ? '' : ' (you read it)'}">${labelIcon(sh.color, 'group')}${esc(sh.name)}</span>` : ''; }).join('');
   // papers being read are marked in the app's green – or in the colour of their label
   const rc = p.status === 'reading' && !rowHide && !rowHideS ? p.group_ids.map(g => lcol(state.groups.find(x => x.id === g)?.color)).find(Boolean) : '';
   return `<div class="row ${sel ? 'selected' : ''} ${state.openId === p.id ? 'open' : ''} ${p.status === 'reading' ? 'is-reading' : ''}" data-id="${p.id}" draggable="true"${rc ? ` style="--rc:${rc}"` : ''}>
@@ -515,7 +517,7 @@ function groupedHtml(list) {
   const scope = state.view.type === 'group' ? state.view.id : null;  // inside a label: its sub-labels
   // shared labels are groups too, except when you are already looking at one label
   const withShares = !['group', 'share'].includes(state.view.type) && (state.shares || []).length;
-  const shareName = sid => (state.shares || []).find(x => x.id === sid)?.name || 'Shared label';
+  const shareName = sid => (state.shares || []).find(x => x.id === sid)?.name || 'Group';
   const shareIcon = sid => { const x = (state.shares || []).find(y => y.id === sid); return labelIcon(x?.color, x?.role === 'member' ? 'link' : 'inbox'); };
   const shareIds = p => withShares ? (p.share_ids || []).filter(sid => (state.shares || []).some(x => x.id === sid)) : [];
   let html = '';
@@ -565,7 +567,7 @@ function groupedHtml(list) {
       const arr = list.filter(p => (p.share_ids || []).includes(x.id)); if (!arr.length) continue;
       rowHide = null; rowHideS = new Set([x.id]); push(arr);
       const multi = arr.filter(p => p.group_ids.length || shareIds(p).length > 1).length;
-      items.push({key: 's:' + x.id, rd: nRead(arr), html: section('s:' + x.id, esc(x.name), shareIcon(x.id), arr, {cols: [scol(x.id)], rd: nRead(arr), sub: ['shared label', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')})});
+      items.push({key: 's:' + x.id, rd: nRead(arr), html: section('s:' + x.id, esc(x.name), shareIcon(x.id), arr, {cols: [scol(x.id)], rd: nRead(arr), sub: ['group', multi ? `${multi} also in other labels` : ''].filter(Boolean).join(' · ')})});
     }
     const scopeIds = scope ? descendants(scope) : null;
     const none = list.filter(p => scope ? !p.group_ids.some(x => x !== scope && scopeIds.has(x)) : !p.group_ids.length && !shareIds(p).length);
@@ -765,7 +767,7 @@ async function deletePapers(ids) {
   const res = await confirmBox(one ? 'Delete this paper?' : `Delete ${ids.length} papers?`,
     one ? `“${truncate(one.title, 120)}” will be removed from your library.` : 'They will be removed from your library and from all labels.',
     {ok: 'Delete', danger: true, checkbox: withPdf ? `Also move ${withPdf > 1 ? `the ${withPdf} PDF files` : 'the PDF file'} to the Trash` : '',
-     checkbox2: inShared ? `Also remove the shared label${inShared > 1 ? 's' : ''} for everybody – the others keep their copy, without the label` : '', checked2: true});
+     checkbox2: inShared ? `Also remove ${inShared > 1 ? 'them from their groups' : 'it from its group'} for everybody – the others keep their copy` : '', checked2: true});
   if (!res) return;
   try {
     await api('/api/papers/delete', {method: 'POST', body: {ids, delete_files: res.checked, unshare: inShared ? res.checked2 : true}});
@@ -894,52 +896,48 @@ function openExport() {
 function openSettings(startTab) {
   const s = state.settings; const o = location.origin;
   const bm = pdf => `javascript:(function(){window.open('${o}/quickadd?url='+encodeURIComponent(location.href)${pdf ? "+'&pdf=1'" : ''},'_blank');})();`;
-  const TABS = [['general', 'General'], ['pdfs', 'PDFs & access'], ['sync', '💻 Sync my computers'], ['sharing', '👥 Sharing'], ['data', 'Data sources'], ['updates', 'Updates']];
+  const TABS = [['general', 'General'], ['pdfs', 'PDFs & access'], ['sync', '💻 My computers'], ['sharing', '👥 Groups'], ['data', 'Data sources'], ['updates', 'Updates']];
   let tab = 'general'; try { tab = localStorage.getItem('papershelf-settings-tab') || 'general'; } catch (e) { /* ignore */ }
   if (tab === 'github') tab = 'sync';
   if (typeof startTab === 'string') tab = startTab;
   if (!TABS.some(t => t[0] === tab)) tab = 'general';
-  const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="start">📘 Guide</button> <button class="btn small" data-help="status">🩺 System check</button> <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit</button></h3>
+  const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="status" title="Check that everything works: Git, GitHub, sources…">🩺 System check</button> <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit</button></h3>
     <div class="stabs">${TABS.map(([id, label]) => `<button data-stab="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>
     <div class="stab-panels">
 
     <div class="stab-panel" data-panel="general">
-    <div class="section-label">PaperShelf as an app <button class="help-q" data-help="start" title="Explain this">?</button></div>
-    <div id="ia-section"><p class="muted small">…</p></div>
-    <div class="section-label">Simple icon</div>
-    <p class="muted small">Or create a plain PaperShelf icon to start it with one click (${state.platform === 'win32' ? 'Desktop and Start menu – then right-click → <i>Pin to taskbar</i>' : state.platform === 'darwin' ? 'Applications folder and Desktop – then drag it onto the Dock' : 'applications menu'}). Started from the icon, PaperShelf runs in the background without a Terminal window; stop it with <b>⏻ Quit</b> above.</p>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create PaperShelf icon</button><span class="muted small" id="set-shortcut-res"></span></div>
-    <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave installed, PaperShelf opens as a separate app window named “PaperShelf”, without the 127.0.0.1 address bar. Otherwise it opens in your normal browser.</small></span></label>
     <div class="section-label">Open PaperShelf on</div>
-    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list – only the papers to read and being read</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library – all your papers, with map and statistics</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👤 Researchers</option></select>
-    <div class="section-label">Paper list</div>
-    <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes<small>Off: a cleaner list – select papers with ${state.platform === 'darwin' ? '⌘' : 'Ctrl'}-click (or Shift-click for a range); the boxes appear as soon as something is selected.</small></span></label>
-    <div class="section-label">Reading list reminders</div>
+    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option></select>
+    <div class="section-label">PaperShelf as an app <button class="help-q" data-help="updates" title="Explain this">?</button></div>
+    <div id="ia-section"><p class="muted small">…</p></div>
+    <details class="more"><summary>Other ways to start it</summary>
+      <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave: a window without the address bar. Otherwise your normal browser.</small></span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create a simple PaperShelf icon</button><span class="muted small" id="set-shortcut-res">${state.platform === 'win32' ? 'Desktop and Start menu' : state.platform === 'darwin' ? 'Applications folder and Desktop' : 'Applications menu'}</span></div>
+    </details>
+    <div class="section-label">Reading</div>
     <label class="opt-row">Remind me of papers waiting in the reading list for more than
       <select class="input" id="set-stale">${[['', 'never'], ['30', '1 month'], ['60', '2 months'], ['90', '3 months'], ['180', '6 months']].map(([v, l]) => `<option value="${v}" ${(s.stale_days || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-    <div class="section-label">Library check</div>
-    <label class="opt"><input type="checkbox" id="set-libcheck" ${s.lib_check !== '' ? 'checked' : ''}><span>Watch my papers for retractions, corrections and published versions<small>When you press ⟳ (each paper about once a week), PaperShelf asks Crossref, OpenAlex and arXiv – sending only the papers' DOIs / arXiv IDs, nothing about you. Retracted papers get a red badge; preprints that appeared in a journal can be switched to the published version.</small></span></label>
-    <div class="section-label">Default citation style <button class="help-q" data-help="export" title="Explain this">?</button></div>
-    <select class="input wide" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
-    <div class="section-label">Folder for downloaded PDFs</div>
-    <div style="display:flex;gap:6px"><input class="input" id="set-dir" style="flex:1" value="${esc(s.pdf_dir)}"><button class="btn" id="open-dir">Open</button></div>
-    <div class="section-label">Browser buttons <button class="help-q" data-help="adding" title="Explain this">?</button></div>
-    <p class="muted small" style="margin-bottom:4px">Show the bookmarks bar (⇧⌘B on Mac, Ctrl+Shift+B on Windows), then <b>drag</b> these buttons onto it. On any article page click one to save it here (PaperShelf must be running).</p>
-    <a class="bookmarklet" href="${esc(bm(false))}" onclick="return false">＋ Save to PaperShelf</a>
-    <a class="bookmarklet" href="${esc(bm(true))}" onclick="return false">⬇ Save + PDF</a>
-    <div class="section-label">Privacy <button class="help-q" data-help="privacy" title="Explain this">?</button></div>
-    <p class="muted small">PaperShelf runs only on this computer and answers only to it. Your library, notes, profiles and settings are stored only here – in <code>${esc(state.dataDir)}</code> – and in your own private GitHub repository if you turn on sync. Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search for), never your e-mail or other personal data, except the optional Unpaywall address.</p>
+    <label class="opt"><input type="checkbox" id="set-libcheck" ${s.lib_check !== '' ? 'checked' : ''}><span>Watch my papers for retractions and published versions <button class="help-q" data-help="smart" title="Explain this">?</button><small>When you press ⟳. Only the papers' DOIs are sent, nothing about you.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes in the list<small>Off: they appear when you select (${state.platform === 'darwin' ? '⌘' : 'Ctrl'}-click or Shift-click).</small></span></label>
+    <div class="section-label">Citations & files</div>
+    <div class="set-grid"><span class="muted small">Citation style</span><select class="input" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
+      <span class="muted small">PDF folder</span><div style="display:flex;gap:6px"><input class="input" id="set-dir" style="flex:1" value="${esc(s.pdf_dir)}"><button class="btn" id="open-dir">Open</button></div></div>
+    <details class="more"><summary>Browser buttons – save an article from any web page</summary>
+      <p class="muted small" style="margin-bottom:4px">Show the bookmarks bar (⇧⌘B on Mac, Ctrl+Shift+B on Windows), then <b>drag</b> these buttons onto it. On an article page, click one to save it here. <button class="help-q" data-help="adding" title="Explain this">?</button></p>
+      <a class="bookmarklet" href="${esc(bm(false))}" onclick="return false">＋ Save to PaperShelf</a>
+      <a class="bookmarklet" href="${esc(bm(true))}" onclick="return false">⬇ Save + PDF</a></details>
+    <p class="muted small set-privacy">🛡 Your library, notes and settings stay on this computer (<code>${esc(state.dataDir)}</code>) – and in your own private GitHub repository if you sync. <button class="linklike" data-help="privacy">Privacy details</button></p>
     </div>
 
     <div class="stab-panel" data-panel="pdfs">
     <div class="section-label">E-mail for Unpaywall (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
     <input class="input wide" id="set-email" type="email" value="${esc(s.email)}" placeholder="leave empty to skip Unpaywall">
-    <p class="muted small">Unpaywall (the largest index of legal free PDFs) requires an e-mail address with each request; it's sent only to Unpaywall and only when you look for a PDF. Leave empty to skip it – the other free sources are still searched.</p>
+    <p class="muted small">Unpaywall, the largest index of legal free PDFs, asks for an e-mail with each request. It goes only to Unpaywall, only when you look for a PDF.</p>
     <div class="section-label">CORE API key (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
     <input class="input wide" id="set-core" type="password" autocomplete="off" placeholder="${s.has_core_key ? '•••••••• key saved – paste a new one to replace it' : 'Free key from core.ac.uk/services/api'}">
-    <p class="muted small">CORE collects papers from university repositories worldwide – often the authors' own legal copies. With a free key, “Find PDF” searches it too.</p>
+    <p class="muted small">University repositories worldwide (authors' legal copies). With a free key, “Find PDF” searches them too.</p>
     <div class="section-label">University / library access <button class="help-q" data-help="university" title="Explain this">?</button></div>
-    <p class="muted small">For papers you can read through your university. PaperShelf opens the article through your library's access page in your browser; you log in there as usual (single sign-on, two-factor…) and download the PDF – PaperShelf notices it in your Downloads folder and attaches it to the right paper. Your password is never stored.</p>
+    <p class="muted small">For paywalled papers: PaperShelf opens the article through your library's page, you log in there as usual and download the PDF – it is attached to the right paper by itself. Your password is never stored.</p>
     <div id="proxy-rows">${(s.proxies || []).map(proxyRow).join('')}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small" id="proxy-add">＋ Add a library</button>
       <select class="input" id="proxy-preset" style="padding:4px 8px"><option value="">Templates…</option><option value="https://ezproxy.YOUR-UNIVERSITY.edu/login?url=">EZproxy (…/login?url=)</option><option value="https://YOUR-UNIVERSITY.idm.oclc.org/login?url=">EZproxy hosted by OCLC</option><option value="https://go.openathens.net/redirector/YOUR-UNIVERSITY.edu?url={url}">OpenAthens redirector</option></select></div>
@@ -949,23 +947,28 @@ function openSettings(startTab) {
     <label class="opt"><input type="checkbox" id="set-auto-import" ${s.auto_import === '1' ? 'checked' : ''}><span>Always attach PDFs I download<small>Any new PDF in the folder below whose DOI matches a paper in your library is attached automatically (not only after “Get via library”).</small></span></label>
     <label class="opt"><input type="checkbox" id="set-remove-dl" ${s.remove_downloads === '1' ? 'checked' : ''}><span>Move the downloaded file to the Trash once attached<small>A copy is kept in your PDF folder.</small></span></label>
     <div style="display:flex;gap:6px;align-items:center"><span class="muted small" style="white-space:nowrap">Downloads folder</span><input class="input" id="set-watch" style="flex:1" value="${esc(s.watch_dir)}"></div>
-    <p class="muted small">On a Mac, the first time macOS may ask to let PaperShelf (or “Terminal”) access the Downloads folder: click Allow.</p>
+    ${state.platform === 'darwin' ? '<p class="muted small">The first time, macOS may ask to let PaperShelf access the Downloads folder: click Allow.</p>' : ''}
     </div>
 
     <div class="stab-panel" data-panel="sync">
-    <div class="set-intro sync"><b>💻 Sync my computers</b> – the same library on all <i>your</i> computers (Mac or Windows), through a <b>private</b> GitHub repository that only you can see.
-      <ul><li>Synced: papers, details, personal labels, private notes, highlights, reading status – and PDFs if you want.</li>
-        <li>Nobody else sees any of this. To share papers with colleagues, see the tab <button class="linklike" data-stab="sharing">👥 Sharing</button>.</li>
-        <li>Optional: with one computer only, you don't need it.</li></ul></div>
-    ${s.last_sync || s.last_sync_error ? `<p class="muted small">${s.last_sync ? `Last sync: ${esc(new Date(s.last_sync).toLocaleString())}.` : ''} ${s.last_sync_error ? `<span style="color:var(--danger)">Last error: ${esc(s.last_sync_error)}</span>` : ''}</p>` : ''}
-    <div class="section-label">1 · GitHub token <button class="help-q" data-help="sync" title="Explain this">?</button></div>
-    <p class="muted small">Needs <b>Contents: Read and write</b> on your library repository. <button class="linklike" data-help="sync">How to create the token</button></p>
-    <input class="input wide" id="set-token" type="password" placeholder="${s.has_sync_token ? '•••••••• token saved – paste a new one to replace it' : 'GitHub access token (github_pat_…)'}" autocomplete="off">
-    <div class="section-label">2 · Your private library repository</div>
-    <input class="input wide" id="set-repo" value="${esc(s.sync_repo)}" placeholder="https://github.com/your-name/papershelf-library  (leave empty if you don't sync)">
-    <label class="opt" style="margin-top:8px"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>Convenient, but uses space: GitHub works best under ~1 GB (≈ 400–500 papers). Off = only the list, labels, notes and highlights sync; free PDFs can be re-downloaded on the other computer with “Find PDFs”.</small></span></label>
-    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>When PaperShelf starts and every 20 minutes while it runs</small></span></label>
-    <div class="sync-actions"><button class="btn small" data-help="sync">📘 Step-by-step guide</button><button class="btn small" id="sync-test">Test connection</button><span id="sync-test-res" class="muted small"></span></div>
+    <div class="set-intro sync"><b>💻 The same library on all your computers</b> (Mac and Windows) – papers, labels, private notes, highlights, reading status and, if you like, PDFs. It goes through a <b>private</b> GitHub repository that only you can see. With one computer you don't need it. <button class="help-q" data-help="sync" title="Explain this">?</button></div>
+    <div class="set-status ${s.sync_repo && s.has_sync_token ? (s.last_sync_error ? 'bad' : 'ok') : ''}">${s.sync_repo && s.has_sync_token
+      ? `${s.last_sync_error ? `⚠ Last sync failed: ${esc(s.last_sync_error)}` : `✓ On – ${s.last_sync ? `last sync ${esc(new Date(s.last_sync).toLocaleString())}` : 'not synced yet'}`} · <span class="muted">${esc(s.sync_repo.replace(/^https?:\/\/github\.com\//, ''))}</span>`
+      : 'Not set up yet: 4 steps, about 5 minutes, the first time only.'}</div>
+    <ol class="gh-steps">
+      <li><b>A GitHub account</b> – free; skip if you have one. <a class="btn small" href="https://github.com/signup" target="_blank" rel="noopener">Create an account</a></li>
+      <li><b>A private repository</b> named <code>papershelf-library</code>: your library is kept there. <a class="btn small" href="https://github.com/new?name=papershelf-library&visibility=private&description=My%20PaperShelf%20library%20(private)" target="_blank" rel="noopener">Create it on GitHub</a> <button class="linklike small" data-help="gh-repo">Show me how</button></li>
+      <li><b>A token</b> – a password just for PaperShelf. <a class="btn small" href="https://github.com/settings/personal-access-tokens/new?name=PaperShelf&description=PaperShelf%3A%20sync%20my%20library%20and%20groups&expires_in=366&contents=write&gists=write" target="_blank" rel="noopener">Create it on GitHub</a> <button class="linklike small" data-help="gh-token">Show me how</button>
+        <small>The page opens filled in; you only choose <i>Repository access → Only select repositories → papershelf-library</i>, then <i>Generate token</i> and copy it. The same token works for 👥 Groups too.</small></li>
+      <li><b>Paste them here</b> and click <i>Test</i>:
+        <input class="input wide" id="set-token" type="password" autocomplete="off" placeholder="${s.has_sync_token ? '•••••••• token saved – paste a new one to replace it' : 'Token (github_pat_…)'}">
+        <input class="input wide" id="set-repo" value="${esc(s.sync_repo)}" placeholder="Repository address, e.g. https://github.com/your-name/papershelf-library">
+        <div class="sync-actions"><button class="btn small" id="sync-test">Test</button><span id="sync-test-res" class="muted small"></span></div></li>
+    </ol>
+    ${s.has_git === false ? `<p class="warn-box small"><b>Git is needed</b> and isn't installed on this computer. ${state.platform === 'darwin' ? 'Open the Terminal app, type <code>xcode-select --install</code>, press Enter and accept.' : 'Install it from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a> (default options), then restart PaperShelf.'}</p>` : ''}
+    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>When PaperShelf starts and every 20 minutes. Otherwise press ⟳.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>GitHub works best under ~1 GB (≈ 400 papers). Off: free PDFs can be fetched again with “Find PDFs”.</small></span></label>
+    <p class="muted small"><b>On your other computer:</b> install PaperShelf, then do step 4 with the same repository (same token, or a new one). Your library appears after the first sync.</p>
     </div>
 
     <div class="stab-panel" data-panel="sharing">
@@ -1193,7 +1196,7 @@ function rowMenu(e, id) {
   m.className = 'ctx-menu';
   m.innerHTML = `<div class="ctx-head">${one ? esc(truncate(one.title || 'Untitled', 60)) : `${P.length} papers`}</div>
     <div class="ctx-item ctx-parent">🏷 Labels<span class="ctx-arrow">›</span><div class="ctx-sub">${state.groups.length ? labelItems() : '<div class="ctx-empty">No labels yet</div>'}<div class="ctx-sep"></div><button class="ctx-item" data-c="newlabel">＋ New label…</button></div></div>
-    ${shares.length ? `<div class="ctx-item ctx-parent">🔗 Shared labels<span class="ctx-arrow">›</span><div class="ctx-sub">${shares.map(x => `<button class="ctx-item ctx-check ${shHas(x.id) ? 'on' : ''}" data-cs="${esc(x.id)}"><span class="ctx-tick">${shHas(x.id) ? '✓' : ''}</span>${labelIcon(x.color, 'link')}<span>${esc(x.name)}</span></button>`).join('')}</div></div>` : ''}
+    ${shares.length ? `<div class="ctx-item ctx-parent">👥 Groups<span class="ctx-arrow">›</span><div class="ctx-sub">${shares.map(x => `<button class="ctx-item ctx-check ${shHas(x.id) ? 'on' : ''}" data-cs="${esc(x.id)}"><span class="ctx-tick">${shHas(x.id) ? '✓' : ''}</span>${labelIcon(x.color, 'link')}<span>${esc(x.name)}</span></button>`).join('')}</div></div>` : ''}
     <div class="ctx-item ctx-parent">◐ Status<span class="ctx-arrow">›</span><div class="ctx-sub">${Object.entries({to_read: 'To read', reading: 'Reading now', read: 'Read'}).map(([k, l]) => `<button class="ctx-item ctx-check ${P.every(p => p.status === k) ? 'on' : ''}" data-cst="${k}"><span class="ctx-tick">${P.every(p => p.status === k) ? '✓' : ''}</span><span>${l}</span></button>`).join('')}</div></div>
     <div class="ctx-sep"></div>
     ${one ? `<button class="ctx-item" data-c="pdf">📄 ${one.pdf_exists ? 'Open PDF' : 'Get the PDF'}</button><button class="ctx-item" data-c="notes">📝 Notes</button><button class="ctx-item" data-c="details">ⓘ Details</button><button class="ctx-item" data-c="cite">❝ Copy citation</button>` : `<button class="ctx-item" data-c="export">⤓ Export references</button>`}
@@ -1246,23 +1249,16 @@ async function brandMenu() {
   let installed = true;
   try { installed = !!(await api('/api/app-status')).installed; } catch (e) { /* ignore */ }
   const item = (act, label, small = '') => `<button type="button" data-bm="${act}">${label}${small ? `<small>${small}</small>` : ''}</button>`;
-  menu.innerHTML = `<div class="bm-head"><img src="/static/icons/icon-64.png" alt=""><div><b>PaperShelf ${esc(state.version || '')}</b><small>${state.papers.length} papers · ${state.groups.length + (state.shares || []).length} labels</small></div></div>
-    ${item('update', '⟳ Update now', 'Sync, shared labels, new version')}
-    ${upd ? item('install-update', `⬆ Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') : item('check', '⬆ Check for updates')}
-    <div class="bm-sep"></div>
-    ${item('feed', "✨ What's new", Feed.data && Feed.data.count ? `${Feed.data.count} new papers from people and topics you follow` : 'New papers from people and topics you follow')}
-    ${item('stats', '📊 Reading stats', 'Papers read, time spent reading')}
-    ${item('checklib', '🩺 Check my library', 'Retractions, corrections, published preprints')}
+  // only what isn't already one click away in the top bar (⟳, What's new, ?, ⚙︎)
+  menu.innerHTML = `<div class="bm-head"><img src="/static/icons/icon-64.png" alt=""><div><b>PaperShelf ${esc(state.version || '')}</b><small>${state.papers.length} papers · ${state.groups.length} labels · ${(state.shares || []).length} groups</small></div></div>
+    ${upd ? item('install-update', `⬆ Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') + '<div class="bm-sep"></div>' : ''}
+    ${item('shares', '👥 Groups', 'Create a group, join one, invite people')}
     ${item('topic', '🔎 Search papers by topic', 'Find papers online by meaning')}
-    ${item('bulk', '＋ Add many papers at once')}
     ${item('export', '⤓ Export references or notes')}
-    ${item('shares', '🔗 Shared labels', 'Create, join, invite colleagues')}
+    ${item('stats', '📊 Reading stats')}
+    ${item('checklib', '🩺 Check my library', 'Retractions, corrections, published preprints')}
     <div class="bm-sep"></div>
     ${installed ? '' : item('app', '⬇ Install PaperShelf as an app', 'Own icon in the Dock / taskbar')}
-    ${item('settings', '⚙︎ Settings')}
-    ${item('guide', '📘 Guide')}
-    ${item('status', '🩺 System check')}
-    <div class="bm-sep"></div>
     ${item('quit', '⏻ Quit PaperShelf', 'Stops it on this computer')}`;
   menu.classList.add('open');
   menu.onclick = async e => {
@@ -1400,7 +1396,7 @@ async function setDefaultStyle(style) {
 function updateSyncButton() {
   const b = $('#sync-btn'); const s = state.settings;
   b.style.display = '';
-  const what = [s.sync_repo ? 'sync your library with your other computers' : '', (state.shares || []).length ? 'update shared labels and notes' : '', 'check for a new version of PaperShelf'].filter(Boolean);
+  const what = [s.sync_repo ? 'sync your library with your other computers' : '', (state.shares || []).length ? 'update your groups' : '', 'check for a new version of PaperShelf'].filter(Boolean);
   b.title = (s.last_sync_error ? `⚠ Last library sync failed: ${s.last_sync_error}\n` : '') + 'Update now: ' + what.join(', ') +
     (s.last_sync ? `\n(last library sync: ${new Date(s.last_sync).toLocaleString()})` : '');
   b.classList.toggle('warn', !!s.last_sync_error);
@@ -1426,14 +1422,14 @@ async function syncNow() {
     }
   }
   if ((state.shares || []).length) {
-    t.set('Updating shared labels and notes…');
+    t.set('Updating groups…');
     try {
       const d = await api('/api/shares/sync', {method: 'POST', body: {}});
       const L = Object.values(d.result.lists || {});
       const added = L.reduce((n, r) => n + (r.added || 0), 0);
-      done.push(`shared labels updated${added ? ` (${added} new paper${added > 1 ? 's' : ''})` : ''}`);
-      if (L.some(r => r.error || (r.errors || []).length)) problems.push('some members of a shared label could not be read (see the label)');
-    } catch (err) { problems.push('shared labels: ' + err.message); }
+      done.push(`groups updated${added ? ` (${added} new paper${added > 1 ? 's' : ''})` : ''}`);
+      if (L.some(r => r.error || (r.errors || []).length)) problems.push('some people in a group could not be read (see the group)');
+    } catch (err) { problems.push('groups: ' + err.message); }
   }
   const fd = Feed.data;
   if (!fd || fd.followed.some(f => !f.muted) || fd.topics.length) {
@@ -1498,12 +1494,12 @@ async function highlightsToNotes(id, shareId = null) {
     }
     const block = '### Highlights\n' + d.annotations.map(a => `- **p. ${a.page}**: ==${a.text.trim().replace(/\s+/g, ' ')}==${a.note ? ` → ${a.note}` : ''}`).join('\n');
     const r = await Notes.add(id, block, shareId);
-    if (r) toast(shareId ? 'Highlights added as a public note – the members of the shared label will see it.' : 'Highlights copied into a private note.', 'ok', 6000);
+    if (r) toast(shareId ? 'Highlights added as a public note – the group will see it.' : 'Highlights copied into a private note.', 'ok', 6000);
   } catch (err) { toast(err.message, 'error'); }
 }
 function chooseNoteTarget(T, title) {
   return new Promise(resolve => {
-    const m = modal(`<h3>${esc(title)}</h3><p class="muted small">This paper is in a shared label: the note can stay private or be seen by the label's members.</p>
+    const m = modal(`<h3>${esc(title)}</h3><p class="muted small">This paper is in a group: the note can stay private or be seen by the group.</p>
       <div class="note-targets">${T.map(t => `<button class="share-opt" data-t="${esc(t.v)}"><b>${esc(t.label)}</b><small>${t.v ? 'All members see it, with your name' : 'Only in your library'}</small></button>`).join('')}</div>
       <div class="modal-actions"><button class="btn" data-close>Cancel</button></div>`);
     let res = null; m.onclose = () => resolve(res);
@@ -1716,12 +1712,12 @@ function bind() {
   $('#sidebar').addEventListener('dragover', e => {
     if (!dragKind) return;
     const target = e.target.closest('.group-item') || (dragKind === 'papers' ? e.target.closest('.share-item.editable') : null)
-      || (dragKind === 'group' ? e.target.closest('#groups-head') : null);
+      || (dragKind === 'group' ? e.target.closest('#labels-head') : null);
     $$('.drop').forEach(x => x !== target && x.classList.remove('drop'));
     if (target) { e.preventDefault(); target.classList.add('drop'); }
   });
   $('#sidebar').addEventListener('drop', e => {
-    const target = e.target.closest('.group-item') || e.target.closest('#groups-head') || e.target.closest('.share-item.editable');
+    const target = e.target.closest('.group-item') || e.target.closest('#labels-head') || e.target.closest('.share-item.editable');
     $$('.drop').forEach(x => x.classList.remove('drop'));
     if (!target || !dragKind) return;
     e.preventDefault();

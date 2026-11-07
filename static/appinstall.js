@@ -52,9 +52,9 @@ const AppInstall = (() => {
     if (!st) return '';
     const inst = st.installed;
     return `${inst ? `<p class="up-ok small">✓ PaperShelf is installed as an app – <b>${isMac() ? 'keep it in the Dock' : 'pin it to the taskbar'}</b> and use it instead of the old icon. <span class="muted">(${esc(inst)})</span></p>`
-      : `<p class="muted small">Recommended: install PaperShelf as an app. It gets its own icon ${isMac() ? 'in the Dock' : 'in the taskbar'} that shows when it is open, brings its window back when clicked (no second window) and has <i>Quit</i> in its menu.${st.browser ? '' : ' Needs Chrome, Edge or Brave.'}</p>
+      : `<p class="muted small">Recommended: its own icon ${isMac() ? 'in the Dock' : 'in the taskbar'}, one window, <i>Quit</i> in its menu.${st.browser ? '' : ' Needs Chrome, Edge or Brave.'}</p>
          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small primary" id="ia-install">⬇ Install PaperShelf as an app</button><span class="muted small" id="ia-res"></span></div>`}
-      <label class="opt" style="margin-top:8px"><input type="checkbox" id="ia-auto" ${st.autostart ? 'checked' : ''}><span>Start PaperShelf in the background when I log in<small>Then the app opens instantly, and your shared labels and sync keep up to date. It uses little memory and has no window; stop it with ⏻ Quit.</small></span></label>`;
+      <label class="opt" style="margin-top:8px"><input type="checkbox" id="ia-auto" ${st.autostart ? 'checked' : ''}><span>Start PaperShelf in the background when I log in<small>The app then opens instantly and your groups and sync stay up to date. No window; stop it with ⏻ Quit.</small></span></label>`;
   }
   function settingsBind(m) {
     $('#ia-install', m.el)?.addEventListener('click', async () => {

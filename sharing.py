@@ -243,7 +243,7 @@ MAX_NOTE = 20000
 def add_note(st, author, key, body, name="") -> str:
     e = st["items"].get(key)
     if e is None:
-        raise ShareError("This paper is not in the shared label.")
+        raise ShareError("This paper is not in the group.")
     nid = uuid.uuid4().hex[:16]
     e.setdefault("notes", {})[nid] = {"by": author, "name": (name or "")[:60], "body": (body or "")[:MAX_NOTE],
                                       "created": _now(), "at": _now(), "del": False, "s": tick(st, author)}
@@ -320,7 +320,7 @@ def items(st) -> dict:
 def merge(a: dict, b: dict) -> dict:
     """Combine two copies of the same list. Commutative, associative and idempotent."""
     if a.get("id") != b.get("id"):
-        raise ShareError("These are two different shared lists.")
+        raise ShareError("These are two different groups.")
     out = {"papershelf_shared": FORMAT, "id": a["id"], "clock": max(clock(a), clock(b)),
            "updated_at": max(a.get("updated_at") or "", b.get("updated_at") or ""),
            "publisher": a.get("publisher") or b.get("publisher") or ""}
@@ -367,10 +367,10 @@ def merge(a: dict, b: dict) -> dict:
 def validate(data) -> dict:
     """Check and clean a list file read from someone else's repository (never trust it blindly)."""
     if not isinstance(data, dict) or data.get("papershelf_shared") != FORMAT:
-        raise ShareError("This is not a PaperShelf shared list.")
+        raise ShareError("This is not a PaperShelf group.")
     lid = str(data.get("id") or "")
     if not ID_RE.match(lid):
-        raise ShareError("This shared list has an invalid id.")
+        raise ShareError("This group has an invalid id.")
     st = {"papershelf_shared": FORMAT, "id": lid, "clock": 0, "updated_at": str(data.get("updated_at") or "")[:40],
           "publisher": str(data.get("publisher") or "")[:60], "members": {}, "items": {}}
     for k, lim in (("name", 120), ("description", 1000)):
@@ -555,7 +555,7 @@ class GitHub:
     # ---- account and gist
     def whoami(self) -> str:
         if not self.token:
-            raise ShareError("Paste your GitHub token first (Settings → GitHub sync & sharing).")
+            raise ShareError("Paste your GitHub token first (Settings → Groups).")
         r = self._req("GET", f"{API}/user", headers=self._headers())
         if r.status_code == 401:
             raise ShareError("GitHub doesn't accept this token (wrong or expired).")
@@ -626,7 +626,7 @@ class GitHub:
             if r.status_code == 404:
                 return None
             if r.status_code != 200:
-                raise ShareError(f"GitHub answered {r.status_code} for {owner}'s shared labels.")
+                raise ShareError(f"GitHub answered {r.status_code} for {owner}'s groups.")
             return self._json(r.content, name)
         if not REPO_RE.match(src or ""):
             return None
@@ -635,7 +635,7 @@ class GitHub:
     def publish(self, src: str, files: dict):
         """Write {filename: data} into your own gist in one go."""
         if not (self.token and is_gist(src)):
-            raise ShareError("Sharing is not set up (Settings → GitHub sync & sharing → Share labels).")
+            raise ShareError("GitHub is not connected for groups (Settings → Groups).")
         gid = src[5:]
         body = {"files": {n: {"content": json.dumps(d, indent=1, sort_keys=True, ensure_ascii=False) + "\n"} for n, d in files.items()}}
         r = self._req("PATCH", f"{API}/gists/{gid}", headers=self._headers(), json=body)
@@ -645,7 +645,7 @@ class GitHub:
         if r.status_code in (401, 403):
             raise ShareError(NEEDS_GISTS)
         if r.status_code == 404:
-            raise ShareError("Your shared-labels gist was not found – turn sharing off and on again in Settings → GitHub sync & sharing.")
+            raise ShareError("Your groups gist was not found – in Settings → Groups click Disconnect, then connect again.")
         raise ShareError(f"GitHub answered {r.status_code} while publishing.")
 
     def comment(self, src: str, body: str):
@@ -692,4 +692,4 @@ class GitHub:
 
 NEEDS_GISTS = ("Your GitHub token can't use gists. Edit the token on GitHub (Settings → Developer settings → "
                "Personal access tokens → Fine-grained tokens → your token → Edit) and under Account permissions set "
-               "“Gists” to Read and write, then click Update – no new token needed. See the guide (Shared labels).")
+               "“Gists” to Read and write, then click Update – no new token needed. See the guide (Groups).")

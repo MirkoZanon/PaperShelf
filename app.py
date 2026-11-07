@@ -277,6 +277,7 @@ def get_settings(db=None, secrets=True) -> dict:
     if not secrets:
         for key in SECRET_SETTINGS:
             s["has_" + key] = bool(s.pop(key))
+        s["has_git"] = bool(shutil.which("git"))   # needed by "Sync my computers"
     return s
 
 
@@ -2012,8 +2013,8 @@ def diagnostics():
     ident = share_identity(db)
     nsh = db.execute("SELECT COUNT(*) FROM shares").fetchone()[0]
     bad = [r["last_error"] for r in db.execute("SELECT last_error FROM shares WHERE last_error != ''")]
-    add("Shared labels", not bad, (f"{nsh} shared label(s)" + (f", shared through the gist of {ident['user']}" if ident["can_publish"] else
-        ", not publishing (only following)") + (f" – {bad[0]}" if bad else "")) if nsh or ident["repo"] else "not used (optional)", "sharing")
+    add("Groups", not bad, (f"{nsh} group(s)" + (f", connected to GitHub as {ident['user']}" if ident["can_publish"] else
+        ", GitHub not connected (reader only)") + (f" – {bad[0]}" if bad else "")) if nsh or ident["repo"] else "not used (optional)", "sharing")
     gs = syncmod.git_status()
     add("Git (for GitHub sync)", gs["ok"], gs["version"] or gs["error"], "sync")
     if s.get("sync_repo"):
@@ -2935,7 +2936,7 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     gh = gh or sharing.GitHub(ident["token"])
     row, st = _load_share(db, sid)
     if not st:
-        raise sharing.ShareError("Shared label not found.")
+        raise sharing.ShareError("Group not found.")
     me = _my_author(st, ident)
     errors, authority = [], [(me, json.loads(json.dumps(st)))] if me else []  # your own copy decides about your notes
     sources = {(n, rp) for n, rp in sharing.members(st).items() if rp}
@@ -3025,7 +3026,7 @@ def restore_my_shares(db, ident, gh) -> int:
 
 def sync_all_shares(db, only=None) -> dict:
     if not share_lock.acquire(timeout=120):
-        raise sharing.ShareError("Shared labels are already being updated.")
+        raise sharing.ShareError("Groups are already being updated.")
     try:
         ident = share_identity(db)
         gh = sharing.GitHub(ident["token"])
@@ -3169,10 +3170,10 @@ def _public_target(db, pid, sid):
     """(state, item key, author) of a paper in a shared label, or an error response."""
     row, st = _load_share(db, sid)
     if not st:
-        return None, None, None, error("Shared label not found.", 404)
+        return None, None, None, error("Group not found.", 404)
     r = db.execute("SELECT item_key FROM paper_shares WHERE paper_id=? AND share_id=?", (pid, sid)).fetchone()
     if not r or r["item_key"] not in st["items"]:
-        return None, None, None, error("This paper is not in that shared label.")
+        return None, None, None, error("This paper is not in that group.")
     return st, r["item_key"], _my_author(st, share_identity(db)), None
 
 
@@ -3206,7 +3207,7 @@ def paper_note_add(pid):
     if err:
         return err
     if not author:
-        return error("You follow this shared label but are not a member, so you can't write public notes in it.")
+        return error("You are a reader of this group, so you can't write public notes in it. Ask an editor to add your GitHub username.")
     sharing.add_note(st, author, key, body, _display_name(db))
     _save_share(db, sid, st)
     db.commit()
@@ -3322,7 +3323,7 @@ def notes_export():
 def _share_or_404(db, sid):
     row, st = _load_share(db, sid)
     if not st:
-        return None, None, (jsonify(error="Shared label not found."), 404)
+        return None, None, (jsonify(error="Group not found."), 404)
     return row, st, None
 
 
@@ -3342,7 +3343,7 @@ def create_share():
     ident = share_identity(db)
     name = (b.get("name") or "").strip()
     if not name:
-        return error("Give the shared label a name.")
+        return error("Give the group a name.")
     author = ident["user"] if ident["can_publish"] else ident["local"]
     st = sharing.new_state(name, author, ident["repo"] if ident["can_publish"] else "",
                            display_name=get_settings(db).get("display_name") or ident["user"])
@@ -3377,7 +3378,7 @@ def update_share(sid):
     ident = share_identity(db)
     author = _my_author(st, ident)
     if ("name" in b or "description" in b) and not author:
-        return error("Only members can rename this shared label. You are following it.")
+        return error("Only editors can rename this group – you are a reader.")
     if "name" in b and (b["name"] or "").strip() and b["name"].strip() != st["name"]["v"]:
         sharing.set_name(st, author, b["name"])
     if "description" in b and (b["description"] or "") != st["description"]["v"]:
@@ -3429,7 +3430,7 @@ def share_papers(sid):
     ids = [int(i) for i in b.get("paper_ids") or []]
     remove = b.get("action") == "remove"
     if not remove and not author:
-        return error("You follow this shared label but are not a member, so you can't add papers. Ask a member to add "
+        return error("You are a reader of this group, so you can't add papers. Ask an editor to add "
                      "your GitHub name, then join again with the code.")
     for p in load_papers(db, ids):
         if remove:
@@ -3465,12 +3466,12 @@ def share_members(sid):
     ident = share_identity(db)
     author = _my_author(st, ident)
     if not author:
-        return error("Only members can add or remove members.")
+        return error("Only editors can invite people or remove editors.")
     if not ident["can_publish"]:
-        return error("To share with other people, first turn on sharing in Settings → GitHub sync & sharing.")
+        return error("To invite people, first connect GitHub in Settings → Groups.")
     name = re.sub(r"^https?://github\.com/", "", (b.get("name") or "").strip()).strip("/@ ")
     if not sharing.NAME_RE.match(name):
-        return error("Type the GitHub user name of the person (e.g. MarioRossi).")
+        return error("Type the GitHub username of the person (e.g. MarioRossi).")
     if b.get("remove"):
         sharing.set_member(st, author, name, remove=True)
     else:
@@ -3523,13 +3524,13 @@ def join_share():
         if not lid:
             idx = gh.read_src(owner, src, "index", fresh=True)
             if not idx:
-                return error(f"No shared labels found there. Ask {owner} for the code shown in the label's ⚙︎.", 404)
+                return error(f"No groups found there. Ask {owner} for the code in their invitation.", 404)
             have = {r[0] for r in db.execute("SELECT id FROM shares")}
             lists = [dict(x, joined=x.get("id") in have) for x in idx.get("lists") or [] if isinstance(x, dict)]
             return jsonify(choose=lists, owner=owner)
         data = gh.read_src(owner, src, "list", lid, fresh=True)
         if not data:
-            return error("That shared label was not found. Check the code, or wait a minute if it was just created.", 404)
+            return error("That group was not found. Check the code, or wait a minute if it was just created.", 404)
         st = sharing.validate(data)
         sid, stats = _add_share_state(db, st, origin=f"{owner}|{src}")
     except sharing.ShareError as exc:

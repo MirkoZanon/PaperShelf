@@ -84,7 +84,7 @@ const Notes = (() => {
     if (state.settings.display_name) return state.settings.display_name;
     return new Promise(resolve => {
       const m = modal(`<h3>Your name for ${esc(what)}</h3>
-        <p class="muted small">Shown next to your public notes and on the shared labels you create, so members know who wrote what. Use your name, initials or a nickname – it's seen only by the members of your shared labels. You can change it later in ⚙︎ Settings → 👥 Sharing.</p>
+        <p class="muted small">Shown next to your public notes and in the groups you create, so people know who wrote what. Use your name, initials or a nickname – it's seen only by the people in your groups. You can change it later in ⚙︎ Settings → 👥 Groups.</p>
         <input class="input wide" id="dn-in" maxlength="60" placeholder="e.g. Mirko Z. or MZ" value="${esc(state.settings.share_user || '')}">
         <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="dn-ok">Save</button></div>`);
       let res = null; m.onclose = () => resolve(res);
@@ -127,13 +127,13 @@ const Notes = (() => {
   }
   function targets() {
     const d = cur.data;
-    return [{v: '', label: '🔒 Private – only me', ok: true}].concat(d.public.map(g => ({v: g.share_id, label: `🌐 Public in “${g.share_name}”`, ok: g.can_write})));
+    return [{v: '', label: '🔒 Private – only me', ok: true}].concat(d.public.map(g => ({v: g.share_id, label: `🌐 Public in the group “${g.share_name}”`, ok: g.can_write})));
   }
   function composerHtml({value = '', editing = false} = {}) {
     const tb = [['b', 'B', 'Bold'], ['i', '<i>I</i>', 'Italic'], ['s', '<s>S</s>', 'Strike-through'], ['mark', '<mark>H</mark>', 'Highlight'],
       ['h', 'H', 'Heading'], ['ul', '• List', 'List'], ['task', '☐', 'To-do item'], ['q', '❝', 'Quote'], ['code', '&lt;/&gt;', 'Code'], ['link', '🔗', 'Link']];
     const colors = Object.entries(COLORS).filter(([k]) => k !== 'gray').map(([k, c]) => `<button data-tb="color" data-c="${k}" title="${k}" class="nc-dot" style="background:${c}"></button>`).join('');
-    const vis = editing ? '' : `<select class="input nc-vis" title="Who can read it">${targets().map(t => `<option value="${esc(t.v)}" ${t.ok ? '' : 'disabled'}>${esc(t.label)}${t.ok ? '' : ' (you only follow it)'}</option>`).join('')}</select>`;
+    const vis = editing ? '' : `<select class="input nc-vis" title="Who can read it">${targets().map(t => `<option value="${esc(t.v)}" ${t.ok ? '' : 'disabled'}>${esc(t.label)}${t.ok ? '' : ' (you only read it)'}</option>`).join('')}</select>`;
     return `<div class="nc ${editing ? 'nc-edit' : ''}">
       <div class="nc-tools">${tb.map(([k, l, t]) => `<button data-tb="${k}" title="${t}">${l}</button>`).join('')}<span class="nc-sep"></span>${colors}<span class="grow"></span><button data-tb="preview" class="nc-prev-btn" title="Preview">👁 Preview</button></div>
       <textarea class="input nc-text" rows="${editing ? 4 : 3}" placeholder="Write a note… Markdown: **bold**, *italic*, ==highlight==, {red}colour{/}, - list, > quote">${esc(value)}</textarea>
@@ -152,7 +152,7 @@ const Notes = (() => {
         <span class="grow"></span>${hiddenN ? `<button class="linklike small" data-nshowhidden>${cur.showHidden ? 'Hide' : 'Show'} ${hiddenN} hidden</button>` : ''}</div>
       <div class="notes-thread">${shown.length ? shown.map(bubble).join('') : `<div class="notes-empty muted">${all.length ? 'No notes in this view.' : 'No notes yet – write the first one below.'}</div>`}</div>
       ${cur.editing ? '' : composerHtml()}
-      ${!d.public.length ? `<p class="muted small notes-hint">🔒 Notes are private. To discuss this paper with colleagues, put it in a <b>shared label</b>: you can then also write public notes that all its members see.</p>` : ''}`;
+      ${!d.public.length ? `<p class="muted small notes-hint">🔒 Notes are private. To discuss this paper with colleagues, put it in a <b>group</b>: you can then also write public notes that all its members see.</p>` : ''}`;
     $('.notes-title', cur.m.el).textContent = p.title || 'Notes';
     const th = $('.notes-thread', cur.m.el); th.scrollTop = th.scrollHeight;
     const vis = $('.nc-vis', cur.m.el);
@@ -207,7 +207,7 @@ const Notes = (() => {
     const b = $('[data-nsend]', cur.m.el); setBusy(b, true, 'Saving…');
     const ok = await call(`/api/papers/${cur.id}/notes`, {method: 'POST', body: {body, share_id}});
     if (!ok) setBusy($('[data-nsend]', cur.m.el), false);
-    else if (share_id) toast('Public note saved – the members of the shared label will see it at their next update.', 'ok');
+    else if (share_id) toast('Public note saved – the group will see it at their next update.', 'ok');
   }
 
   async function open(id, {filter = 'all'} = {}) {
@@ -238,7 +238,7 @@ const Notes = (() => {
         return;
       }
       if (t.closest('[data-ndel]')) {
-        const ok = await confirmBox('Delete this note?', kind === 'public' ? 'It is deleted for all the members of the shared label.' : 'It is deleted from your library.', {ok: 'Delete', danger: true});
+        const ok = await confirmBox('Delete this note?', kind === 'public' ? 'It is deleted for everybody in the group.' : 'It is deleted from your library.', {ok: 'Delete', danger: true});
         if (ok) call(`/api/papers/${cur.id}/notes/${nid}${kind === 'public' ? `?share=${encodeURIComponent(sid)}` : ''}`, {method: 'DELETE'});
         return;
       }
@@ -259,7 +259,7 @@ const Notes = (() => {
   // where a note on this paper can go: private, or public in each shared label you are a member of
   async function targetsFor(id) {
     const d = await api(`/api/papers/${id}/notes`);
-    return [{v: '', label: '🔒 Private – only me'}].concat(d.public.filter(g => g.can_write).map(g => ({v: g.share_id, label: `🌐 Public in “${g.share_name}”`, name: g.share_name})));
+    return [{v: '', label: '🔒 Private – only me'}].concat(d.public.filter(g => g.can_write).map(g => ({v: g.share_id, label: `🌐 Public in the group “${g.share_name}”`, name: g.share_name})));
   }
   async function add(id, body, shareId = '') {
     if (shareId && !(await ensureName())) return null;
@@ -292,7 +292,7 @@ const Notes = (() => {
       <label class="opt"><input type="radio" name="nfmt" value="html"><span>Web page (.html)<small>With styles and colours; open it in the browser and print or paste into Word</small></span></label>
       <div class="section-label">Which notes</div>
       <label class="opt"><input type="checkbox" id="nx-priv" checked><span>🔒 My private notes</span></label>
-      <label class="opt"><input type="checkbox" id="nx-pub" checked><span>🌐 Public notes of shared labels<small>Notes you hid are left out</small></span></label>
+      <label class="opt"><input type="checkbox" id="nx-pub" checked><span>🌐 Public notes of groups<small>Notes you hid are left out</small></span></label>
       <label class="opt"><input type="checkbox" id="nx-only" ${withNotes && withNotes < ids.length ? 'checked' : ''}><span>Only papers that have notes</span></label>
       <div class="section-label">Reference style</div>
       <select class="input wide" id="nx-style">${styleOpts}</select>

@@ -47,7 +47,7 @@ const Reader = (() => {
           <div class="r-side-head">Highlights <span class="muted" id="r-count"></span></div>
           <div class="muted small r-hint">Select text in the PDF, then click a color to highlight it. Click a highlight to add a note.</div>
           <div id="r-list"></div>
-          <div class="r-side-foot"><button class="btn small" id="r-copy">Copy all</button><button class="btn small" id="r-tonotes" title="Copy all highlights (with their notes) into a note of this paper – private, or public if the paper is in a shared label">Add to paper notes</button></div>
+          <div class="r-side-foot"><button class="btn small" id="r-copy">Copy all</button><button class="btn small" id="r-tonotes" title="Copy all highlights (with their notes) into a note of this paper – private, or public if the paper is in a group">Add to paper notes</button></div>
         </aside>
       </div>
       <div class="r-pop" id="r-pop"></div>`;
@@ -279,7 +279,7 @@ const Reader = (() => {
         await update(a, {note}); hidePop();
         if (to !== '-' && note.trim()) {
           const body = `> ==${a.text.trim().replace(/\s+/g, ' ')}== (p. ${a.page})\n\n${note.trim()}`;
-          try { const r = await Notes.add(paper.id, body, to); if (r) toast(to ? 'Note added to the paper as a public note – the members of the shared label will see it.' : 'Note added to the paper\'s private notes.', 'ok', 6000); }
+          try { const r = await Notes.add(paper.id, body, to); if (r) toast(to ? 'Note added to the paper as a public note – the group will see it.' : 'Note added to the paper\'s private notes.', 'ok', 6000); }
           catch (err) { toast(err.message, 'error'); }
         }
       }
