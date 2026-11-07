@@ -3925,6 +3925,23 @@ def _own_window_setting() -> bool:
         return True
 
 
+def _opening_too_often() -> bool:
+    """Safety net: if PaperShelf is asked to open its window many times in a few seconds, something
+    is starting it in a loop – open a plain browser tab instead of the app."""
+    f = HOME / ".opening"
+    t = time.time()
+    try:
+        old = [float(x) for x in f.read_text().split()[-5:]] if f.exists() else []
+    except (OSError, ValueError):
+        old = []
+    recent = [x for x in old if t - x < 15] + [t]
+    try:
+        f.write_text(" ".join(f"{x:.2f}" for x in recent))
+    except OSError:
+        pass
+    return len(recent) >= 4
+
+
 def main():
     ap = argparse.ArgumentParser(description="PaperShelf - local reference manager")
     ap.add_argument("--port", type=int, default=PORT)
@@ -3940,7 +3957,7 @@ def main():
         print(f"[{now()}] PaperShelf {APP_VERSION}: started after an update")
     if _port_in_use(args.port):
         print(f"PaperShelf already seems to be running - opening {url}")
-        launcher.open_ui(url, _own_window_setting())
+        launcher.open_ui(url, _own_window_setting() and not _opening_too_often())
         return
 
     init_db()

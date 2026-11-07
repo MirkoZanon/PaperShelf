@@ -66,8 +66,21 @@ def app_browser() -> str | None:
 _APP_NAME = re.compile(r"^PaperShelf(?: [^/\\]*)?\.(?:app|lnk)$")
 
 
+def _is_browser_app(c: Path) -> bool:
+    """A real app installed by the browser – never PaperShelf's own launcher icon (that one starts
+    PaperShelf, which would open it again, in a loop)."""
+    if c.suffix != ".app":
+        return True
+    try:
+        with open(c / "Contents" / "Info.plist", "rb") as f:
+            info = plistlib.load(f)
+    except (OSError, ValueError, plistlib.InvalidFileException):
+        return False
+    return bool(info.get("CrAppModeShortcutID")) and not str(info.get("CFBundleIdentifier", "")).startswith("io.github.mirkozanon")
+
+
 def _pick(cands) -> str | None:
-    cands = [c for c in cands if _APP_NAME.match(c.name) and c.exists()]
+    cands = [c for c in cands if _APP_NAME.match(c.name) and c.exists() and _is_browser_app(c)]
     if not cands:
         return None
     exact = [c for c in cands if c.stem == "PaperShelf"]

@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.11.3 – 2026-11-07
+
+- **Fix: the PaperShelf icon kept bouncing without opening** – 2.11.2 could mistake PaperShelf's own
+  icon (the launcher) for the app installed by Chrome, and then each start opened the next one, in a
+  loop. Now only a real browser app counts, and a safety net stops PaperShelf from reopening itself
+  more than a few times in a row.
+
 ## 2.11.2 – 2026-11-07
 
 - **Fix: the PaperShelf app wasn't recognised again** – when Chrome reinstalls an app it can give it a
