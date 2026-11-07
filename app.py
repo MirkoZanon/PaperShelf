@@ -2689,7 +2689,7 @@ def quit_app():
 def web_manifest():
     data = {"name": "PaperShelf", "short_name": "PaperShelf", "id": "/", "start_url": "/", "scope": "/", "display": "standalone",
             "launch_handler": {"client_mode": ["focus-existing", "auto"]},
-            "background_color": "#f3f4f6", "theme_color": "#e9ecf0",
+            "background_color": "#eaf3ee", "theme_color": "#e6f2ec",
             "description": "Your private library of scientific papers",
             "icons": [{"src": f"/static/icons/icon-{n}.png", "sizes": f"{n}x{n}", "type": "image/png"} for n in (192, 512)]}
     return Response(json.dumps(data), mimetype="application/manifest+json")

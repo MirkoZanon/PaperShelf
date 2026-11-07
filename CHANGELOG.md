@@ -2,15 +2,20 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.10 – 2026-11-07
+
+- **Green glass** – the look is now metallic green with a “liquid glass” feel: translucent, softly
+  blurred top bar, sidebar, details panel, menus and dialogs over a light green background; buttons,
+  tabs and switches in polished metallic green with a highlight; the page title with a green sheen.
+  Dark mode becomes deep green glass. The icon is green again, metallic and glossy, with metal-coloured
+  books. ⚙︎ Settings → General → *Look*: *Green glass* (default) or *Flat*.
+
 ## 2.9 – 2026-11-07
 
 - **Discover has its own tab** – next to Library and Researchers. It suggests papers for the whole
   library, or for the label you pick in the sidebar, and has the search by topic. The Library keeps
   List, Map and Table.
-- **Metallic look** – brushed-steel top bar and sidebar, polished buttons and switches, a green that
-  shines a little; dark mode becomes graphite. New icon to match (steel tile, metal-coloured books).
-  ⚙︎ Settings → General → *Look*: *Metallic* (default) or *Flat*. (An app already installed in the Dock /
-  taskbar may keep the old icon until it is installed again.)
+- **Metallic look** (replaced by *Green glass* in 2.10).
 - **Export by labels** – *Papers with these labels*: pick one or more labels or groups (sub-labels
   included) and export only those papers.
 - **Simpler logo menu** – *Check my library* is gone (⟳ already does it) and so is *Search by topic*

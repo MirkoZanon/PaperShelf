@@ -1299,89 +1299,125 @@ main.narrow .search-box, main.narrow .search-box:focus-within { flex: 1 1 auto; 
 .vt-scope { color: var(--muted); font-weight: 600; }
 body.tab-discover #list-toolbar { display: none !important; }
 
-/* ================================================================ 2.9: the metallic look (⚙︎ Settings → General → Look) */
+.look-seg { margin: 0 0 4px; }
+
+/* ================================================================ 2.10: green glass – metallic green and "liquid glass"
+   (⚙︎ Settings → General → Look: Green glass / Flat). Translucent, blurred panels over a soft green
+   background; controls in polished metallic green with a specular highlight. */
 body.look-metal {
-  --bg: #eef0f3; --panel: #ffffff; --side: #e2e6ea; --border: #cbd1d8; --border-soft: #dfe3e8;
-  --chip: #e9ecef; --hover: #edf0f3; --sel: #e3efe8;
-  --metal-top: #f9fafb; --metal-bot: #d9dee4; --metal-edge: #b9c0c8; --metal-hi: rgba(255,255,255,.95);
-  --btn-top: #ffffff; --btn-bot: #eceff2; --btn-edge: #c7cdd4; --track: linear-gradient(180deg, #e3e7eb, #eef1f4);
-  --green-top: #3c9a6b; --green-bot: #24704c; --green-edge: #1f6143;
+  --bg: #e9f2ed; --panel: rgba(255,255,255,.72); --side: rgba(236,246,240,.55); --border: rgba(120,160,140,.32); --border-soft: rgba(120,160,140,.2);
+  --chip: rgba(46,125,85,.08); --hover: rgba(46,125,85,.07); --sel: rgba(46,125,85,.12);
+  --glass: rgba(255,255,255,.58); --glass-strong: rgba(255,255,255,.78); --glass-edge: rgba(255,255,255,.75); --glass-line: rgba(30,90,60,.14);
+  --glass-hi: inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(30,90,60,.05);
+  --g1: #5fd39a; --g2: #2f9a66; --g3: #1d6e48; --g-edge: #1b6542; --g-ink: #ffffff;
+  --metal-green: linear-gradient(180deg, #74dba8 0%, #3eaa74 45%, #23794f 55%, #2e8f60 100%);
+  --metal-green-soft: linear-gradient(180deg, rgba(126,222,170,.55), rgba(46,154,102,.28));
+  --blur: blur(22px) saturate(1.6);
+  background: radial-gradient(1200px 700px at 8% -10%, #cfeedd 0%, transparent 60%),
+              radial-gradient(900px 600px at 105% 15%, #d8efe6 0%, transparent 55%),
+              radial-gradient(1000px 800px at 60% 120%, #d3eadc 0%, transparent 60%),
+              linear-gradient(180deg, #eef6f1, #e4efe8) fixed;
 }
 @media (prefers-color-scheme: dark) {
   body.look-metal {
-    --bg: #17191c; --panel: #1f2125; --side: #1b1d20; --border: #353940; --border-soft: #2a2d32;
-    --chip: #2b2e33; --hover: #272a2e; --sel: #1d2e24;
-    --metal-top: #2e3237; --metal-bot: #212428; --metal-edge: #3a3f46; --metal-hi: rgba(255,255,255,.07);
-    --btn-top: #2f3338; --btn-bot: #25282c; --btn-edge: #3c4148; --track: linear-gradient(180deg, #1b1d20, #24272b);
-    --green-top: #62c993; --green-bot: #3fa572; --green-edge: #2f8a5c;
+    --bg: #0f1713; --panel: rgba(30,44,37,.72); --side: rgba(22,34,28,.55); --border: rgba(120,200,160,.18); --border-soft: rgba(120,200,160,.11);
+    --chip: rgba(120,220,170,.1); --hover: rgba(120,220,170,.08); --sel: rgba(120,220,170,.14);
+    --glass: rgba(34,52,43,.55); --glass-strong: rgba(30,46,38,.82); --glass-edge: rgba(160,230,195,.14); --glass-line: rgba(160,230,195,.12);
+    --glass-hi: inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.25);
+    --g-ink: #06140d; --g-edge: #2f9c66;
+    --metal-green: linear-gradient(180deg, #a3f0c8 0%, #62cf96 45%, #3aa572 55%, #4dbb84 100%);
+    --metal-green-soft: linear-gradient(180deg, rgba(110,220,160,.32), rgba(50,150,100,.18));
+    background: radial-gradient(1200px 700px at 8% -10%, #1d3a2b 0%, transparent 60%),
+                radial-gradient(900px 600px at 105% 15%, #183326 0%, transparent 55%),
+                radial-gradient(1000px 800px at 60% 120%, #152b20 0%, transparent 60%),
+                linear-gradient(180deg, #111b16, #0c1410) fixed;
   }
 }
-/* brushed-steel header and sidebar */
+/* glass surfaces */
 body.look-metal header {
-  background: linear-gradient(180deg, var(--metal-top), var(--metal-bot));
-  border-bottom: 1px solid var(--metal-edge); box-shadow: inset 0 1px 0 var(--metal-hi), 0 1px 3px rgba(0,0,0,.05);
+  background: linear-gradient(180deg, rgba(255,255,255,.72), rgba(236,247,241,.5)); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--glass-edge); box-shadow: var(--glass-hi), 0 6px 24px rgba(20,80,50,.08); position: relative; z-index: 30;
 }
+@media (prefers-color-scheme: dark) { body.look-metal header { background: linear-gradient(180deg, rgba(40,60,50,.7), rgba(24,38,31,.55)); } }
 body.look-metal aside#sidebar, body.look-metal aside#people-side {
-  background:
-    repeating-linear-gradient(0deg, rgba(255,255,255,.06) 0 1px, rgba(0,0,0,.025) 1px 2px),
-    linear-gradient(100deg, color-mix(in srgb, var(--side) 55%, var(--metal-top)) 0%, var(--side) 55%, color-mix(in srgb, var(--side) 85%, var(--metal-bot)) 100%);
-  border-right: 1px solid var(--metal-edge); box-shadow: inset -1px 0 0 var(--metal-hi);
+  background: var(--side); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border-right: 1px solid var(--glass-edge); box-shadow: inset -1px 0 0 var(--glass-line);
 }
-/* raised metal buttons */
+body.look-metal #detail, body.look-metal .menu, body.look-metal .ctx-menu, body.look-metal .modal, body.look-metal .rv-wrap {
+  background: var(--glass-strong); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
+  border-color: var(--glass-edge); box-shadow: var(--glass-hi), 0 20px 50px rgba(15,60,38,.18);
+}
+body.look-metal .modal-wrap { background: rgba(20,50,35,.18); }
+body.look-metal .toolbar { border-bottom-color: var(--glass-line); }
+/* papers float as glass cards on hover / selection */
+body.look-metal .row:hover, body.look-metal .row.open { background: var(--glass); border-color: var(--glass-edge); box-shadow: var(--glass-hi), 0 4px 16px rgba(20,80,50,.07); }
+body.look-metal .row.selected { background: rgba(46,154,102,.12); }
+body.look-metal #list > .row:not(:hover):not(.open):not(.selected) + .row:not(:hover):not(.open):not(.selected) { box-shadow: 0 -1px 0 var(--glass-line); }
+/* glass buttons, metallic-green primary buttons */
 body.look-metal .btn:not(.primary):not(.danger):not(.linklike) {
-  background: linear-gradient(180deg, var(--btn-top), var(--btn-bot)); border-color: var(--btn-edge);
-  box-shadow: inset 0 1px 0 var(--metal-hi), 0 1px 1.5px rgba(0,0,0,.07);
+  background: linear-gradient(180deg, rgba(255,255,255,.82), rgba(240,249,244,.55)); border-color: var(--glass-edge);
+  box-shadow: var(--glass-hi), 0 1px 3px rgba(20,80,50,.12); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-body.look-metal .btn:not(.primary):not(.danger):not(.linklike):hover { background: linear-gradient(180deg, var(--btn-top), color-mix(in srgb, var(--btn-bot) 80%, var(--btn-edge))); }
-body.look-metal .btn:not(.primary):not(.danger):not(.linklike):active { background: linear-gradient(180deg, var(--btn-bot), var(--btn-top)); box-shadow: inset 0 1px 2px rgba(0,0,0,.12); }
-body.look-metal .btn.primary, body.look-metal .seg button.on.solid {
-  background: linear-gradient(180deg, var(--green-top), var(--green-bot)); border-color: var(--green-edge);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.28), 0 1px 2px rgba(0,0,0,.14); text-shadow: 0 -1px 0 rgba(0,0,0,.15);
+@media (prefers-color-scheme: dark) { body.look-metal .btn:not(.primary):not(.danger):not(.linklike) { background: linear-gradient(180deg, rgba(70,100,85,.45), rgba(40,62,51,.4)); } }
+body.look-metal .btn:not(.primary):not(.danger):not(.linklike):hover { border-color: rgba(46,154,102,.45); color: var(--accent); }
+body.look-metal .btn.primary {
+  background: var(--metal-green); border-color: var(--g-edge); color: var(--g-ink);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 4px rgba(0,40,20,.18), 0 2px 8px rgba(30,120,75,.32);
+  text-shadow: 0 -1px 0 rgba(0,50,25,.25);
 }
-body.look-metal .btn.primary:hover { filter: brightness(1.05); }
-body.look-metal .btn.primary:active { box-shadow: inset 0 1px 3px rgba(0,0,0,.25); }
 @media (prefers-color-scheme: dark) { body.look-metal .btn.primary { text-shadow: none; } }
-/* recessed tracks with a raised, polished selected pill (views, tabs, status…) */
-body.look-metal .seg, body.look-metal .mode-seg, body.look-metal .nt-tools {
-  background: var(--track); border-color: var(--btn-edge); box-shadow: inset 0 1px 2px rgba(0,0,0,.08), 0 1px 0 var(--metal-hi);
+body.look-metal .btn.primary:hover { filter: brightness(1.06) saturate(1.05); }
+body.look-metal .btn.primary:active { box-shadow: inset 0 2px 5px rgba(0,40,20,.35); }
+/* tabs and switches: a glass track with a polished metallic-green pill */
+body.look-metal .seg, body.look-metal .mode-seg, body.look-metal .nt-tools, body.look-metal .view-opts {
+  background: rgba(255,255,255,.42); border-color: var(--glass-edge); box-shadow: inset 0 1px 3px rgba(20,80,50,.1), 0 1px 0 rgba(255,255,255,.7);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
-body.look-metal .seg button.on, body.look-metal .mode-seg button.on, body.look-metal .nt-tools .nt.on {
-  background: linear-gradient(180deg, var(--btn-top), var(--btn-bot)); box-shadow: inset 0 1px 0 var(--metal-hi), 0 1px 2px rgba(0,0,0,.14), 0 0 0 1px var(--btn-edge);
+@media (prefers-color-scheme: dark) { body.look-metal .seg, body.look-metal .mode-seg, body.look-metal .nt-tools, body.look-metal .view-opts { background: rgba(0,0,0,.2); box-shadow: inset 0 1px 3px rgba(0,0,0,.35); } }
+body.look-metal .seg button.on, body.look-metal .mode-seg button.on, body.look-metal .nt-tools .nt.on, body.look-metal .nt.nt-read.on {
+  background: var(--metal-green); color: var(--g-ink); font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), inset 0 -2px 4px rgba(0,40,20,.15), 0 2px 6px rgba(30,120,75,.3);
+  text-shadow: 0 -1px 0 rgba(0,50,25,.2);
 }
-body.look-metal .nt.nt-read.on { background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 70%, var(--btn-top)), var(--accent-soft));
-  box-shadow: inset 0 1px 0 var(--metal-hi), 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--btn-edge)); }
-/* round header buttons: polished discs */
-body.look-metal header .btn.round { background: radial-gradient(circle at 50% 30%, var(--btn-top), var(--btn-bot) 75%); }
-/* the add box and search: inset fields */
-body.look-metal #add-form #add-input, body.look-metal .search-box, body.look-metal .input, body.look-metal .fld input:not([type=radio]):not([type=checkbox]),
-body.look-metal .fld textarea, body.look-metal .fld select {
-  box-shadow: inset 0 1px 2px rgba(0,0,0,.06);
+body.look-metal .nt.on .tab-n { background: rgba(255,255,255,.85); color: var(--g3); }
+body.look-metal .nt:not(.on):hover { background: rgba(46,154,102,.1); color: var(--accent); }
+body.look-metal .vo { border-right-color: var(--glass-line); }
+body.look-metal .vo:hover { background: rgba(46,154,102,.08); }
+body.look-metal .vo-toggle:has(input:checked) { background: var(--metal-green-soft); color: var(--g3); }
+body.look-metal #incl-sub-wrap { background: rgba(255,255,255,.5); border-color: var(--glass-edge); }
+body.look-metal #incl-sub-wrap:has(input:checked) { background: var(--metal-green-soft); }
+/* round header buttons: glass bubbles */
+body.look-metal header .btn.round { border-radius: 50%; background: radial-gradient(circle at 50% 25%, rgba(255,255,255,.95), rgba(225,243,233,.6) 70%) !important; }
+@media (prefers-color-scheme: dark) { body.look-metal header .btn.round { background: radial-gradient(circle at 50% 25%, rgba(110,160,135,.4), rgba(35,55,45,.5) 70%) !important; } }
+body.look-metal .feed-n { background: var(--metal-green); color: var(--g-ink); }
+/* fields: frosted */
+body.look-metal .input, body.look-metal .search-box, body.look-metal #add-form #add-input, body.look-metal .fld input:not([type=radio]):not([type=checkbox]), body.look-metal .fld textarea, body.look-metal .fld select {
+  background-color: rgba(255,255,255,.6); border-color: var(--glass-edge); box-shadow: inset 0 1px 2px rgba(20,80,50,.08);
 }
-body.look-metal #add-form #add-input { background: color-mix(in srgb, var(--panel) 85%, var(--bg)); }
-/* view options group and export: metal too */
-body.look-metal .view-opts, body.look-metal .vo-export, body.look-metal #incl-sub-wrap {
-  background: linear-gradient(180deg, var(--btn-top), var(--btn-bot)); border-color: var(--btn-edge); box-shadow: inset 0 1px 0 var(--metal-hi), 0 1px 1.5px rgba(0,0,0,.06);
+@media (prefers-color-scheme: dark) { body.look-metal .input, body.look-metal .search-box, body.look-metal #add-form #add-input, body.look-metal .fld input:not([type=radio]):not([type=checkbox]), body.look-metal .fld textarea, body.look-metal .fld select { background-color: rgba(0,0,0,.22); } }
+body.look-metal .input:focus, body.look-metal .search-box:focus-within, body.look-metal #add-form #add-input:focus { border-color: rgba(46,154,102,.7); box-shadow: 0 0 0 3px rgba(46,154,102,.18); }
+/* sidebar: the chosen item is a metallic-green glass pill */
+body.look-metal .nav-item.active { background: var(--metal-green-soft); color: var(--g3); box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 0 0 1px rgba(46,154,102,.25); }
+@media (prefers-color-scheme: dark) { body.look-metal .nav-item.active { color: #a8f0c9; } }
+body.look-metal .nav-item:hover { background: rgba(46,154,102,.08); }
+/* option cards and other cards: glass */
+body.look-metal .opt, body.look-metal .s-card, body.look-metal .p-card, body.look-metal .st-tile, body.look-metal .set-status, body.look-metal .grp, body.look-metal .dash {
+  background-color: rgba(255,255,255,.5); border-color: var(--glass-edge);
 }
-body.look-metal .vo { border-right-color: var(--btn-edge); }
-/* panels and dialogs: a fine steel rim */
-body.look-metal .modal { border-color: var(--btn-edge); box-shadow: 0 1px 0 var(--metal-hi) inset, 0 18px 50px rgba(20,24,30,.22); }
-body.look-metal #detail { border-left-color: var(--metal-edge); }
-body.look-metal .row:hover, body.look-metal .row.open { box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-body.look-metal .nav-item.active { background: linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 60%, #fff 10%), var(--accent-soft));
-  box-shadow: inset 0 1px 0 var(--metal-hi), 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent); }
-@media (prefers-color-scheme: dark) { body.look-metal .nav-item.active { background: var(--accent-soft); } }
-.look-seg { margin: 0 0 4px; }
-
-/* the header: brushed steel with a soft light reflection */
-body.look-metal header { background:
-    linear-gradient(100deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.35) 45%, rgba(255,255,255,0) 60%),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, rgba(0,0,0,.012) 1px 3px),
-    linear-gradient(180deg, var(--metal-top), var(--metal-bot)); }
-@media (prefers-color-scheme: dark) { body.look-metal header { background:
-    linear-gradient(100deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.04) 45%, rgba(255,255,255,0) 60%),
-    repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 1px, rgba(0,0,0,.05) 1px 3px),
-    linear-gradient(180deg, var(--metal-top), var(--metal-bot)); } }
-body.look-metal .view-head h1 { background: linear-gradient(180deg, var(--text) 40%, color-mix(in srgb, var(--text) 65%, var(--muted)));
-  -webkit-background-clip: text; background-clip: text; color: transparent; }
+@media (prefers-color-scheme: dark) { body.look-metal .opt, body.look-metal .s-card, body.look-metal .p-card, body.look-metal .st-tile, body.look-metal .set-status { background-color: rgba(255,255,255,.04); } }
+body.look-metal .opt:has(input:checked) { background: linear-gradient(180deg, rgba(126,222,170,.28), rgba(46,154,102,.12)); border-color: rgba(46,154,102,.45); }
+body.look-metal ol.gh-steps > li::before { background: var(--metal-green); color: var(--g-ink); box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 1px 3px rgba(30,120,75,.3); }
+/* the page title: a quiet metallic-green sheen */
+body.look-metal .view-head h1 { background: linear-gradient(180deg, #1f5d40 0%, #2e8a5d 60%, #1c5a3e 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@media (prefers-color-scheme: dark) { body.look-metal .view-head h1 { background: linear-gradient(180deg, #d9f7e7, #8fdcb3); -webkit-background-clip: text; background-clip: text; } }
 body.look-metal .view-head h1 .view-clear, body.look-metal .view-head h1 .vt-scope { -webkit-text-fill-color: initial; }
 body.look-metal .vt-scope { color: var(--muted); }
+body.look-metal .brand { color: var(--g3); }
+@media (prefers-color-scheme: dark) { body.look-metal .brand { color: #c9f3dd; } }
+/* sticky headers stay opaque, so what scrolls underneath doesn't show through */
+body.look-metal .rv thead th, body.look-metal .rv th.rv-paper, body.look-metal .rv td.rv-paper, body.look-metal .prow.head { background-color: #f1f8f4; }
+@media (prefers-color-scheme: dark) { body.look-metal .rv thead th, body.look-metal .rv th.rv-paper, body.look-metal .rv td.rv-paper, body.look-metal .prow.head { background-color: #18241e; } }
+/* dialogs and menus: frosted but well readable */
+body.look-metal .modal, body.look-metal .menu, body.look-metal .ctx-menu { background: linear-gradient(180deg, rgba(252,255,253,.95), rgba(242,250,246,.93)); }
+@media (prefers-color-scheme: dark) { body.look-metal .modal, body.look-metal .menu, body.look-metal .ctx-menu { background: linear-gradient(180deg, rgba(32,48,40,.97), rgba(24,37,31,.96)); } }
+body.look-metal .modal-wrap { background: rgba(20,50,35,.22); -webkit-backdrop-filter: blur(6px) saturate(1.2); backdrop-filter: blur(6px) saturate(1.2); }

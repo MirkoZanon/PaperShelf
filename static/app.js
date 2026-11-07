@@ -941,7 +941,7 @@ function openSettings(startTab) {
     <div class="section-label">Open PaperShelf on</div>
     <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option></select>
     <div class="section-label">Look</div>
-    <div class="seg look-seg"><button type="button" data-look="metal" class="${(s.look || 'metal') === 'metal' ? 'on' : ''}">✦ Metallic</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
+    <div class="seg look-seg"><button type="button" data-look="metal" class="${(s.look || 'metal') === 'metal' ? 'on' : ''}">✦ Green glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
     <div class="section-label">PaperShelf as an app <button class="help-q" data-help="updates" title="Explain this">?</button></div>
     <div id="ia-section"><p class="muted small">…</p></div>
     <details class="more"><summary>Other ways to start it</summary>
