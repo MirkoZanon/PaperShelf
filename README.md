@@ -170,8 +170,9 @@ locally); under a label, how many **key references** cited by several of its pap
 **Review table** – for a label: one row per paper, your own columns (aim, method, data, main result,
 limitations…), filled as you like with the paper's notes and highlights at hand; exported as CSV or
 Markdown. Handy for a literature review or a thesis chapter. In a **group** the table is shared: same columns
-for everybody, and each cell collects the members' entries, signed with their names – nobody overwrites
-anybody else, and only the author can edit or delete an entry.
+for everybody; clicking a cell opens its window, like a chat, with the members' entries signed with their
+names, and a box to add yours as public (the group sees it) or private (only you). Nobody overwrites anybody
+else, and only the author can edit or delete an entry.
 
 **Search by topic** – in the Discover tab, describe a subject, a question or an abstract: OpenAlex semantic
 search finds papers about the same idea even when they use other words (or classic search by words).

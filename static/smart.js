@@ -347,65 +347,129 @@ const Review = (() => {
   const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
   const when = s => { if (!s) return ''; const d = new Date(s); return isNaN(d) ? s.slice(0, 10) : d.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'}); };
   const sid = () => encodeURIComponent(state.view.id);
-  const ents = (pid, cid) => ((data.cells[String(pid)] || {})[cid]) || [];
   const mdOr = t => (typeof Notes !== 'undefined' && Notes.md) ? Notes.md(t) : esc(t).replace(/\n/g, '<br>');
-  let editing = null;   // id of the entry being edited
-  function entryHtml(e) {
-    const who = e.mine ? `${e.name || 'You'} (you)` : (e.name || e.by);
-    const tip = `${who} · ${when(e.created)}${e.at && e.at !== e.created ? ` · edited ${when(e.at)}` : ''}`;
-    if (editing === e.id) return `<div class="rv-e mine editing" data-eid="${esc(e.id)}"><textarea class="rv-edit" rows="2">${esc(e.body)}</textarea>
-      <div class="rv-eacts-row"><span class="muted small">Enter to save · Esc to cancel</span><span class="grow"></span><button class="linklike small" data-ecancel>Cancel</button><button class="btn small primary" data-esave>Save</button></div></div>`;
-    return `<div class="rv-e ${e.mine ? 'mine' : ''}" data-eid="${esc(e.id)}" title="${esc(tip)}">
-      <span class="rv-av" style="background:hsl(${hue(e.by)} 50% 42%)">${esc(initials(e.name || e.by))}</span>
-      <div class="rv-eb md">${mdOr(e.body)}</div>
-      ${e.mine && data.can_write ? '<span class="rv-eacts"><button data-eedit title="Edit">✎</button><button data-edel title="Delete for everybody">🗑</button></span>' : ''}</div>`;
+  // all entries of a cell, public and private, oldest first
+  function cellEntries(pid, cid) {
+    const pub = (((data.cells[String(pid)] || {})[cid]) || []).map(e => ({...e, kind: 'public'}));
+    const pri = (((data.private?.[String(pid)] || {})[cid]) || []).map(e => ({...e, kind: 'private', mine: true, by: '', name: data.display_name || 'You'}));
+    const t = e => Date.parse(e.created || '') || 0;
+    return [...pub, ...pri].sort((a, b) => t(a) - t(b));
+  }
+  function chipHtml(e) {
+    const who = e.kind === 'private' ? 'You · private, only on this computer' : e.mine ? `${e.name || 'You'} (you)` : (e.name || e.by);
+    const av = e.kind === 'private' ? '<span class="rv-av priv">🔒</span>' : `<span class="rv-av" style="background:hsl(${hue(e.by)} 50% 42%)">${esc(initials(e.name || e.by))}</span>`;
+    return `<div class="rv-e ${e.kind} ${e.mine ? 'mine' : ''}" data-eid="${esc(e.id)}" title="${esc(`${who} · ${when(e.created)}${e.mine ? ' – click to open or edit' : ' – click to open'}`)}">${av}<div class="rv-eb md">${mdOr(e.body)}</div></div>`;
   }
   function drawShared() {
     const el = box(); if (!el || !data) return;
-    // keep what you were typing (the table is redrawn after each change)
-    const drafts = {}, foc = document.activeElement;
-    let focusKey = null;
-    $$('textarea[data-add]', el).forEach(ta => { const k = ta.closest('td').dataset.pid + '|' + ta.closest('td').dataset.col; if (ta.value) drafts[k] = ta.value; if (ta === foc) focusKey = k; });
     const P = papers(), W = data.can_write;
     const people = new Set(); Object.values(data.cells).forEach(r => Object.values(r).forEach(l => l.forEach(e => people.add(e.by))));
-    const banner = data.local_cells ? (W
-      ? `<div class="rv-banner">🔒 You have an older <b>private</b> table for this group on this computer (${plural(data.local_cells, 'filled cell')}). <button class="btn small primary" id="rv-import">Share it with the group</button> <span class="muted small">Your text becomes your signed entries.</span></div>`
-      : `<div class="rv-banner">🔒 Your older private table for this group stays on this computer; you can share it once an editor makes you an editor.</div>`) : '';
-    el.innerHTML = `<div class="rv-head"><div><b>Group table</b> <span class="muted small">· ${plural(P.length, 'paper')} · 👥 shared with the group${people.size ? ` · ${plural(people.size, 'contributor')}` : ''} · ${W ? 'everyone adds their own entries, signed' : 'you are a reader: read only'}</span></div><span class="grow"></span>
-        ${W ? '<button class="btn small" id="rv-addcol">＋ Column</button>' : ''}<button class="btn small" id="rv-refresh" title="Get the latest entries of the others">⟳</button><button class="btn small" id="rv-csv" title="For Excel, Numbers, Google Sheets">⤓ CSV</button><button class="btn small" id="rv-md" title="A table for a text, a wiki or Obsidian">⤓ Markdown</button></div>${banner}
+    el.innerHTML = `<div class="rv-head"><div><b>Group table</b> <span class="muted small">· ${plural(P.length, 'paper')} · click a cell to open it${people.size ? ` · ${plural(people.size, 'contributor')}` : ''}${W ? '' : ' · reader: your entries stay private'}</span></div><span class="grow"></span>
+        ${W ? '<button class="btn small" id="rv-addcol">＋ Column</button>' : ''}<button class="btn small" id="rv-refresh" title="Get the latest entries of the others">⟳</button><button class="btn small" id="rv-csv" title="For Excel, Numbers, Google Sheets">⤓ CSV</button><button class="btn small" id="rv-md" title="A table for a text, a wiki or Obsidian">⤓ Markdown</button></div>
       ${P.length ? `<div class="rv-wrap"><table class="rv rv-shared"><thead><tr><th class="rv-paper">Paper</th>${data.cols.map((c, i) => `<th data-col="${esc(c.id)}"><div class="rv-th">${W ? `<button class="rv-name" data-rename="${esc(c.id)}" title="Rename (for everybody)">${esc(c.name)}</button><button class="rv-colmenu" data-colmenu="${i}" title="Move or delete">⋯</button>` : `<span class="rv-name">${esc(c.name)}</span>`}</div></th>`).join('')}</tr></thead>
         <tbody>${P.map(p => `<tr><td class="rv-paper"><button class="linklike rv-ref" data-open="${p.id}">${esc(ref(p))}</button><div class="rv-t">${esc(truncate(p.title || 'Untitled', 120))}</div>${p.journal ? `<div class="rv-j">${esc(p.journal)}</div>` : ''}<button class="rv-notes" data-rvnotes="${p.id}" title="Show this paper's notes and highlights, to copy from">📝 notes</button></td>
-          ${data.cols.map(c => `<td class="rv-sc" data-pid="${p.id}" data-col="${esc(c.id)}"><div class="rv-ents">${ents(p.id, c.id).map(entryHtml).join('')}</div>${W ? '<textarea data-add rows="1" placeholder="＋ add…" title="Enter to add · Shift+Enter for a new line"></textarea>' : ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+          ${data.cols.map(c => { const E = cellEntries(p.id, c.id); return `<td class="rv-sc" data-pid="${p.id}" data-col="${esc(c.id)}" title="${E.length ? '' : 'Click to add an entry'}"><div class="rv-ents">${E.map(chipHtml).join('')}</div><button class="rv-plus" data-cadd title="Add an entry">＋</button></td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`
         : `<div class="empty"><div class="big">▦</div><h2>No papers in this group</h2><div>Add papers to the group and they become rows of this table.</div></div>`}`;
-    $$('textarea[data-add]', el).forEach(ta => { const k = ta.closest('td').dataset.pid + '|' + ta.closest('td').dataset.col; if (drafts[k]) { ta.value = drafts[k]; grow(ta); } if (k === focusKey) ta.focus(); });
-    const ed = $('.rv-edit', el); if (ed) { grow(ed); ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length); }
   }
-  async function sharedCall(url, opts, focusCell) {
-    try {
-      const d = await api(`/api/shares/${sid()}/table${url}`, opts);
-      data = {...d, shared: true}; editing = null; drawShared(); flashSaved();
-      if (focusCell) $(`td.rv-sc[data-pid="${focusCell[0]}"][data-col="${CSS.escape(focusCell[1])}"] textarea[data-add]`, box())?.focus();
-      return true;
-    } catch (err) { toast(err.message, 'error'); return false; }
+  const colCall = async body => {
+    try { const d = await api(`/api/shares/${sid()}/table/cols`, {method: 'POST', body}); data = {...d, shared: true}; drawShared(); flashSaved(); }
+    catch (err) { toast(err.message, 'error'); }
+  };
+
+  /* The window of a cell: all its entries like a chat, and a box to add a new one (public or private)
+     or to change one of yours. */
+  function lsGet(k, d) { try { return localStorage.getItem(k) || d; } catch { return d; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* private window */ } }
+  function openCell(pid, cid, focusId = null) {
+    const p = paperById(pid), col = data.cols.find(c => c.id === cid); if (!p || !col) return;
+    const W = data.can_write;
+    const cw = {pid, cid, editing: null, vis: W ? lsGet('papershelf-table-vis', 'public') : 'private', orig: ''};
+    const m = modal(`<div class="cw-head"><div class="cw-titles"><div class="cw-col">${esc(col.name)}</div><div class="cw-paper">${esc(ref(p))} · ${esc(truncate(p.title || 'Untitled', 90))}</div></div>
+        <button class="cw-x" data-close title="Close (Esc)">✕</button></div>
+      <div class="cw-thread notes-thread"></div>
+      <div class="cw-composer">
+        <div class="cw-mode"></div>
+        <textarea class="input cw-text" rows="3" placeholder="Write an entry for this cell…"></textarea>
+        <div class="cw-foot"><div class="cw-vis seg">
+            <button data-vis="public" ${W ? '' : 'disabled title="You are a reader of this group: only private entries"'}>🌐 Public <small>the group sees it</small></button>
+            <button data-vis="private">🔒 Private <small>only me</small></button></div>
+          <span class="grow"></span><span class="muted small cw-kbd">${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter</span>
+          <button class="btn" data-cwclose>Close</button><button class="btn primary" data-cwsave>Add entry</button></div>
+      </div>`, {wide: true, nofocus: true});
+    m.el.querySelector('.modal').classList.add('cw');
+    const ta = $('.cw-text', m.el);
+    const dirty = () => ta.value.trim() !== '' && ta.value.trim() !== cw.orig.trim();
+    m.guard = () => {
+      if (!dirty()) return true;
+      confirmBox('Discard what you wrote?', 'The text in the box has not been saved.', {ok: 'Discard', danger: true}).then(ok => { if (ok) m.close(true); });
+      return false;
+    };
+    function bubble(e) {
+      const who = e.kind === 'private' ? 'You' : e.mine ? `${e.name || 'You'} (you)` : (e.name || e.by);
+      const acts = !e.mine ? '' : `<button data-cwedit title="Edit">✎ Edit</button>${e.kind === 'private' && W ? '<button data-cwpub title="Make it public: the group will see it, signed with your name">🌐 Make public</button>' : ''}<button data-cwdel title="${e.kind === 'private' ? 'Delete' : 'Delete for everybody'}">🗑</button>`;
+      const av = e.mine ? '' : `<span class="nb-av" style="background:hsl(${hue(e.by)} 55% 46%)">${esc(initials(e.name || e.by))}</span>`;
+      return `<div class="nb ${e.mine ? 'mine' : 'theirs'} ${e.kind} ${cw.editing === e.id ? 'cw-editing' : ''}" data-eid="${esc(e.id)}" data-kind="${e.kind}">${av}<div class="nb-box">
+        <div class="nb-meta"><span class="nb-who">${esc(who)}</span><span class="nb-tag ${e.kind}">${e.kind === 'private' ? '🔒 Private' : '🌐 Public'}</span>
+          <span class="nb-time" title="${e.at && e.at !== e.created ? 'edited ' + esc(when(e.at)) : ''}">${esc(when(e.created))}${e.at && e.at !== e.created ? ' · edited' : ''}</span><span class="grow"></span><span class="nb-acts">${acts}</span></div>
+        <div class="nb-body md">${mdOr(e.body)}</div></div></div>`;
+    }
+    function paint(scrollTo = null) {
+      const E = cellEntries(pid, cid), th = $('.cw-thread', m.el);
+      th.innerHTML = E.length ? E.map(bubble).join('') : '<div class="notes-empty muted">Nothing in this cell yet – write the first entry below.</div>';
+      const ed = cw.editing && E.find(e => e.id === cw.editing);
+      if (cw.editing && !ed) cw.editing = null;
+      $('.cw-mode', m.el).innerHTML = ed ? `<b>✎ Editing your ${ed.kind} entry</b><span class="grow"></span><button class="linklike small" data-cwcancel>Cancel editing</button>`
+        : `<b>＋ New entry</b><span class="muted small">${cw.vis === 'public' ? '– signed with your name, the group sees it' : '– only you see it, it stays on this computer'}</span>`;
+      $('[data-cwsave]', m.el).textContent = ed ? 'Save changes' : 'Add entry';
+      $$('.cw-vis button', m.el).forEach(b => { b.classList.toggle('on', b.dataset.vis === (ed ? ed.kind : cw.vis)); if (ed) b.disabled = true; else b.disabled = b.dataset.vis === 'public' && !W; });
+      $('.cw-composer', m.el).classList.toggle('editing', !!ed);
+      const target = scrollTo && $(`.nb[data-eid="${CSS.escape(scrollTo)}"]`, th);
+      if (target) { target.scrollIntoView({block: 'nearest'}); target.classList.add('cw-flash'); setTimeout(() => target.classList.remove('cw-flash'), 1200); }
+      else th.scrollTop = th.scrollHeight;
+    }
+    function startEdit(id) {
+      const e = cellEntries(pid, cid).find(x => x.id === id); if (!e || !e.mine) return;
+      cw.editing = id; cw.orig = e.body; ta.value = e.body; paint(id); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+    function stopEdit() { cw.editing = null; cw.orig = ''; ta.value = ''; paint(); ta.focus(); }
+    async function run(path, opts) {
+      try { const d = await api(`/api/shares/${sid()}/table${path}`, opts); data = {...d, shared: true}; drawShared(); flashSaved(); return true; }
+      catch (err) { toast(err.message, 'error'); return false; }
+    }
+    async function saveIt() {
+      const body = ta.value.trim(); if (!body) { ta.focus(); return; }
+      const btn = $('[data-cwsave]', m.el); if (btn.disabled) return; btn.disabled = true;
+      const loc = {paper_id: pid, col: cid}, e = cw.editing && cellEntries(pid, cid).find(x => x.id === cw.editing);
+      const ok = e ? await run(`/${e.kind === 'private' ? 'private' : 'cells'}/${encodeURIComponent(e.id)}`, {method: 'PUT', body: {...loc, body}})
+        : await run(cw.vis === 'private' ? '/private' : '/cells', {method: 'POST', body: {...loc, body}});
+      btn.disabled = false;
+      if (ok) { const was = cw.editing; cw.editing = null; cw.orig = ''; ta.value = ''; paint(was); ta.focus(); }
+    }
+    m.el.addEventListener('click', async ev => {
+      const t = ev.target, nb = t.closest('.nb'), e = nb && cellEntries(pid, cid).find(x => x.id === nb.dataset.eid);
+      if (t.closest('[data-cwclose]')) return m.close();
+      if (t.closest('[data-cwsave]')) return saveIt();
+      if (t.closest('[data-cwcancel]')) return stopEdit();
+      const v = t.closest('[data-vis]'); if (v && !v.disabled && !cw.editing) { cw.vis = v.dataset.vis; if (W) lsSet('papershelf-table-vis', cw.vis); paint(); ta.focus(); return; }
+      if (!e) return;
+      if (t.closest('[data-cwedit]')) return startEdit(e.id);
+      if (t.closest('[data-cwdel]')) {
+        if (!(await confirmBox(e.kind === 'private' ? 'Delete this private entry?' : 'Delete your entry for everybody?', e.kind === 'private' ? 'It is only on this computer.' : 'The other members will no longer see it.', {ok: 'Delete', danger: true}))) return;
+        if (cw.editing === e.id) { cw.editing = null; cw.orig = ''; ta.value = ''; }
+        if (await run(`/${e.kind === 'private' ? 'private' : 'cells'}/${encodeURIComponent(e.id)}?paper=${pid}&col=${encodeURIComponent(cid)}`, {method: 'DELETE'})) paint();
+        return;
+      }
+      if (t.closest('[data-cwpub]')) {
+        if (!(await confirmBox('Make this entry public?', 'All the members of the group will see it, signed with your name. You can still edit or delete it.', {ok: '🌐 Make public'}))) return;
+        if (cw.editing === e.id) { cw.editing = null; cw.orig = ''; ta.value = ''; }
+        if (await run(`/private/${encodeURIComponent(e.id)}/publish`, {method: 'POST', body: {paper_id: pid, col: cid}})) paint();
+      }
+    });
+    ta.addEventListener('keydown', ev => { if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) { ev.preventDefault(); saveIt(); } });
+    const fe = focusId && cellEntries(pid, cid).find(x => x.id === focusId);
+    if (fe && fe.mine) startEdit(fe.id);
+    else { paint(focusId); setTimeout(() => ta.focus(), 30); }
   }
-  async function addEntry(ta) {
-    const td = ta.closest('td'), body = ta.value.trim(); if (!body || ta.dataset.busy) return;
-    ta.dataset.busy = '1';
-    const v = ta.value; ta.value = '';
-    const ok = await sharedCall('/cells', {method: 'POST', body: {paper_id: +td.dataset.pid, col: td.dataset.col, body}}, [td.dataset.pid, td.dataset.col]);
-    if (!ok) { ta.value = v; delete ta.dataset.busy; }
-  }
-  function saveEdit(box) {
-    const td = box.closest('td'), body = $('.rv-edit', box).value.trim();
-    if (!body) return delEntry(box);
-    return sharedCall(`/cells/${encodeURIComponent(box.dataset.eid)}`, {method: 'PUT', body: {paper_id: +td.dataset.pid, col: td.dataset.col, body}});
-  }
-  async function delEntry(box) {
-    const td = box.closest('td');
-    if (!(await confirmBox('Delete your entry?', 'It is deleted for everybody in the group.', {ok: 'Delete', danger: true}))) return;
-    sharedCall(`/cells/${encodeURIComponent(box.dataset.eid)}?paper=${td.dataset.pid}&col=${encodeURIComponent(td.dataset.col)}`, {method: 'DELETE'});
-  }
-  const colCall = body => sharedCall('/cols', {method: 'POST', body});
 
   function draw() {
     const el = box(); if (!el || !data) return;
@@ -437,7 +501,7 @@ const Review = (() => {
   }
   function exportAs(kind) {
     const P = papers(), title = viewTitle().replace(/[\\/:*?"<>|]+/g, '-');
-    const cell = (p, c) => data.shared ? ents(p.id, c.id).map(e => `${e.name || e.by}: ${e.body}`).join('\n') : (data.cells[p.uid] || {})[c.id] || '';
+    const cell = (p, c) => data.shared ? cellEntries(p.id, c.id).map(e => `${e.kind === 'private' ? 'Me (private)' : e.name || e.by}: ${e.body}`).join('\n') : (data.cells[p.uid] || {})[c.id] || '';
     const row = p => [ref(p), p.title || '', p.journal || '', p.doi || '', ...data.cols.map(c => cell(p, c))];
     const head = ['Reference', 'Title', 'Journal', 'DOI', ...data.cols.map(c => c.name)];
     if (kind === 'csv') {
@@ -504,15 +568,7 @@ const Review = (() => {
   }
   function bind() {
     const el = box(); if (!el) return;
-    el.addEventListener('keydown', e => {
-      const t = e.target;
-      if (t.matches('textarea[data-add]') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); addEntry(t); }
-      else if (t.matches('textarea[data-add]') && e.key === 'Escape') { t.value = ''; grow(t); t.blur(); }
-      else if (t.matches('.rv-edit') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); saveEdit(t.closest('.rv-e')); }
-      else if (t.matches('.rv-edit') && e.key === 'Escape') { editing = null; drawShared(); }
-    });
     el.addEventListener('input', e => {
-      if (e.target.matches('textarea[data-add], .rv-edit')) return grow(e.target);
       const ta = e.target.closest('textarea[data-cell]'); if (!ta || !data) return;
       const uid = ta.closest('tr').dataset.uid;
       (data.cells[uid] || (data.cells[uid] = {}))[ta.dataset.cell] = ta.value;
@@ -521,21 +577,20 @@ const Review = (() => {
     el.addEventListener('click', async e => {
       const t = e.target;
       if (data?.shared) {
-        if (t.closest('[data-eedit]')) { editing = t.closest('.rv-e').dataset.eid; return drawShared(); }
-        if (t.closest('[data-edel]')) return delEntry(t.closest('.rv-e'));
-        if (t.closest('[data-ecancel]')) { editing = null; return drawShared(); }
-        if (t.closest('[data-esave]')) return saveEdit(t.closest('.rv-e'));
         if (t.closest('#rv-refresh')) {
           const b = t.closest('#rv-refresh'); b.disabled = true;
           await Shares.syncNow(state.view.id);
           b.disabled = false; return render();
         }
-        if (t.closest('#rv-import')) return sharedCall('/import', {method: 'POST'});
         if (t.closest('#rv-addcol')) {
           const v = await askText('New column (for everybody)', {placeholder: 'e.g. Sample size, Species, Key figure…', ok: 'Add'}); if (!v) return;
           return colCall({action: 'add', name: v});
         }
-        if (t.closest('td.rv-sc') && !t.closest('button, a, textarea, .rv-e.editing') && !String(getSelection())) { $('textarea[data-add]', t.closest('td'))?.focus(); return; }
+        const td = t.closest('td.rv-sc');
+        if (td && !String(getSelection())) {
+          const chip = t.closest('.rv-e');
+          return openCell(+td.dataset.pid, td.dataset.col, chip && !t.closest('[data-cadd]') ? chip.dataset.eid : null);
+        }
       }
       if (t.closest('#rv-addcol')) {
         const v = await askText('New column', {placeholder: 'e.g. Sample size, Species, Key figure…', ok: 'Add'}); if (!v) return;

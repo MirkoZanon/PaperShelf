@@ -73,7 +73,7 @@ function modal(html, {wide = false, nofocus = false} = {}) {
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog">${html}</div>`;
   document.body.appendChild(wrap);
-  const m = {el: wrap, onclose: null, close() { wrap.remove(); if (m.onclose) { const f = m.onclose; m.onclose = null; f(); } }};
+  const m = {el: wrap, onclose: null, guard: null, close(force) { if (force !== true && m.guard && !m.guard()) return; wrap.remove(); if (m.onclose) { const f = m.onclose; m.onclose = null; f(); } }};
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) m.close(); });
   // delegated: works also for buttons added later (dialogs that rebuild their content, e.g. Reading stats)
   wrap.addEventListener('click', e => { if (e.target.closest('[data-close]') && wrap.isConnected) m.close(); });

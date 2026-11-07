@@ -2,16 +2,26 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.11.1 – 2026-11-07
+
+- **A window for each cell of the group table** – click a cell to open it: all its entries like a chat,
+  and a box to write a new one. Before saving choose **🌐 Public** (the group sees it, signed with your
+  name) or **🔒 Private** (only you, on this computer), then *Add entry*. Click one of your entries to
+  edit or delete it, or to make a private one public; the others' entries can be read and answered with
+  a new entry. Clear *Add entry / Save changes* and *Close* buttons; ✕ and Esc close it at once, and it
+  asks before throwing away text you haven't saved. (This replaces the small typing box inside the
+  cells, which was confusing and hard to leave.)
+- **Private entries** in group tables, also for readers. A table you had already filled for a group
+  (it was on your computer only) becomes your private entries.
+
 ## 2.11 – 2026-11-07
 
 - **Shared table in groups** – in a group, *▦ Table* is now shared with its members: the same columns
   for everybody, and each cell collects **entries**, like short messages, each signed with its author's
-  initials (hover for name and date). Write in *＋ add…* and press Enter; nobody overwrites anybody
-  else, and only the author can edit or delete an entry. Editors can add, rename, move or delete columns
-  for everybody; readers see the table read-only. It updates with the group, and the CSV/Markdown
-  export lists each entry with its author's name.
-- If you had already filled a table for a group (it stayed on your computer), *Share it with the group*
-  turns your text into your signed entries.
+  initials (hover for name and date). Nobody overwrites anybody else, and only the author can edit or
+  delete an entry. Editors can add, rename, move or delete columns for everybody; readers see the table
+  read-only. It updates with the group, and the CSV/Markdown export lists each entry with its author's
+  name.
 
 ## 2.10 – 2026-11-07
 

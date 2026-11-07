@@ -2429,8 +2429,10 @@ def put_review():
         return error("This review table is too large to save.")
     if table == "collections":   # private labels travel with your personal sync
         db.execute("UPDATE collections SET review=?, updated_at=? WHERE id=?", (data, now(), key))
-    else:                        # shared labels: your table stays on this computer
-        db.execute("UPDATE shares SET review=? WHERE id=?", (data, key))
+    else:                        # groups: kept on this computer, with your private entries
+        d = json.loads(data)
+        d["entries"] = _priv(row)["entries"]
+        db.execute("UPDATE shares SET review=? WHERE id=?", (json.dumps(d, ensure_ascii=False), key))
     db.commit()
     return jsonify(ok=True)
 
@@ -2462,11 +2464,15 @@ def _share_table(db, sid):
                 out[cid] = ents
         if out:
             cells[str(r["paper_id"])] = out
-    local = _review_data(row["review"])
-    return jsonify(cols=[{"id": c["id"], "name": c["name"]} for c in cols], cells=cells,
-                   can_write=bool(_my_author(st, ident)), display_name=_display_name(db, ident),
-                   local_cells=sum(1 for v in local["cells"].values() for t in v.values() if str(t).strip()),
-                   widths=local["widths"])
+    d = _priv_migrate(db, sid, row, cols)
+    private = {}
+    for r in db.execute("SELECT s.paper_id, p.uid FROM paper_shares s JOIN papers p ON p.id = s.paper_id WHERE s.share_id=?", (sid,)):
+        mine = {cid: [{k: e.get(k) for k in ("id", "body", "created", "at")} for e in lst if isinstance(e, dict)]
+                for cid, lst in (d["entries"].get(r["uid"]) or {}).items() if cid in ids and lst}
+        if mine:
+            private[str(r["paper_id"])] = mine
+    return jsonify(cols=[{"id": c["id"], "name": c["name"]} for c in cols], cells=cells, private=private,
+                   can_write=bool(_my_author(st, ident)), display_name=_display_name(db, ident), widths=d["widths"])
 
 
 def _table_write(db, sid):
@@ -2593,37 +2599,141 @@ def share_table_delete(sid, eid):
     return _table_saved(db, sid, st)
 
 
-@app.post("/api/shares/<sid>/table/import")
-def share_table_import(sid):
-    """Your own table of this group (from before 2.11, kept on this computer) becomes your signed entries."""
-    db = get_db()
-    st, author, err = _table_write(db, sid)
-    if err:
-        return err
-    row = db.execute("SELECT review FROM shares WHERE id=?", (sid,)).fetchone()
-    local = _review_data(row["review"])
-    by_uid = {r["uid"]: r["item_key"] for r in db.execute(
-        "SELECT p.uid, s.item_key FROM paper_shares s JOIN papers p ON p.id = s.paper_id WHERE s.share_id=?", (sid,))}
-    target, n, dn = {}, 0, _display_name(db)
-    for uid, vals in local["cells"].items():
-        key = by_uid.get(uid)
-        if not key or key not in st["items"]:
+# Private entries of a group table: yours only, kept on this computer (shares.review), next to the
+# public entries of the group. "Make public" turns one into a signed entry of the group.
+def _priv(row) -> dict:
+    d = insights.json_or(row["review"], {})
+    ents = d.get("entries") if isinstance(d.get("entries"), dict) else {}
+    return {"cols": d.get("cols") if isinstance(d.get("cols"), list) else [], "cells": d.get("cells") if isinstance(d.get("cells"), dict) else {},
+            "widths": d.get("widths") if isinstance(d.get("widths"), dict) else {}, "entries": ents}
+
+
+def _priv_save(db, sid, d):
+    db.execute("UPDATE shares SET review=? WHERE id=?", (json.dumps(d, ensure_ascii=False), sid))
+
+
+def _priv_migrate(db, sid, row, cols) -> dict:
+    """Before 2.11 a group's table was one text per cell, on this computer: it becomes your private entries."""
+    d = _priv(row)
+    if not any(str(t).strip() for v in d["cells"].values() if isinstance(v, dict) for t in v.values()):
+        return d
+    names = {c["name"].lower(): c["id"] for c in cols}
+    ids = {c["id"] for c in cols}
+    for uid, vals in d["cells"].items():
+        if not isinstance(vals, dict):
             continue
         for lcid, text in vals.items():
             text = str(text).strip()
             if not text:
                 continue
-            if lcid not in target:
-                lname = next((c["name"] for c in local["cols"] if c["id"] == lcid), "Column")
-                cols = sharing.table_cols(st)
-                same = next((c["id"] for c in cols if c["name"].lower() == lname.lower()), None)
-                if not same:
-                    same = _new_col_id(st)
-                    sharing.set_col(st, author, same, name=lname, pos=max([c["pos"] for c in cols] or [0]) + 1)
-                target[lcid] = same
-            sharing.add_cell(st, author, key, target[lcid], text, dn)
-            n += 1
-    db.execute("UPDATE shares SET review=? WHERE id=?", (json.dumps({"cols": local["cols"], "cells": {}, "widths": local["widths"]}), sid))
+            lname = next((c.get("name") or "" for c in d["cols"] if c.get("id") == lcid), "")
+            cid = names.get(lname.lower()) or (lcid if lcid in ids and not lname else None)
+            if not cid:   # a column the group doesn't have: into the first one, with its name
+                cid, text = cols[0]["id"], f"**{lname or 'Column'}:** {text}"
+            d["entries"].setdefault(uid, {}).setdefault(cid, []).append({"id": uuid.uuid4().hex[:16], "body": text[:5000],
+                                                                         "created": now(), "at": now()})
+    d["cells"] = {}
+    _priv_save(db, sid, d)
+    db.commit()
+    return d
+
+
+def _priv_target(db, sid, b):
+    """(row, private data, paper uid, column id) or raises ShareError."""
+    row, st = _load_share(db, sid)
+    if not st:
+        raise sharing.ShareError("Group not found.")
+    r = db.execute("SELECT p.uid FROM paper_shares s JOIN papers p ON p.id = s.paper_id WHERE s.share_id=? AND s.paper_id=?",
+                   (sid, _int(b.get("paper_id")))).fetchone()
+    if not r:
+        raise sharing.ShareError("This paper is not in the group.")
+    cid = str(b.get("col") or "")
+    cols = sharing.table_cols(st) or [{"id": f"c{i}"} for i in range(1, len(sharing.DEFAULT_COLS) + 1)]
+    if cid not in {c["id"] for c in cols}:
+        raise sharing.ShareError("That column doesn't exist any more.")
+    return row, _priv(row), r["uid"], cid
+
+
+@app.post("/api/shares/<sid>/table/private")
+def share_table_priv_add(sid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    body = str(b.get("body") or "").strip()
+    if not body:
+        return error("Write something first.")
+    try:
+        row, d, uid, cid = _priv_target(db, sid, b)
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    lst = d["entries"].setdefault(uid, {}).setdefault(cid, [])
+    if len(lst) >= 200:
+        return error("Too many entries in this cell.")
+    lst.append({"id": uuid.uuid4().hex[:16], "body": body[:5000], "created": now(), "at": now()})
+    _priv_save(db, sid, d)
+    db.commit()
+    return _share_table(db, sid)
+
+
+def _priv_find(d, uid, cid, eid):
+    lst = (d["entries"].get(uid) or {}).get(cid) or []
+    return lst, next((e for e in lst if e.get("id") == eid), None)
+
+
+@app.put("/api/shares/<sid>/table/private/<eid>")
+def share_table_priv_edit(sid, eid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    body = str(b.get("body") or "").strip()
+    try:
+        row, d, uid, cid = _priv_target(db, sid, b)
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    lst, e = _priv_find(d, uid, cid, eid)
+    if not e:
+        return error("Entry not found.", 404)
+    if body:
+        e.update(body=body[:5000], at=now())
+    else:
+        lst.remove(e)
+    _priv_save(db, sid, d)
+    db.commit()
+    return _share_table(db, sid)
+
+
+@app.delete("/api/shares/<sid>/table/private/<eid>")
+def share_table_priv_delete(sid, eid):
+    db = get_db()
+    try:
+        row, d, uid, cid = _priv_target(db, sid, {"paper_id": request.args.get("paper"), "col": request.args.get("col")})
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    lst, e = _priv_find(d, uid, cid, eid)
+    if e:
+        lst.remove(e)
+        _priv_save(db, sid, d)
+        db.commit()
+    return _share_table(db, sid)
+
+
+@app.post("/api/shares/<sid>/table/private/<eid>/publish")
+def share_table_priv_publish(sid, eid):
+    """A private entry becomes a public, signed entry of the group."""
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    st, author, err = _table_write(db, sid)
+    if err:
+        return err
+    try:
+        row, d, uid, cid = _priv_target(db, sid, b)
+        lst, e = _priv_find(d, uid, cid, eid)
+        if not e:
+            return error("Entry not found.", 404)
+        key, _ = _cell_target(db, sid, st, b)
+        sharing.add_cell(st, author, key, cid, e["body"], _display_name(db))
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    lst.remove(e)
+    _priv_save(db, sid, d)
     return _table_saved(db, sid, st)
 
 
