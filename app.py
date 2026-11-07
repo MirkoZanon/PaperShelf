@@ -13,6 +13,7 @@ import json
 import logging
 import mimetypes
 import os
+import hashlib
 import re
 import shutil
 import socket
@@ -565,9 +566,20 @@ def try_download(db, pid) -> dict:
 # --------------------------------------------------------------------------- #
 # Pages
 # --------------------------------------------------------------------------- #
+def _icon_version() -> str:
+    """Changes when the icon changes: the browser then fetches the new icon instead of keeping the
+    one it saved (also when the app is installed again)."""
+    try:
+        return hashlib.sha1((BASE_DIR / "static" / "icons" / "icon-512.png").read_bytes()).hexdigest()[:10]
+    except OSError:
+        return APP_VERSION
+
+
 @app.get("/")
 def index():
-    return send_file(BASE_DIR / "static" / "index.html")
+    html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
+    html = re.sub(r'(/static/icons/icon-\d+\.png)"', lambda m: f'{m.group(1)}?v={_icon_version()}"', html)
+    return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/quickadd")
@@ -2993,8 +3005,9 @@ def web_manifest():
             "launch_handler": {"client_mode": ["focus-existing", "auto"]},
             "background_color": "#eaf3ee", "theme_color": "#e6f2ec",
             "description": "Your private library of scientific papers",
-            "icons": [{"src": f"/static/icons/icon-{n}.png", "sizes": f"{n}x{n}", "type": "image/png"} for n in (192, 512)]}
-    return Response(json.dumps(data), mimetype="application/manifest+json")
+            "icons": [{"src": f"/static/icons/icon-{n}.png?v={_icon_version()}", "sizes": f"{n}x{n}", "type": "image/png",
+                       "purpose": "any"} for n in (192, 512)]}
+    return Response(json.dumps(data), mimetype="application/manifest+json", headers={"Cache-Control": "no-cache"})
 
 
 @app.post("/api/open-backups")

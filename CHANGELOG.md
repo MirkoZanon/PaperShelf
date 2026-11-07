@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.11.4 – 2026-11-07
+
+- **Fix: the app installed from Chrome kept the old icon** – the browser reused the icon it had saved
+  before. The icon's address now changes whenever the icon changes, so a new installation (and the
+  browser tab) always gets the current one.
+
 ## 2.11.3 – 2026-11-07
 
 - **Fix: the PaperShelf icon kept bouncing without opening** – 2.11.2 could mistake PaperShelf's own
