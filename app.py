@@ -2435,6 +2435,198 @@ def put_review():
     return jsonify(ok=True)
 
 
+# The group's shared table: same columns for everybody, and in each cell the entries of each
+# member, signed – nobody overwrites anybody else (see sharing.py).
+def _share_table(db, sid):
+    row, st = _load_share(db, sid)
+    if not st:
+        return error("Group not found.", 404)
+    ident = share_identity(db)
+    me = {ident["user"], ident["local"]} - {""}
+    names = sharing.profiles(st)
+    cols = sharing.table_cols(st) or [{"id": f"c{i}", "name": n, "pos": i} for i, n in enumerate(sharing.DEFAULT_COLS, 1)]
+    ids = {c["id"] for c in cols}
+    cells = {}
+    for r in db.execute("SELECT paper_id, item_key FROM paper_shares WHERE share_id=?", (sid,)).fetchall():
+        e = st["items"].get(r["item_key"])
+        if not e or not e.get("cells"):
+            continue
+        out = {}
+        for cid in e["cells"]:
+            if cid not in ids:
+                continue
+            ents = [{"id": n["id"], "by": n.get("by"), "name": n.get("name") or names.get(n.get("by")) or n.get("by") or "",
+                     "body": n.get("body") or "", "created": n.get("created") or "", "at": n.get("at") or "",
+                     "mine": n.get("by") in me} for n in sharing.cell_entries(e, cid)]
+            if ents:
+                out[cid] = ents
+        if out:
+            cells[str(r["paper_id"])] = out
+    local = _review_data(row["review"])
+    return jsonify(cols=[{"id": c["id"], "name": c["name"]} for c in cols], cells=cells,
+                   can_write=bool(_my_author(st, ident)), display_name=_display_name(db, ident),
+                   local_cells=sum(1 for v in local["cells"].values() for t in v.values() if str(t).strip()),
+                   widths=local["widths"])
+
+
+def _table_write(db, sid):
+    """(state, author) for a change to the group's table, or an error response."""
+    row, st = _load_share(db, sid)
+    if not st:
+        return None, None, error("Group not found.", 404)
+    author = _my_author(st, share_identity(db))
+    if not author:
+        return None, None, error("You are a reader of this group, so you can't write in its table. Ask an editor to make you an editor.", 403)
+    sharing.ensure_cols(st, author)
+    return st, author, None
+
+
+def _table_saved(db, sid, st):
+    _save_share(db, sid, st)
+    db.commit()
+    publish_soon(sid)
+    return _share_table(db, sid)
+
+
+def _new_col_id(st) -> str:
+    while True:
+        cid = uuid.uuid4().hex[:8]
+        if cid not in (st.get("cols") or {}):
+            return cid
+
+
+@app.get("/api/shares/<sid>/table")
+def share_table(sid):
+    return _share_table(get_db(), sid)
+
+
+@app.post("/api/shares/<sid>/table/cols")
+def share_table_cols(sid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    st, author, err = _table_write(db, sid)
+    if err:
+        return err
+    act, cid, cols = b.get("action"), str(b.get("id") or ""), sharing.table_cols(st)
+    name = " ".join(str(b.get("name") or "").split())[:60]
+    if act == "add":
+        if not name:
+            return error("Give the column a name.")
+        if len(cols) >= sharing.MAX_COLS:
+            return error("This table already has the maximum number of columns.")
+        sharing.set_col(st, author, _new_col_id(st), name=name, pos=(max([c["pos"] for c in cols] or [0]) + 1))
+    else:
+        i = next((k for k, c in enumerate(cols) if c["id"] == cid), None)
+        if i is None:
+            return error("That column doesn't exist any more (someone may have deleted it).", 404)
+        if act == "rename":
+            if not name:
+                return error("Give the column a name.")
+            sharing.set_col(st, author, cid, name=name)
+        elif act == "move":
+            j = i + (-1 if b.get("dir") == "left" else 1)
+            if 0 <= j < len(cols):
+                cols[i], cols[j] = cols[j], cols[i]
+                for k, c in enumerate(cols, 1):       # renumber, so that the order is the same for everybody
+                    if c["pos"] != k:
+                        sharing.set_col(st, author, c["id"], pos=k)
+        elif act == "delete":
+            sharing.set_col(st, author, cid, delete=True)
+        else:
+            return error("Unknown action.")
+    return _table_saved(db, sid, st)
+
+
+def _cell_target(db, sid, st, b):
+    pid = _int(b.get("paper_id"))
+    r = db.execute("SELECT item_key FROM paper_shares WHERE paper_id=? AND share_id=?", (pid, sid)).fetchone()
+    if not r or r["item_key"] not in st["items"]:
+        raise sharing.ShareError("This paper is not in the group.")
+    return r["item_key"], str(b.get("col") or "")
+
+
+@app.post("/api/shares/<sid>/table/cells")
+def share_table_add(sid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    st, author, err = _table_write(db, sid)
+    if err:
+        return err
+    body = str(b.get("body") or "").strip()
+    if not body:
+        return error("Write something first.")
+    try:
+        key, cid = _cell_target(db, sid, st, b)
+        sharing.add_cell(st, author, key, cid, body, _display_name(db))
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    return _table_saved(db, sid, st)
+
+
+@app.put("/api/shares/<sid>/table/cells/<eid>")
+def share_table_edit(sid, eid):
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    st, author, err = _table_write(db, sid)
+    if err:
+        return err
+    body = str(b.get("body") or "").strip()
+    try:
+        key, cid = _cell_target(db, sid, st, b)
+        sharing.edit_cell(st, author, key, cid, eid, body=body or None, name=_display_name(db), delete=not body)
+    except sharing.ShareError as exc:
+        return error(str(exc), 403)
+    return _table_saved(db, sid, st)
+
+
+@app.delete("/api/shares/<sid>/table/cells/<eid>")
+def share_table_delete(sid, eid):
+    db = get_db()
+    st, author, err = _table_write(db, sid)
+    if err:
+        return err
+    try:
+        key, cid = _cell_target(db, sid, st, {"paper_id": request.args.get("paper"), "col": request.args.get("col")})
+        sharing.edit_cell(st, author, key, cid, eid, delete=True)
+    except sharing.ShareError as exc:
+        return error(str(exc), 403)
+    return _table_saved(db, sid, st)
+
+
+@app.post("/api/shares/<sid>/table/import")
+def share_table_import(sid):
+    """Your own table of this group (from before 2.11, kept on this computer) becomes your signed entries."""
+    db = get_db()
+    st, author, err = _table_write(db, sid)
+    if err:
+        return err
+    row = db.execute("SELECT review FROM shares WHERE id=?", (sid,)).fetchone()
+    local = _review_data(row["review"])
+    by_uid = {r["uid"]: r["item_key"] for r in db.execute(
+        "SELECT p.uid, s.item_key FROM paper_shares s JOIN papers p ON p.id = s.paper_id WHERE s.share_id=?", (sid,))}
+    target, n, dn = {}, 0, _display_name(db)
+    for uid, vals in local["cells"].items():
+        key = by_uid.get(uid)
+        if not key or key not in st["items"]:
+            continue
+        for lcid, text in vals.items():
+            text = str(text).strip()
+            if not text:
+                continue
+            if lcid not in target:
+                lname = next((c["name"] for c in local["cols"] if c["id"] == lcid), "Column")
+                cols = sharing.table_cols(st)
+                same = next((c["id"] for c in cols if c["name"].lower() == lname.lower()), None)
+                if not same:
+                    same = _new_col_id(st)
+                    sharing.set_col(st, author, same, name=lname, pos=max([c["pos"] for c in cols] or [0]) + 1)
+                target[lcid] = same
+            sharing.add_cell(st, author, key, target[lcid], text, dn)
+            n += 1
+    db.execute("UPDATE shares SET review=? WHERE id=?", (json.dumps({"cols": local["cols"], "cells": {}, "widths": local["widths"]}), sid))
+    return _table_saved(db, sid, st)
+
+
 # --------------------------------------------------------------------------- #
 # Updates (see updater.py)
 # --------------------------------------------------------------------------- #

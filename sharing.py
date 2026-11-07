@@ -175,6 +175,14 @@ def clock(st: dict) -> int:
     for pr in (st.get("profiles") or {}).values():
         if pr.get("s"):
             c = max(c, pr["s"][0])
+    for col in (st.get("cols") or {}).values():
+        if col.get("s"):
+            c = max(c, col["s"][0])
+    for e in st.get("items", {}).values():
+        for cell in (e.get("cells") or {}).values():
+            for n in cell.values():
+                if n.get("s"):
+                    c = max(c, n["s"][0])
     return c
 
 
@@ -287,6 +295,83 @@ def _merge_notes(x: dict, y: dict) -> dict:
     return out
 
 
+# --------------------------------------------------------------------------- the group's table
+# A review table shared by the group: columns any editor can add, rename, move or delete (the newest
+# change wins), and in each cell (paper × column) a list of entries, like messages: each entry belongs
+# to its author – only versions written by the author are accepted, exactly like public notes.
+MAX_CELL = 5000
+MAX_COLS = 24
+DEFAULT_COLS = ["Question / aim", "Method", "Data / sample", "Main result", "Limitations"]
+COL_RE = re.compile(r"^[a-z0-9]{1,16}$")
+
+
+def set_col(st, author, cid, name=None, pos=None, delete=False):
+    cols = st.setdefault("cols", {})
+    cur = dict(cols.get(cid) or {"name": "Column", "pos": float(len(cols) + 1), "del": False})
+    if name is not None:
+        cur["name"] = " ".join(str(name).split())[:60] or "Column"
+    if pos is not None:
+        cur["pos"] = float(pos)
+    cur["del"] = bool(delete)
+    cur["s"] = tick(st, author)
+    cols[cid] = cur
+
+
+def ensure_cols(st, author) -> bool:
+    """The usual first columns, with fixed ids so that two editors starting at once don't duplicate them."""
+    if st.get("cols"):
+        return False
+    for i, n in enumerate(DEFAULT_COLS, 1):
+        set_col(st, author, f"c{i}", name=n, pos=i)
+    return True
+
+
+def table_cols(st) -> list:
+    return sorted(({"id": k, "name": v.get("name") or "Column", "pos": v.get("pos") or 0}
+                   for k, v in (st.get("cols") or {}).items() if not v.get("del")), key=lambda c: (c["pos"], c["id"]))
+
+
+def add_cell(st, author, key, cid, body, name="") -> str:
+    e = st["items"].get(key)
+    if e is None:
+        raise ShareError("This paper is not in the group.")
+    if cid not in (st.get("cols") or {}) or st["cols"][cid].get("del"):
+        raise ShareError("That column doesn't exist any more.")
+    eid = uuid.uuid4().hex[:16]
+    s = tick(st, author)
+    e.setdefault("cells", {}).setdefault(cid, {})[eid] = {"by": author, "name": (name or "")[:60], "body": (body or "")[:MAX_CELL],
+                                                         "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0]}
+    return eid
+
+
+def edit_cell(st, author, key, cid, eid, body=None, name=None, delete=False):
+    n = (((st["items"].get(key) or {}).get("cells") or {}).get(cid) or {}).get(eid)
+    if not n:
+        raise ShareError("Entry not found.")
+    if n.get("by") != author:
+        raise ShareError("Only the author can change this entry.")
+    n.update(at=_now(), s=tick(st, author))
+    if delete:
+        n.update(body="", **{"del": True})
+    else:
+        if body is not None:
+            n["body"] = body[:MAX_CELL]
+        if name:
+            n["name"] = name[:60]
+
+
+def cell_entries(e, cid) -> list:
+    return notes_of({"notes": ((e.get("cells") or {}).get(cid) or {})})
+
+
+def _merge_cols(x: dict, y: dict) -> dict:
+    out = {}
+    for cid in set(x) | set(y):
+        a, b = x.get(cid), y.get(cid)
+        out[cid] = dict(b if a is None or (b is not None and newer(b.get("s"), a.get("s"))) else a)
+    return out
+
+
 def trust_author_copy(st: dict, owner: str, copy: dict):
     """The copy published by `owner` (read from owner's own gist) is the authority on owner's notes:
     a version of one of owner's notes found in someone else's copy but not in owner's is dropped,
@@ -306,6 +391,15 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
                 del e["notes"][nid]
             elif n != theirs[nid]:
                 e["notes"][nid] = dict(theirs[nid])
+        for cid, cell in list((e.get("cells") or {}).items()):   # the same for the table entries
+            theirs_c = (mine.get("cells") or {}).get(cid) or {}
+            for eid, n in list(cell.items()):
+                if n.get("by") != owner:
+                    continue
+                if eid not in theirs_c:
+                    del cell[eid]
+                elif n != theirs_c[eid]:
+                    cell[eid] = dict(theirs_c[eid])
 
 
 def members(st) -> dict:
@@ -361,6 +455,16 @@ def merge(a: dict, b: dict) -> dict:
         notes = _merge_notes(x.get("notes") or {}, y.get("notes") or {})
         if notes:
             out["items"][key]["notes"] = notes
+        cells = {}
+        for cid in set(x.get("cells") or {}) | set(y.get("cells") or {}):
+            c = _merge_notes((x.get("cells") or {}).get(cid) or {}, (y.get("cells") or {}).get(cid) or {})
+            if c:
+                cells[cid] = c
+        if cells:
+            out["items"][key]["cells"] = cells
+    cols = _merge_cols(a.get("cols") or {}, b.get("cols") or {})
+    if cols:
+        out["cols"] = cols
     return out
 
 
@@ -406,6 +510,26 @@ def validate(data) -> dict:
                                "c": n["c"] if isinstance(n.get("c"), int) and 0 <= n["c"] <= stp[0] else stp[0]}
         if notes:
             item["notes"] = notes
+        raw_cells = e.get("cells") if isinstance(e.get("cells"), dict) else {}
+        cells = {}
+        for cid, cell in list(raw_cells.items())[:MAX_COLS * 2]:
+            if not (COL_RE.match(str(cid)) and isinstance(cell, dict)):
+                continue
+            ok = {}
+            for eid, n in list(cell.items())[:200]:
+                if not (isinstance(n, dict) and re.match(r"^[a-f0-9]{8,32}$", str(eid))):
+                    continue
+                by, stp = str(n.get("by") or ""), _stamp(n.get("s"))
+                if not (NAME_RE.match(by) or by.startswith("local-")) or not stp or stp[1] != by:
+                    continue
+                ok[str(eid)] = {"by": by, "name": str(n.get("name") or "")[:60], "body": str(n.get("body") or "")[:MAX_CELL],
+                                "created": str(n.get("created") or "")[:40], "at": str(n.get("at") or "")[:40],
+                                "del": bool(n.get("del")), "s": stp,
+                                "c": n["c"] if isinstance(n.get("c"), int) and 0 <= n["c"] <= stp[0] else stp[0]}
+            if ok:
+                cells[str(cid)] = ok
+        if cells:
+            item["cells"] = cells
         st["items"][item_key(meta)] = item
     raw_p = data.get("profiles") if isinstance(data.get("profiles"), dict) else {}
     for who, pr in list(raw_p.items())[:MAX_MEMBERS]:
@@ -413,6 +537,16 @@ def validate(data) -> dict:
         if stp and stp[1] == who and (NAME_RE.match(str(who)) or str(who).startswith("local-")):
             st.setdefault("profiles", {})[str(who)] = {"name": " ".join(str(pr.get("name") or "").split())[:60],
                                                        "since": str(pr.get("since") or "")[:40], "s": stp}
+    raw_cols = data.get("cols") if isinstance(data.get("cols"), dict) else {}
+    for cid, col in list(raw_cols.items())[:MAX_COLS * 2]:
+        stp = _stamp(col.get("s")) if isinstance(col, dict) else None
+        if stp and COL_RE.match(str(cid)) and (NAME_RE.match(stp[1]) or stp[1].startswith("local-")):
+            try:
+                pos = float(col.get("pos") or 0)
+            except (TypeError, ValueError):
+                pos = 0.0
+            st.setdefault("cols", {})[str(cid)] = {"name": " ".join(str(col.get("name") or "").split())[:60] or "Column",
+                                                   "pos": pos, "del": bool(col.get("del")), "s": stp}
     c = data.get("creator") if isinstance(data.get("creator"), dict) else None
     if c and (NAME_RE.match(str(c.get("by") or "")) or str(c.get("by") or "").startswith("local-")):
         st["creator"] = {"by": str(c["by"])[:60], "name": str(c.get("name") or "")[:60], "at": str(c.get("at") or "")[:40]}

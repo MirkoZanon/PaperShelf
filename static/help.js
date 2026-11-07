@@ -131,7 +131,7 @@ const Help = (() => {
       <h4>📚 Key references you don't have</h4>
       <p>In a label, a link under the title tells you how many works are cited by several of its papers but are not in your library; it opens <b>Discover</b> with them.</p>
       <h4>▦ Review table</h4>
-      <p>In the Library, open a label and choose <b>▦ Table</b>: one row per paper, with columns you choose (aim, method, data, main result, limitations… add, rename, move or delete them). It's saved as you type; <b>📝 notes</b> shows the paper's notes and highlights to copy from. Export it as <b>CSV</b> (Excel, Numbers) or <b>Markdown</b>. Tables of your own labels travel with your sync (💻 My computers); tables of groups stay on this computer.</p>`},
+      <p>In the Library, open a label and choose <b>▦ Table</b>: one row per paper, with columns you choose (aim, method, data, main result, limitations… add, rename, move or delete them). It's saved as you type; <b>📝 notes</b> shows the paper's notes and highlights to copy from. Export it as <b>CSV</b> (Excel, Numbers) or <b>Markdown</b>. Tables of your own labels are private and travel with your sync (💻 My computers). In a <b>group</b> the table is shared with its members, and everyone adds their own signed entries to the cells – see <a href="#" data-help="sharing">Groups</a>.</p>`},
 
     {id: 'export', icon: '⤓', title: 'Citations, export & Zotero', html: () => `
       <h4>Citation styles</h4>
@@ -266,10 +266,10 @@ const Help = (() => {
       ${tip('The token expires after a year: GitHub e-mails you before. Then create a new one the same way and paste it in Settings.')}`},
 
     {id: 'sharing', icon: '👥', title: 'Groups: sharing with other people', html: () => `
-      <p>A <b>group</b> is a set of papers you share with other people – a lab, a journal club, a co-author. Only the <b>bibliographic details</b> travel (title, authors, year, journal, DOI) and the <b>public notes</b> written in the group; never PDFs, private notes, highlights or the rest of your library. Papers that arrive are added to your library; if someone removes one from the group, your copy only leaves the group.</p>
+      <p>A <b>group</b> is a set of papers you share with other people – a lab, a journal club, a co-author. Only the <b>bibliographic details</b> travel (title, authors, year, journal, DOI) the <b>public notes</b> and the <b>group table</b> written in the group; never PDFs, private notes, highlights or the rest of your library. Papers that arrive are added to your library; if someone removes one from the group, your copy only leaves the group.</p>
       <h4>Two roles</h4>
-      <ul><li><b>Editor</b> – adds and removes papers, writes public notes, invites people. Needs a free GitHub account connected once.</li>
-        <li><b>Reader</b> – sees the papers and the public notes, changes nothing. Needs nothing: just the code.</li></ul>
+      <ul><li><b>Editor</b> – adds and removes papers, writes public notes and entries in the group table, invites people. Needs a free GitHub account connected once.</li>
+        <li><b>Reader</b> – sees the papers, the public notes and the table, changes nothing. Needs nothing: just the code.</li></ul>
       <p>The person who invites chooses the role. A reader can become an editor later: an editor adds their GitHub username in the group's ⚙︎ (People & options → Invite someone → Edit).</p>
 
       <h4>Create a group and invite people</h4>
@@ -285,6 +285,8 @@ const Help = (() => {
 
       <h4>Who takes part</h4>
       <p>Above the papers of a group you see its <b>editors</b>, with the name each chose (⚙︎ Settings → 👥 Groups → <i>Your name in groups</i>); <i>invited</i> means they haven't joined yet. Readers aren't listed: they don't publish anything. The code lets anyone who has it read the group, so send it only to the people you invite.</p>
+      <h4>The group table</h4>
+      <p>Open the group and choose <b>▦ Table</b>: one row per paper, the same columns for everybody. Each cell collects <b>entries</b>, like short messages: write in <i>＋ add…</i> and press Enter (Shift+Enter for a new line). Every entry carries its author's initials – hover it for the name and the date – and nobody overwrites anybody else: you edit ✎ or delete 🗑 only your own entries. Any editor can add, rename, move or delete columns, for everybody. The table updates with the group (⟳ in the table gets the latest entries at once) and exports to CSV or Markdown with the names.</p>
       <h4>Without GitHub</h4>
       <p>In a group's ⚙︎ → <i>Save as a file</i>, and send the <code>.papershelf</code> file by e-mail. It opens with <i>Groups ＋ → Open a group file</i>.</p>
       <h4>How it works</h4>

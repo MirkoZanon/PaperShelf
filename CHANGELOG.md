@@ -2,6 +2,17 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.11 – 2026-11-07
+
+- **Shared table in groups** – in a group, *▦ Table* is now shared with its members: the same columns
+  for everybody, and each cell collects **entries**, like short messages, each signed with its author's
+  initials (hover for name and date). Write in *＋ add…* and press Enter; nobody overwrites anybody
+  else, and only the author can edit or delete an entry. Editors can add, rename, move or delete columns
+  for everybody; readers see the table read-only. It updates with the group, and the CSV/Markdown
+  export lists each entry with its author's name.
+- If you had already filled a table for a group (it stayed on your computer), *Share it with the group*
+  turns your text into your signed entries.
+
 ## 2.10 – 2026-11-07
 
 - **Green glass** – the look is now metallic green with a “liquid glass” feel: translucent, softly

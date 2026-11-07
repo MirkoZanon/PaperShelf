@@ -323,10 +323,17 @@ const Review = (() => {
   async function render() {
     const t = target(), el = box(); if (!el) return;
     if (!t) {
-      el.innerHTML = `<div class="empty"><div class="big">▦</div><h2>Review table</h2><div>Open a <b>label</b> (in the sidebar) to build its review table: one row per paper, with your own columns – aim, method, data, main result… Handy for a literature review or a thesis chapter. You can export it to CSV (Excel) or Markdown.</div></div>`;
+      el.innerHTML = `<div class="empty"><div class="big">▦</div><h2>Review table</h2><div>Open a <b>label</b> or a <b>group</b> (in the sidebar) to build its review table: one row per paper, with columns – aim, method, data, main result… Handy for a literature review or a thesis chapter. You can export it to CSV (Excel) or Markdown.</div></div>`;
       return;
     }
     const k = JSON.stringify(t);
+    if (t.share) {   // a group: the table is shared with its members (entries signed by each person)
+      if (k !== key) { key = k; data = null; el.innerHTML = '<p class="muted" style="padding:16px">Loading…</p>'; }
+      const my = ++seq;
+      try { const d = await api(`/api/shares/${encodeURIComponent(t.share)}/table`); if (my !== seq) return; data = {...d, shared: true}; }
+      catch (err) { if (!data) el.innerHTML = `<p class="up-err" style="padding:16px">${esc(err.message)}</p>`; return; }
+      return draw();
+    }
     if (k !== key) {
       key = k; data = null; el.innerHTML = '<p class="muted" style="padding:16px">Loading…</p>';
       const my = ++seq;
@@ -335,8 +342,74 @@ const Review = (() => {
     }
     draw();
   }
+  /* ------------------------------------------------ shared mode (groups) */
+  const initials = n => (String(n || '?').match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
+  const when = s => { if (!s) return ''; const d = new Date(s); return isNaN(d) ? s.slice(0, 10) : d.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'short'}); };
+  const sid = () => encodeURIComponent(state.view.id);
+  const ents = (pid, cid) => ((data.cells[String(pid)] || {})[cid]) || [];
+  const mdOr = t => (typeof Notes !== 'undefined' && Notes.md) ? Notes.md(t) : esc(t).replace(/\n/g, '<br>');
+  let editing = null;   // id of the entry being edited
+  function entryHtml(e) {
+    const who = e.mine ? `${e.name || 'You'} (you)` : (e.name || e.by);
+    const tip = `${who} · ${when(e.created)}${e.at && e.at !== e.created ? ` · edited ${when(e.at)}` : ''}`;
+    if (editing === e.id) return `<div class="rv-e mine editing" data-eid="${esc(e.id)}"><textarea class="rv-edit" rows="2">${esc(e.body)}</textarea>
+      <div class="rv-eacts-row"><span class="muted small">Enter to save · Esc to cancel</span><span class="grow"></span><button class="linklike small" data-ecancel>Cancel</button><button class="btn small primary" data-esave>Save</button></div></div>`;
+    return `<div class="rv-e ${e.mine ? 'mine' : ''}" data-eid="${esc(e.id)}" title="${esc(tip)}">
+      <span class="rv-av" style="background:hsl(${hue(e.by)} 50% 42%)">${esc(initials(e.name || e.by))}</span>
+      <div class="rv-eb md">${mdOr(e.body)}</div>
+      ${e.mine && data.can_write ? '<span class="rv-eacts"><button data-eedit title="Edit">✎</button><button data-edel title="Delete for everybody">🗑</button></span>' : ''}</div>`;
+  }
+  function drawShared() {
+    const el = box(); if (!el || !data) return;
+    // keep what you were typing (the table is redrawn after each change)
+    const drafts = {}, foc = document.activeElement;
+    let focusKey = null;
+    $$('textarea[data-add]', el).forEach(ta => { const k = ta.closest('td').dataset.pid + '|' + ta.closest('td').dataset.col; if (ta.value) drafts[k] = ta.value; if (ta === foc) focusKey = k; });
+    const P = papers(), W = data.can_write;
+    const people = new Set(); Object.values(data.cells).forEach(r => Object.values(r).forEach(l => l.forEach(e => people.add(e.by))));
+    const banner = data.local_cells ? (W
+      ? `<div class="rv-banner">🔒 You have an older <b>private</b> table for this group on this computer (${plural(data.local_cells, 'filled cell')}). <button class="btn small primary" id="rv-import">Share it with the group</button> <span class="muted small">Your text becomes your signed entries.</span></div>`
+      : `<div class="rv-banner">🔒 Your older private table for this group stays on this computer; you can share it once an editor makes you an editor.</div>`) : '';
+    el.innerHTML = `<div class="rv-head"><div><b>Group table</b> <span class="muted small">· ${plural(P.length, 'paper')} · 👥 shared with the group${people.size ? ` · ${plural(people.size, 'contributor')}` : ''} · ${W ? 'everyone adds their own entries, signed' : 'you are a reader: read only'}</span></div><span class="grow"></span>
+        ${W ? '<button class="btn small" id="rv-addcol">＋ Column</button>' : ''}<button class="btn small" id="rv-refresh" title="Get the latest entries of the others">⟳</button><button class="btn small" id="rv-csv" title="For Excel, Numbers, Google Sheets">⤓ CSV</button><button class="btn small" id="rv-md" title="A table for a text, a wiki or Obsidian">⤓ Markdown</button></div>${banner}
+      ${P.length ? `<div class="rv-wrap"><table class="rv rv-shared"><thead><tr><th class="rv-paper">Paper</th>${data.cols.map((c, i) => `<th data-col="${esc(c.id)}"><div class="rv-th">${W ? `<button class="rv-name" data-rename="${esc(c.id)}" title="Rename (for everybody)">${esc(c.name)}</button><button class="rv-colmenu" data-colmenu="${i}" title="Move or delete">⋯</button>` : `<span class="rv-name">${esc(c.name)}</span>`}</div></th>`).join('')}</tr></thead>
+        <tbody>${P.map(p => `<tr><td class="rv-paper"><button class="linklike rv-ref" data-open="${p.id}">${esc(ref(p))}</button><div class="rv-t">${esc(truncate(p.title || 'Untitled', 120))}</div>${p.journal ? `<div class="rv-j">${esc(p.journal)}</div>` : ''}<button class="rv-notes" data-rvnotes="${p.id}" title="Show this paper's notes and highlights, to copy from">📝 notes</button></td>
+          ${data.cols.map(c => `<td class="rv-sc" data-pid="${p.id}" data-col="${esc(c.id)}"><div class="rv-ents">${ents(p.id, c.id).map(entryHtml).join('')}</div>${W ? '<textarea data-add rows="1" placeholder="＋ add…" title="Enter to add · Shift+Enter for a new line"></textarea>' : ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+        : `<div class="empty"><div class="big">▦</div><h2>No papers in this group</h2><div>Add papers to the group and they become rows of this table.</div></div>`}`;
+    $$('textarea[data-add]', el).forEach(ta => { const k = ta.closest('td').dataset.pid + '|' + ta.closest('td').dataset.col; if (drafts[k]) { ta.value = drafts[k]; grow(ta); } if (k === focusKey) ta.focus(); });
+    const ed = $('.rv-edit', el); if (ed) { grow(ed); ed.focus(); ed.setSelectionRange(ed.value.length, ed.value.length); }
+  }
+  async function sharedCall(url, opts, focusCell) {
+    try {
+      const d = await api(`/api/shares/${sid()}/table${url}`, opts);
+      data = {...d, shared: true}; editing = null; drawShared(); flashSaved();
+      if (focusCell) $(`td.rv-sc[data-pid="${focusCell[0]}"][data-col="${CSS.escape(focusCell[1])}"] textarea[data-add]`, box())?.focus();
+      return true;
+    } catch (err) { toast(err.message, 'error'); return false; }
+  }
+  async function addEntry(ta) {
+    const td = ta.closest('td'), body = ta.value.trim(); if (!body || ta.dataset.busy) return;
+    ta.dataset.busy = '1';
+    const v = ta.value; ta.value = '';
+    const ok = await sharedCall('/cells', {method: 'POST', body: {paper_id: +td.dataset.pid, col: td.dataset.col, body}}, [td.dataset.pid, td.dataset.col]);
+    if (!ok) { ta.value = v; delete ta.dataset.busy; }
+  }
+  function saveEdit(box) {
+    const td = box.closest('td'), body = $('.rv-edit', box).value.trim();
+    if (!body) return delEntry(box);
+    return sharedCall(`/cells/${encodeURIComponent(box.dataset.eid)}`, {method: 'PUT', body: {paper_id: +td.dataset.pid, col: td.dataset.col, body}});
+  }
+  async function delEntry(box) {
+    const td = box.closest('td');
+    if (!(await confirmBox('Delete your entry?', 'It is deleted for everybody in the group.', {ok: 'Delete', danger: true}))) return;
+    sharedCall(`/cells/${encodeURIComponent(box.dataset.eid)}?paper=${td.dataset.pid}&col=${encodeURIComponent(td.dataset.col)}`, {method: 'DELETE'});
+  }
+  const colCall = body => sharedCall('/cols', {method: 'POST', body});
+
   function draw() {
     const el = box(); if (!el || !data) return;
+    if (data.shared) return drawShared();
     const P = papers();
     const w = c => data.widths[c] ? ` style="width:${data.widths[c]}px;min-width:${data.widths[c]}px"` : '';
     el.innerHTML = `<div class="rv-head"><div><b>Review table</b> <span class="muted small">· ${plural(P.length, 'paper')} · one row per paper, your own columns · saved automatically${state.view.type === 'share' ? ' · only on this computer (not shared)' : ''}</span></div><span class="grow"></span>
@@ -364,7 +437,8 @@ const Review = (() => {
   }
   function exportAs(kind) {
     const P = papers(), title = viewTitle().replace(/[\\/:*?"<>|]+/g, '-');
-    const row = p => [ref(p), p.title || '', p.journal || '', p.doi || '', ...data.cols.map(c => (data.cells[p.uid] || {})[c.id] || '')];
+    const cell = (p, c) => data.shared ? ents(p.id, c.id).map(e => `${e.name || e.by}: ${e.body}`).join('\n') : (data.cells[p.uid] || {})[c.id] || '';
+    const row = p => [ref(p), p.title || '', p.journal || '', p.doi || '', ...data.cols.map(c => cell(p, c))];
     const head = ['Reference', 'Title', 'Journal', 'DOI', ...data.cols.map(c => c.name)];
     if (kind === 'csv') {
       const q = v => `"${String(v).replace(/"/g, '""')}"`;
@@ -373,7 +447,7 @@ const Review = (() => {
       const c = v => String(v).replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>');
       const mdHead = ['Paper', ...data.cols.map(x => x.name)];
       const lines = [`# ${viewTitle()} – review`, '', `| ${mdHead.map(c).join(' | ')} |`, `|${mdHead.map(() => ' --- ').join('|')}|`,
-        ...P.map(p => `| ${c(`${ref(p)}. ${p.title || ''}${p.doi ? ` https://doi.org/${p.doi}` : ''}`)} | ${data.cols.map(x => c((data.cells[p.uid] || {})[x.id] || '')).join(' | ')} |`)];
+        ...P.map(p => `| ${c(`${ref(p)}. ${p.title || ''}${p.doi ? ` https://doi.org/${p.doi}` : ''}`)} | ${data.cols.map(x => c(cell(p, x))).join(' | ')} |`)];
       download(`${title} – review.md`, lines.join('\n') + '\n', 'text/markdown');
     }
   }
@@ -390,6 +464,14 @@ const Review = (() => {
       mnu.remove(); document.removeEventListener('mousedown', off);
       const C = data.cols;
       if (a === 'rename') return rename(C[i].id);
+      if (data.shared) {
+        if (a === 'del') {
+          const used = Object.values(data.cells).filter(r => (r[C[i].id] || []).length).length;
+          if (!(await confirmBox(`Delete the column “${C[i].name}” for everybody?`, used ? `Its entries in ${plural(used, 'paper')} will no longer be shown.` : 'It is removed from the table of every member.', {ok: 'Delete', danger: true}))) return;
+          return colCall({action: 'delete', id: C[i].id});
+        }
+        return colCall({action: 'move', id: C[i].id, dir: a});
+      }
       if (a === 'left' || a === 'right') { const j = a === 'left' ? i - 1 : i + 1; [C[i], C[j]] = [C[j], C[i]]; }
       if (a === 'del') {
         const used = Object.values(data.cells).filter(v => (v[C[i].id] || '').trim()).length;
@@ -402,6 +484,7 @@ const Review = (() => {
   async function rename(id) {
     const c = data.cols.find(x => x.id === id); if (!c) return;
     const v = await askText('Column name', {value: c.name, ok: 'Rename'}); if (!v) return;
+    if (data.shared) return colCall({action: 'rename', id, name: v});
     c.name = v; draw(); save();
   }
   async function showNotes(pid) {
@@ -421,7 +504,15 @@ const Review = (() => {
   }
   function bind() {
     const el = box(); if (!el) return;
+    el.addEventListener('keydown', e => {
+      const t = e.target;
+      if (t.matches('textarea[data-add]') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); addEntry(t); }
+      else if (t.matches('textarea[data-add]') && e.key === 'Escape') { t.value = ''; grow(t); t.blur(); }
+      else if (t.matches('.rv-edit') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); saveEdit(t.closest('.rv-e')); }
+      else if (t.matches('.rv-edit') && e.key === 'Escape') { editing = null; drawShared(); }
+    });
     el.addEventListener('input', e => {
+      if (e.target.matches('textarea[data-add], .rv-edit')) return grow(e.target);
       const ta = e.target.closest('textarea[data-cell]'); if (!ta || !data) return;
       const uid = ta.closest('tr').dataset.uid;
       (data.cells[uid] || (data.cells[uid] = {}))[ta.dataset.cell] = ta.value;
@@ -429,6 +520,23 @@ const Review = (() => {
     });
     el.addEventListener('click', async e => {
       const t = e.target;
+      if (data?.shared) {
+        if (t.closest('[data-eedit]')) { editing = t.closest('.rv-e').dataset.eid; return drawShared(); }
+        if (t.closest('[data-edel]')) return delEntry(t.closest('.rv-e'));
+        if (t.closest('[data-ecancel]')) { editing = null; return drawShared(); }
+        if (t.closest('[data-esave]')) return saveEdit(t.closest('.rv-e'));
+        if (t.closest('#rv-refresh')) {
+          const b = t.closest('#rv-refresh'); b.disabled = true;
+          await Shares.syncNow(state.view.id);
+          b.disabled = false; return render();
+        }
+        if (t.closest('#rv-import')) return sharedCall('/import', {method: 'POST'});
+        if (t.closest('#rv-addcol')) {
+          const v = await askText('New column (for everybody)', {placeholder: 'e.g. Sample size, Species, Key figure…', ok: 'Add'}); if (!v) return;
+          return colCall({action: 'add', name: v});
+        }
+        if (t.closest('td.rv-sc') && !t.closest('button, a, textarea, .rv-e.editing') && !String(getSelection())) { $('textarea[data-add]', t.closest('td'))?.focus(); return; }
+      }
       if (t.closest('#rv-addcol')) {
         const v = await askText('New column', {placeholder: 'e.g. Sample size, Species, Key figure…', ok: 'Add'}); if (!v) return;
         let n = data.cols.length + 1; while (data.cols.some(c => c.id === 'c' + n)) n++;
