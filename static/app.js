@@ -68,7 +68,7 @@ function toast(msg, kind = 'info', ms = 4500) {
   return {close, set: m => { el.querySelector('span').textContent = m; }};
 }
 
-function modal(html, {wide = false} = {}) {
+function modal(html, {wide = false, nofocus = false} = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'modal-wrap';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog">${html}</div>`;
@@ -77,7 +77,7 @@ function modal(html, {wide = false} = {}) {
   wrap.addEventListener('mousedown', e => { if (e.target === wrap) m.close(); });
   // delegated: works also for buttons added later (dialogs that rebuild their content, e.g. Reading stats)
   wrap.addEventListener('click', e => { if (e.target.closest('[data-close]') && wrap.isConnected) m.close(); });
-  setTimeout(() => $('input:not([type=radio]):not([type=checkbox]),textarea', wrap)?.focus(), 30);
+  if (!nofocus) setTimeout(() => $('input:not([type=radio]):not([type=checkbox]),textarea', wrap)?.focus(), 30);
   return m;
 }
 function topModal() { const all = $$('.modal-wrap'); return all[all.length - 1]; }
@@ -636,12 +636,12 @@ function detailRest(p, link, authorsText) {
       <button class="btn" data-act="attach">📎 ${p.pdf_exists ? 'Replace' : 'Attach'} PDF…</button>
       ${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">🔗 Article page</a>` : ''}
       <button class="btn" data-act="copy">❝ Copy citation</button>
-      <button class="btn" data-act="star" title="${p.starred ? 'Starred – click to unstar' : 'Star'}">${p.starred ? '★' : '☆'}</button>
     </div>
     ${!p.pdf_exists && (p.doi || p.url) ? `<div class="lib-btns"><button class="btn small" data-act="institution" title="Opens the article on the publisher's site: use its “Access through your institution” / “Log in via your university” option, then download the PDF – it is attached automatically">🔐 Open article &amp; log in with my university</button>${(state.settings.proxies || []).map(x => `<button class="btn small" data-act="viaproxy" data-proxy="${esc(x.id)}" title="Open the article through ${esc(x.name)}, then download the PDF: it is attached automatically">🏛 Via ${esc(x.name)}</button>`).join('')}</div>` : ''}
-    <div class="seg">${Object.keys(STATUS_LABEL).map(s => `<button data-status="${s}" class="${p.status === s ? 'on' : ''}">${STATUS_LABEL[s]}</button>`).join('')}</div>
+    <div class="d-status-row"><div class="seg">${Object.keys(STATUS_LABEL).map(s => `<button data-status="${s}" class="${p.status === s ? 'on' : ''}">${STATUS_LABEL[s]}</button>`).join('')}</div>
+      <button class="btn star-btn ${p.starred ? 'on' : ''}" data-act="star" title="${p.starred ? 'Starred – click to unstar' : 'Star this paper'}">${p.starred ? '★ Starred' : '☆ Star'}</button></div>
     ${Notes.detailField(p)}
-    <div class="fld"><span>Labels</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No labels yet – create one in the sidebar (Labels → Personal ＋).</span>'}</div><div class="lsugg" id="lsugg"></div></div>
+    <div class="fld"><span>Labels</span><div class="group-checks">${state.groups.length ? groupChecks(p) : '<span class="muted">No labels yet – create one with ＋ next to Labels in the sidebar.</span>'}</div><div class="lsugg" id="lsugg"></div></div>
     ${typeof Shares !== 'undefined' ? Shares.detailField(p) : ''}
     ${p.annotation_count ? `<div class="fld"><span>Highlights</span><div class="hl-summary">🖍 ${p.annotation_count} highlight${p.annotation_count > 1 ? 's' : ''} in the PDF · <button class="linklike" data-act="read">open reader</button> · <button class="linklike" data-act="hl-notes">copy them into a note</button></div></div>` : ''}
     <details class="fld d-sec" ${p.abstract ? 'open' : ''}><summary>Abstract</summary><textarea data-f="abstract" rows="9" placeholder="No abstract">${esc(p.abstract)}</textarea></details>
@@ -814,7 +814,7 @@ function openBulkAdd(prefill = '') {
   const m = modal(`<h3>Add many papers</h3><p class="muted">One per line: links, DOIs, arXiv IDs or titles.</p>
     <textarea class="input" id="bulk-text" rows="9" placeholder="10.1038/s41586-020-2649-2&#10;https://arxiv.org/abs/1706.03762&#10;Attention is all you need">${esc(prefill)}</textarea>
     <div class="section-label">Put them in</div>
-    <select class="input" id="bulk-target" style="width:100%"><option value="">No group</option>${groupOptions()}</select>
+    <select class="input" id="bulk-target" style="width:100%"><option value="">No label</option>${groupOptions()}</select>
     <label class="opt" style="margin-top:10px"><input type="checkbox" id="bulk-dl"><span>Also try to download free PDFs<small>Slower – each paper is checked on arXiv, Unpaywall, OpenAlex…</small></span></label>
     <div class="progress-list" id="bulk-progress"></div>
     <div class="modal-actions"><button class="btn" data-close>Close</button><button class="btn primary" id="bulk-go">Add all</button></div>`, {wide: true});
@@ -843,10 +843,18 @@ function openExport() {
   const groupName = state.view.type === 'group' ? state.groups.find(g => g.id === state.view.id)?.name : '';
   const styleOpts = state.styles.map(s => `<option value="${s.id}" ${s.id === state.settings.default_style ? 'selected' : ''}>${esc(s.name)} – ${esc(s.journals)}</option>`).join('');
   const m = modal(`<h3>Export references <button class="help-q" data-help="export" title="Explain this">?</button></h3>
+    <div class="exp-cols"><div>
     <div class="section-label">Which papers</div>
     <label class="opt ${sel.length ? '' : 'disabled'}"><input type="radio" name="scope" value="sel" ${sel.length ? 'checked' : ''}><span>Selected papers <small>${sel.length} selected</small></span></label>
     <label class="opt"><input type="radio" name="scope" value="view" ${sel.length ? '' : 'checked'}><span>Current view: ${esc(viewTitle())}<small>${vis.length} paper${vis.length === 1 ? '' : 's'}${state.keyword || state.search ? ', with the active filters' : ''}</small></span></label>
     <label class="opt"><input type="radio" name="scope" value="all"><span>Whole library<small>${state.papers.length} papers</small></span></label>
+    <div id="exp-style-box">
+      <div class="section-label">Style</div>
+      <select class="input wide" id="exp-style">${styleOpts}</select>
+      <label class="opt" style="margin-top:8px"><input type="checkbox" id="exp-order"><span>Keep the order shown on screen<small>Otherwise alphabetical by first author; numbered styles get 1, 2, 3…</small></span></label>
+    </div>
+    <label class="opt" id="exp-tags-box" style="display:none"><input type="checkbox" id="exp-tags" checked><span>Add my labels as tags<small>e.g. “PaperShelf/Thesis/Chapter 1”, to find them in Zotero</small></span></label>
+    </div><div>
     <div class="section-label">Format</div>
     <label class="opt"><input type="radio" name="fmt" value="txt" checked><span>Reference list – text (.txt)<small>Ready to paste anywhere</small></span></label>
     <label class="opt"><input type="radio" name="fmt" value="rtf"><span>Reference list – Word / Pages (.rtf)<small>With italics, bold, hanging indent and double spacing</small></span></label>
@@ -854,14 +862,8 @@ function openExport() {
     <label class="opt"><input type="radio" name="fmt" value="bibtex"><span>BibTeX (.bib)<small>LaTeX / Overleaf</small></span></label>
     <label class="opt"><input type="radio" name="fmt" value="csljson"><span>CSL-JSON (.json)<small>Most precise import into Zotero (no tags)</small></span></label>
     <label class="opt"><input type="radio" name="fmt" value="csv"><span>Spreadsheet (.csv)<small>All fields, opens in Excel or Numbers</small></span></label>
-    <div id="exp-style-box">
-      <div class="section-label">Style</div>
-      <select class="input wide" id="exp-style">${styleOpts}</select>
-      <label class="opt" style="margin-top:8px"><input type="checkbox" id="exp-order"><span>Keep the order shown on screen<small>Otherwise sorted alphabetically by first author. Numbered styles get numbers 1, 2, 3…</small></span></label>
-    </div>
-    <p class="muted small" style="margin-top:10px">📝 Want the notes too? <button class="linklike" id="exp-notes">Export notes with their references…</button></p>
-    <label class="opt" id="exp-tags-box" style="display:none"><input type="checkbox" id="exp-tags" checked><span>Add my labels as tags<small>e.g. “PaperShelf/Thesis/Chapter 1”, so you can find them in Zotero</small></span></label>
-    <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="exp-go">⤓ Download</button></div>`, {wide: true});
+    </div></div>
+    <div class="modal-actions"><span class="muted small">📝 Notes too? <button class="linklike" id="exp-notes">Export notes with their references…</button></span><span class="grow"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="exp-go">⤓ Download</button></div>`, {wide: true});
   const sync = () => {
     const fmt = $('input[name=fmt]:checked', m.el).value;
     $('#exp-style-box', m.el).style.display = ['txt', 'rtf', 'csv'].includes(fmt) ? '' : 'none';
@@ -991,7 +993,7 @@ function openSettings(startTab) {
     <label class="opt"><input type="checkbox" id="set-upd-auto" ${s.update_auto !== '' ? 'checked' : ''}><span>Install updates automatically<small>A new version is installed when PaperShelf starts, before it opens (a backup of the old one is kept). Off: the ⬆ Update button appears and you choose when.</small></span></label>
     </div>
     </div>
-    <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="set-save">Save</button></div>`, {wide: true});
+    <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="set-save">Save</button></div>`, {wide: true, nofocus: true});
   m.el.querySelector('.modal').classList.add('settings-modal');
   const showTab = id => {
     $$('[data-stab]', m.el).forEach(b => b.classList.toggle('on', b.dataset.stab === id));

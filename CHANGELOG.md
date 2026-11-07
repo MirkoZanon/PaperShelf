@@ -2,6 +2,21 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.8 – 2026-11-07
+
+- **Fix: option buttons in dialogs** – in *Create a group*, *Export* and other windows the round option
+  buttons took all the width and pushed the text to the right; they are now small and aligned.
+- **A calmer, more consistent look** – the app's green for every checkbox and radio button; one style for
+  all drop-down menus; segmented buttons (status, filters) like the view switcher; option cards with a
+  quiet selected state; dialogs with softer corners and a lightly blurred background; thin scrollbars;
+  a hairline between papers in the list.
+- **Paper details** – the star moved next to the status (*★ Starred*), so the action buttons stay on one
+  line; with the details open, search and view buttons take their own row above the list.
+- **Export** – two columns (papers and style on the left, format on the right): everything fits on
+  screen.
+- Settings no longer put the cursor in the PDF-folder box when they open; *include sub-labels* looks
+  like the other list options; small wording fixes (“No label”).
+
 ## 2.7 – 2026-11-07
 
 - **Labels and Groups** – the sidebar has two separate sections: **Labels** (your own topics, nested if

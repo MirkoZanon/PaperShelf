@@ -1225,3 +1225,67 @@ details.more[open] { padding-bottom: 8px; }
 @media (max-width: 640px) { .iv-grid { grid-template-columns: 1fr; } }
 .iv-role input[type=radio] { width: auto; flex: 0 0 auto; }
 .iv-role > span { flex: 1; min-width: 0; }
+
+/* ================================================================ 2.7.1: form fixes */
+/* radio buttons and checkboxes inside a form field are never stretched to the full width */
+.fld input[type=radio], .fld input[type=checkbox], .opt input[type=radio], .opt input[type=checkbox] { width: auto; flex: 0 0 auto; padding: 0; margin: 3px 0 0; box-shadow: none; }
+.opt > span { flex: 1; min-width: 0; }
+.fld .opt select, .opt select { width: auto; max-width: 100%; padding: 3px 6px; margin: 0 2px; border-radius: 6px; }
+
+/* ================================================================ 2.8: a calmer, more consistent look */
+:root { accent-color: var(--accent); }                       /* native checkboxes, radios, progress: the app's green */
+::selection { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+/* every drop-down looks the same: no native grey box, one chevron */
+select:not([multiple]):not([size]):not(.vo select) { -webkit-appearance: none; appearance: none; padding-right: 26px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 9px center !important; background-size: 9px 6px !important; cursor: pointer; }
+select:not([multiple]):not([size]) { border-radius: 8px; }
+.opt select, #bulk select { padding-top: 3px; padding-bottom: 3px; }
+/* buttons */
+.btn { border-radius: 9px; transition: background .12s, border-color .12s, color .12s, box-shadow .12s; }
+.btn:not(.primary):not(.danger):hover { border-color: color-mix(in srgb, var(--border) 70%, var(--text)); }
+.btn:focus-visible, .nt:focus-visible, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* option cards: a quiet selected state instead of a big green block */
+.opt { border-color: var(--border-soft); background: var(--panel); transition: border-color .12s, background .12s; }
+.opt:hover { border-color: var(--border); }
+.opt:has(input:checked) { background: color-mix(in srgb, var(--accent-soft) 45%, var(--panel)); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+/* segmented controls (status, filters…) share the style of the view switcher */
+.seg { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 11px; padding: 3px; gap: 2px; overflow: visible; }
+.seg button { border: 0 !important; background: none; border-radius: 8px; padding: 5px 13px; color: var(--muted); font-weight: 500; }
+.seg button:hover { color: var(--text); background: var(--hover); }
+.seg button.on { background: var(--panel); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px var(--border-soft); }
+/* dialogs */
+.modal-wrap { background: rgba(14, 16, 20, .32); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.modal { border-radius: 16px; border: 1px solid var(--border-soft); padding: 22px 24px; }
+.modal h3 { font-size: 17.5px; letter-spacing: -.01em; margin-bottom: 8px; }
+.modal-actions { align-items: center; }
+.exp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+@media (max-width: 720px) { .exp-cols { grid-template-columns: 1fr; } }
+/* details panel */
+.d-actions { gap: 6px; }
+.d-actions .btn { padding: 6px 11px; font-size: 13px; }
+.d-status-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 4px 0 14px; flex-wrap: wrap; }
+.d-status-row .seg { margin: 0; }
+.star-btn { height: 32px; font-size: 13px; color: var(--muted); }
+.star-btn.on { color: #c98a0b; border-color: color-mix(in srgb, #e3a21a 45%, var(--border)); background: color-mix(in srgb, #e3a21a 10%, var(--panel)); }
+/* a narrow list (details open): search and views take their own full-width row */
+main.narrow .view-head { flex-direction: column; align-items: stretch; gap: 10px; }
+main.narrow .head-right { justify-content: space-between; }
+main.narrow .search-box, main.narrow .search-box:focus-within { flex: 1 1 auto; width: auto; }
+/* "include sub-labels" as a small toggle like Details */
+#incl-sub-wrap { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--border-soft); border-radius: 10px;
+  background: var(--panel); color: var(--muted); cursor: pointer; }
+#incl-sub-wrap:has(input:checked) { color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 60%, var(--panel)); }
+#incl-sub-wrap input { margin: 0; }
+/* the paper list: a hairline between papers, cards only on hover / selection */
+#list > .row:not(:hover):not(.open):not(.selected) + .row:not(:hover):not(.open):not(.selected) { box-shadow: 0 -1px 0 var(--border-soft); }
+.row { border-radius: 10px; transition: background .1s, border-color .1s; }
+.row-title { letter-spacing: -.005em; }
+/* thin, quiet scrollbars */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 18%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 32%, transparent); }
+::-webkit-scrollbar-track { background: transparent; }
+/* section labels a touch lighter */
+.section-label { letter-spacing: .05em; color: color-mix(in srgb, var(--muted) 85%, var(--text)); }
