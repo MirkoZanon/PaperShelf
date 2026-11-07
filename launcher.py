@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import os
+import re
 import plistlib
 import shutil
 import subprocess
@@ -59,21 +60,33 @@ def app_browser() -> str | None:
 # Chrome, Edge and Brave can install PaperShelf as a real app ("Install PaperShelf"): it gets its own
 # icon in the Dock / taskbar, a dot while it is open, focuses its window when clicked again, and has
 # Quit in its menu. When installed, PaperShelf opens that app instead of a browser window.
+# The browser may add something to the name when it installs the app again, e.g.
+# "PaperShelf 22.44.52.app": any "PaperShelf…" app in its folder counts (the exact name first,
+# otherwise the most recent one).
+_APP_NAME = re.compile(r"^PaperShelf(?: [^/\\]*)?\.(?:app|lnk)$")
+
+
+def _pick(cands) -> str | None:
+    cands = [c for c in cands if _APP_NAME.match(c.name) and c.exists()]
+    if not cands:
+        return None
+    exact = [c for c in cands if c.stem == "PaperShelf"]
+    if exact:
+        return str(exact[0])
+    try:
+        return str(max(cands, key=lambda c: c.stat().st_mtime))
+    except OSError:
+        return str(cands[0])
+
+
 def installed_app() -> str | None:
     home = Path.home()
     if sys.platform == "darwin":
-        for d in sorted((home / "Applications").glob("*Apps*")):
-            app = d / "PaperShelf.app"
-            if app.exists():
-                return str(app)
-        return None
+        return _pick([a for d in sorted((home / "Applications").glob("*Apps*")) for a in d.glob("PaperShelf*.app")])
     if os.name == "nt":
         progs = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
-        for sub in ("Chrome Apps", "Brave Apps", "Chromium Apps"):
-            lnk = progs / sub / "PaperShelf.lnk"
-            if lnk.exists():
-                return str(lnk)
-        return None
+        return _pick([l for sub in ("Chrome Apps", "Brave Apps", "Chromium Apps", "Microsoft Edge Apps", "Edge Apps")
+                      for l in (progs / sub).glob("PaperShelf*.lnk")])
     for f in (home / ".local" / "share" / "applications").glob("*-Default.desktop"):
         try:
             if "Name=PaperShelf" in f.read_text(encoding="utf-8", errors="ignore"):

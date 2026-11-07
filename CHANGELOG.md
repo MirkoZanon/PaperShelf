@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.11.2 – 2026-11-07
+
+- **Fix: the PaperShelf app wasn't recognised again** – when Chrome reinstalls an app it can give it a
+  name like *PaperShelf 22.44.52*; PaperShelf only looked for *PaperShelf* and so opened a separate
+  browser window every time (no dot in the Dock, a new window at each click). Now any PaperShelf app
+  installed by Chrome, Edge or Brave is found, and opening PaperShelf brings back its open window.
+
 ## 2.11.1 – 2026-11-07
 
 - **A window for each cell of the group table** – click a cell to open it: all its entries like a chat,
