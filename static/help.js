@@ -86,6 +86,8 @@ const Help = (() => {
       <ul><li>Use <b>🔐 Open article &amp; log in with my university</b> – see <a href="#" data-help="university">University access</a>.</li>
         <li>Downloaded it yourself? <b>📎 Attach PDF</b>, or drop the file on the paper's panel.</li>
         <li>Write to the author: most are happy to send their paper.</li></ul>
+      <h4>Delete a PDF you no longer need</h4>
+      <p>Hover the paper in the list and click the small <b>✕</b> on its <b>📄 PDF</b> button – or use <b>🗑 Delete PDF</b> in the paper's details, in the PDF reader's top bar, or in the right-click menu. Several papers: select them and click <b>🗑 Delete PDFs</b>. The file goes to the Trash (you can still restore it from there); the paper stays in your library with its notes, highlights and labels, and you can download the PDF again any time.</p>
       ${tip('An e-mail for Unpaywall and a free CORE key (⚙︎ Settings) noticeably increase how many free PDFs are found.')}
       <p class="muted">PaperShelf only uses legal sources; it never uses “shadow libraries”.</p>`},
 

@@ -38,7 +38,8 @@ const Reader = (() => {
           <button class="btn small" id="r-fit">Fit width</button>
           <span class="r-colors" title="Highlight color">${Object.entries(COLORS).map(([k, v]) => `<button class="r-color ${k === color ? 'on' : ''}" data-color="${k}" style="background:${v}" title="${k}"></button>`).join('')}</span>
           <button class="btn small" id="r-embed" title="Write the highlights into the PDF file, so they also show in Preview, Acrobat or Zotero">💾 Save into PDF</button>
-          <a class="btn small" href="/pdf/${paper.id}" target="_blank" rel="noopener" title="Open in the browser's own PDF viewer">↗</a><button class="help-q" data-help="reader" title="Explain this">?</button>
+          <a class="btn small" href="/pdf/${paper.id}" target="_blank" rel="noopener" title="Open in the browser's own PDF viewer">↗</a>
+          <button class="btn small r-delpdf" id="r-delpdf" title="Delete this PDF (moved to the Trash) – the paper, its notes and highlights stay">🗑 Delete PDF</button><button class="help-q" data-help="reader" title="Explain this">?</button>
         </div>
       </div>
       <div class="r-body">
@@ -356,6 +357,7 @@ const Reader = (() => {
     $('#r-list').onclick = e => { const it = e.target.closest('[data-goto]'); if (it) { const a = anns.find(x => x.id === +it.dataset.goto); if (a) { goTo(a); setTimeout(() => editPopup(a), 700); } } };
     $('#r-copy').onclick = async () => { await navigator.clipboard?.writeText(asText()); toast('Highlights copied.', 'ok'); };
     $('#r-tonotes').onclick = () => highlightsToNotes(paper.id);
+    $('#r-delpdf').onclick = () => deletePdfs([paper.id]);
     $('#r-embed').onclick = async () => {
       if (!anns.length) { toast('No highlights to save yet.'); return; }
       const ok = await confirmBox('Save highlights into the PDF file?',
@@ -375,5 +377,5 @@ const Reader = (() => {
 
   window.addEventListener('pagehide', () => { if (isOpen) flush(); });
   document.addEventListener('visibilitychange', () => { if (isOpen && document.visibilityState === 'hidden') flush(); });
-  return {open, close, isOpen: () => isOpen};
+  return {open, close, isOpen: () => isOpen, paperId: () => paper && paper.id};
 })();

@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.11.5 – 2026-11-07
+
+- **Delete a PDF quickly** – hover a paper and click the small ✕ on its *📄 PDF* button; or *🗑 Delete
+  PDF* in the paper's details, in the PDF reader's top bar and in the right-click menu; for several
+  papers select them and click *🗑 Delete PDFs*. The file goes to the Trash (it can still be restored);
+  the paper keeps its notes, highlights and labels, and the PDF can be downloaded again any time.
+
 ## 2.11.4 – 2026-11-07
 
 - **Fix: the app installed from Chrome kept the old icon** – the browser reused the icon it had saved

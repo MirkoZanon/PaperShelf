@@ -1468,3 +1468,12 @@ body.look-metal .modal-wrap { background: rgba(20,50,35,.22); -webkit-backdrop-f
 .cw-vis.seg button:disabled.on { opacity: .8; }
 .cw-kbd { margin-left: 4px; }
 @media (max-width: 560px) { .cw-kbd { display: none; } }
+
+/* ---- 2.11.5 delete a PDF quickly ---- */
+.pdf-wrap { position: relative; display: inline-flex; }
+.pdf-del { position: absolute; top: -7px; right: -7px; width: 17px; height: 17px; border-radius: 50%; padding: 0; display: grid; place-items: center;
+  font-size: 9px; font-weight: 700; line-height: 1; cursor: pointer; border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+  opacity: 0; transform: scale(.8); transition: opacity .12s, transform .12s; box-shadow: 0 1px 3px rgba(0,0,0,.18); }
+.row:hover .pdf-del, .pdf-del:focus-visible { opacity: 1; transform: none; }
+.pdf-del:hover { background: #d64545; border-color: #d64545; color: #fff; }
+.btn.danger-soft:hover, .r-delpdf:hover { color: #d64545; border-color: color-mix(in srgb, #d64545 55%, transparent); }

@@ -942,6 +942,43 @@ def upload_pdf(pid):
     return jsonify(paper=load_paper(db, pid))
 
 
+def _delete_pdfs(db, ids) -> tuple[int, list]:
+    """Move the PDF files of these papers to the Trash and unlink them. Papers, notes and highlights stay."""
+    n, errors = 0, []
+    for p in load_papers(db, ids):
+        if not p["pdf_path"]:
+            continue
+        try:
+            move_to_trash(p["pdf_path"])
+        except OSError as exc:
+            errors.append(f"{p['title'][:60]}: {exc}")
+            continue
+        db.execute("UPDATE papers SET pdf_path='', updated_at=? WHERE id=?", (now(), p["id"]))
+        fulltext.forget(db, p["id"])
+        n += 1
+    db.commit()
+    return n, errors
+
+
+@app.delete("/api/papers/<int:pid>/pdf")
+def delete_pdf(pid):
+    db = get_db()
+    if not load_paper(db, pid):
+        return error("Paper not found", 404)
+    n, errors = _delete_pdfs(db, [pid])
+    if errors:
+        return error("The PDF could not be moved to the Trash: " + errors[0], 500)
+    return jsonify(paper=load_paper(db, pid))
+
+
+@app.post("/api/papers/pdf/delete")
+def delete_pdfs():
+    db = get_db()
+    ids = [int(i) for i in ((request.get_json(silent=True) or {}).get("ids") or []) if _int(i)]
+    n, errors = _delete_pdfs(db, ids)
+    return jsonify(deleted=n, errors=errors, papers=load_papers(db, ids))
+
+
 @app.post("/api/papers/<int:pid>/open")
 def open_pdf(pid):
     p = load_paper(get_db(), pid)

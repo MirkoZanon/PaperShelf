@@ -383,7 +383,7 @@ function shortAuthors(p) {
   return `${a[0].family} et al.`;
 }
 function pdfButton(p) {
-  if (p.pdf_exists) return `<button class="pdf-btn has" data-pdfq title="Open the PDF">📄 PDF</button>`;
+  if (p.pdf_exists) return `<span class="pdf-wrap"><button class="pdf-btn has" data-pdfq title="Open the PDF">📄 PDF</button><button class="pdf-del" data-pdfdel title="Delete this PDF (moved to the Trash) – the paper, its notes and highlights stay">✕</button></span>`;
   if (!(p.doi || p.url || p.arxiv_id)) return '';
   return `<button class="pdf-btn get" data-pdfq title="Get the PDF: looks for a free copy and opens it; if there is none, opens the article page (log in with your university there – the downloaded PDF is attached automatically)">⬇ PDF</button>`;
 }
@@ -465,6 +465,7 @@ function renderList() {
   $('#bulk').classList.toggle('show', n > 0);
   $('#bulk-remove').style.display = state.view.type === 'group' || state.view.type === 'share' ? '' : 'none';
   $('#bulk-remove').textContent = 'Remove this label';
+  $('#bulk-delpdf').style.display = [...state.selected].some(id => paperById(id)?.pdf_exists) ? '' : 'none';
   if (typeof Shares !== 'undefined') $('#bulk-share').innerHTML = Shares.bulkOptions();
   $('#bulk-group').innerHTML = `<option value="">Add label…</option>${groupOptions()}<option value="__new">＋ New label…</option>`;
   $('#incl-sub-wrap').style.display = state.view.type === 'group' && childrenOf(state.view.id).length ? '' : 'none';
@@ -643,6 +644,7 @@ function detailRest(p, link, authorsText) {
         ? `<button class="btn primary" data-act="read">📖 Read &amp; highlight</button><button class="btn" data-act="openapp" title="Open in Preview / your default PDF app">Open in app</button><button class="btn" data-act="reveal">${finderLabel()}</button>`
         : `<button class="btn primary" data-act="findpdf">⬇ Find &amp; download PDF</button>`}
       <button class="btn" data-act="attach">📎 ${p.pdf_exists ? 'Replace' : 'Attach'} PDF…</button>
+      ${p.pdf_exists ? '<button class="btn danger-soft" data-act="delpdf" title="Move the PDF file to the Trash – the paper, its notes and highlights stay">🗑 Delete PDF</button>' : ''}
       ${link ? `<a class="btn" href="${esc(link)}" target="_blank" rel="noopener">🔗 Article page</a>` : ''}
       <button class="btn" data-act="copy">❝ Copy citation</button>
     </div>
@@ -785,6 +787,27 @@ async function deletePapers(ids) {
     await loadLibrary();
     toast(`Deleted ${ids.length} paper${ids.length > 1 ? 's' : ''}.`, 'ok');
   } catch (err) { toast(err.message, 'error'); }
+}
+async function deletePdfs(ids) {
+  ids = ids.filter(id => paperById(id)?.pdf_exists);
+  if (!ids.length) { toast('No PDF to delete.'); return; }
+  const one = ids.length === 1 ? paperById(ids[0]) : null;
+  const trash = /Win/.test(navigator.platform) ? 'Recycle Bin' : 'Trash';
+  const ok = await confirmBox(one ? 'Delete this PDF?' : `Delete ${ids.length} PDFs?`,
+    `${one ? `The PDF of “${truncate(one.title || 'Untitled', 90)}” is` : 'The PDF files are'} moved to the ${trash} – you can still restore ${one ? 'it' : 'them'} from there. ${one ? 'The paper stays' : 'The papers stay'} in your library, with notes, highlights and labels; you can download the PDF again any time.`,
+    {ok: `🗑 Move to the ${trash}`, danger: true});
+  if (!ok) return;
+  try {
+    if (one) { const d = await api(`/api/papers/${one.id}/pdf`, {method: 'DELETE'}); upsertPaper(d.paper); }
+    else {
+      const d = await api('/api/papers/pdf/delete', {method: 'POST', body: {ids}});
+      d.papers.forEach(upsertPaper);
+      if (d.errors.length) toast(`${d.errors.length} PDF${d.errors.length > 1 ? 's' : ''} could not be deleted: ${d.errors[0]}`, 'error', 9000);
+    }
+    if (Reader.isOpen() && ids.includes(Reader.paperId?.())) Reader.close();
+    renderAll(); if (state.openId && ids.includes(state.openId)) renderDetail();
+    toast(one ? 'PDF moved to the ' + trash + '.' : `${ids.length} PDFs moved to the ${trash}.`, 'ok');
+  } catch (err) { toast(err.message, 'error', 9000); }
 }
 async function bulkFindPdf(ids) {
   const todo = ids.filter(id => !paperById(id)?.pdf_exists);
@@ -1238,7 +1261,7 @@ function rowMenu(e, id) {
     ${shares.length ? `<div class="ctx-item ctx-parent">👥 Groups<span class="ctx-arrow">›</span><div class="ctx-sub">${shares.map(x => `<button class="ctx-item ctx-check ${shHas(x.id) ? 'on' : ''}" data-cs="${esc(x.id)}"><span class="ctx-tick">${shHas(x.id) ? '✓' : ''}</span>${labelIcon(x.color, 'link')}<span>${esc(x.name)}</span></button>`).join('')}</div></div>` : ''}
     <div class="ctx-item ctx-parent">◐ Status<span class="ctx-arrow">›</span><div class="ctx-sub">${Object.entries({to_read: 'To read', reading: 'Reading now', read: 'Read'}).map(([k, l]) => `<button class="ctx-item ctx-check ${P.every(p => p.status === k) ? 'on' : ''}" data-cst="${k}"><span class="ctx-tick">${P.every(p => p.status === k) ? '✓' : ''}</span><span>${l}</span></button>`).join('')}</div></div>
     <div class="ctx-sep"></div>
-    ${one ? `<button class="ctx-item" data-c="pdf">📄 ${one.pdf_exists ? 'Open PDF' : 'Get the PDF'}</button><button class="ctx-item" data-c="notes">📝 Notes</button><button class="ctx-item" data-c="details">ⓘ Details</button><button class="ctx-item" data-c="cite">❝ Copy citation</button>` : `<button class="ctx-item" data-c="export">⤓ Export references</button>`}
+    ${one ? `<button class="ctx-item" data-c="pdf">📄 ${one.pdf_exists ? 'Open PDF' : 'Get the PDF'}</button>${one.pdf_exists ? '<button class="ctx-item" data-c="delpdf">🗑 Delete the PDF…</button>' : ''}<button class="ctx-item" data-c="notes">📝 Notes</button><button class="ctx-item" data-c="details">ⓘ Details</button><button class="ctx-item" data-c="cite">❝ Copy citation</button>` : `<button class="ctx-item" data-c="export">⤓ Export references</button>${P.some(p => p.pdf_exists) ? `<button class="ctx-item" data-c="delpdf">🗑 Delete ${P.filter(p => p.pdf_exists).length} PDF${P.filter(p => p.pdf_exists).length > 1 ? 's' : ''}…</button>` : ''}`}
     <button class="ctx-item" data-c="star">${P.every(p => p.starred) ? '☆ Unstar' : '★ Star'}</button>
     <div class="ctx-sep"></div>
     <button class="ctx-item ctx-danger" data-c="delete">🗑 Delete${one ? '' : ` ${P.length} papers`}…</button>`;
@@ -1277,6 +1300,7 @@ function rowMenu(e, id) {
     if (c === 'export') { openExport(); }
     if (c === 'star') { const v = !P.every(p => p.starred); try { const d = await api('/api/papers/bulk', {method: 'POST', body: {ids, changes: {starred: v}}}); d.papers.forEach(upsertPaper); renderAll(); } catch (err) { toast(err.message, 'error'); } }
     if (c === 'delete') deletePapers(ids);
+    if (c === 'delpdf') deletePdfs(ids);
   });
 }
 
@@ -1792,6 +1816,7 @@ function bind() {
     if (e.target.closest('[data-alert]')) { openDetail(id); return; }
     if (e.target.closest('.star')) { savePaper(id, {starred: !p.starred}); return; }
     if (e.target.closest('[data-notes]')) { Notes.open(id); return; }
+    if (e.target.closest('[data-pdfdel]')) { deletePdfs([id]); return; }
     const pq = e.target.closest('[data-pdfq]'); if (pq) { quickPdf(id, pq); return; }
     if (e.target.closest('[data-done]')) { savePaper(id, {status: 'read'}).then(pp => { if (pp) toast(`Marked as read: ${truncate(pp.title, 60)} – it is in the Library.`, 'ok'); }); return; }
     const chip = e.target.closest('[data-kw]');
@@ -1837,6 +1862,7 @@ function bind() {
     catch (err) { toast(err.message, 'error'); }
   });
   $('#bulk-pdf').addEventListener('click', () => bulkFindPdf([...state.selected]));
+  $('#bulk-delpdf').addEventListener('click', () => deletePdfs([...state.selected]));
   $('#bulk-delete').addEventListener('click', () => deletePapers([...state.selected]));
   $('#bulk-notes').addEventListener('click', () => Notes.exportDialog([...state.selected]));
   $('#export-btn').addEventListener('click', openExport);
@@ -1894,6 +1920,7 @@ function bind() {
     if (act === 'getcites') { setBusy(a, true, 'Fetching…'); await fetchCitations([id]); setBusy(a, false); }
     if (act === 'hl-notes') highlightsToNotes(id);
     if (act === 'notes') Notes.open(id);
+    if (act === 'delpdf') { deletePdfs([id]); return; }
     if (act === 'detach') { const ok = await confirmBox('Unlink the PDF?', 'The file stays in your PDF folder; it just won’t be linked to this paper anymore.', {ok: 'Unlink'}); if (ok) savePaper(id, {pdf_path: ''}); }
   });
 
