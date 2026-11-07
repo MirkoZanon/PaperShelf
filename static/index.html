@@ -8,12 +8,13 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#2e7d55">
+<meta name="theme-color" content="#e9ecf0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#25282d" media="(prefers-color-scheme: dark)">
 <meta name="application-name" content="PaperShelf">
 <meta name="apple-mobile-web-app-title" content="PaperShelf">
 <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="look-metal">
 <div class="app">
   <header>
     <div class="menu-wrap brand-wrap">
@@ -40,6 +41,7 @@
     <div class="grow"></div>
     <div class="nt-tools" role="tablist">
       <button data-tab="library" class="nt" title="All your papers, read ones included – with map, review tables, Discover, statistics and exports"><svg class="nt-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4.5h3.2v15H4.5zM9.6 4.5h3.2v15H9.6zM14.6 5.6l3.1-.8 3.8 14.5-3.1.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M4.5 8h3.2M9.6 8h3.2M4.5 16h3.2M9.6 16h3.2" stroke="currentColor" stroke-width="1.4"/></svg><span>Library</span></button>
+      <button data-tab="discover" class="nt" title="Discover: papers related to yours, and search by topic"><svg class="nt-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.6 8.4l-2.2 5-5 2.2 2.2-5z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg><span>Discover</span></button>
       <button data-tab="people" class="nt" title="Researcher profiles: publications, citations, h-index"><svg class="nt-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8.5" r="3.3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3 19.5c.6-3.4 3-5.3 6-5.3s5.4 1.9 6 5.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15.6 5.6a3 3 0 0 1 0 5.8M17.6 14.4c1.8.6 3 2.3 3.4 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Researchers</span></button>
     </div>
     </div>
@@ -80,7 +82,6 @@
           <button data-mode="list" class="on" title="List of papers">☰<span class="ml"> List</span></button>
           <button data-mode="map" title="Citation map of these papers">🕸<span class="ml"> Map</span></button>
           <button data-mode="table" title="Review table of a label: one row per paper, your own columns (aim, method, result…)">▦<span class="ml"> Table</span></button>
-          <button data-mode="discover" title="Suggested papers related to these">💡<span class="ml"> Discover</span></button>
         </div>
       </div>
     </div>

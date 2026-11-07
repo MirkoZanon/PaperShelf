@@ -120,6 +120,7 @@ function setBusy(btn, busy, label) {
 async function loadLibrary() {
   const d = await api('/api/library');
   state.papers = d.papers; state.groups = d.groups; state.shares = d.shares || []; state.settings = d.settings; state.dataDir = d.data_dir;
+  applyLook(state.settings.look);
   state.styles = d.styles || []; state.platform = d.platform || ''; state.version = d.version || ''; state.appDir = d.app_dir || '';
   updateSyncButton();
   const ids = new Set(state.papers.map(p => p.id));
@@ -247,6 +248,9 @@ function viewTitle() {
     || (v.type === 'status' ? (v.value === 'reading' ? 'Reading now' : STATUS_LABEL[v.value]) : v.type === 'group' ? groupPath(v.id)
       : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Group') : 'Papers');
 }
+function applyLook(look) { document.body.classList.toggle('look-metal', (look || 'metal') === 'metal'); }
+const treeOrder = (pid = null) => childrenOf(pid).flatMap(g => [g, ...treeOrder(g.id)]);   // labels as in the sidebar
+const isDiscover = () => state.tab === 'library' && state.area === 'library' && state.mode === 'discover';
 const homeView = () => ({type: state.area === 'reading' ? 'reading' : 'all'});   // the whole list of the page
 function setView(view) {
   state.view = view; state.selected.clear(); state.keyword = null; state.lastIndex = null;
@@ -473,6 +477,11 @@ function renderList() {
   $('#details-toggle').checked = !!state.details;
   const grouped = (state.arrange || {})[state.area] === 'groups';
   $('#arr-sel').value = grouped ? (state.grpMode || 'each') : 'list';
+  if (isDiscover()) {   // Discover is its own page: suggestions for the whole library, or for the label chosen on the left
+    const g = state.view.type === 'group';
+    $('#view-title').innerHTML = `Discover${g ? ` <span class="vt-scope">· ${esc(groupPath(state.view.id))}</span> <button class="view-clear" data-view-clear title="Suggestions for the whole library">×</button>` : ''}`;
+    $('#view-sub').innerHTML = g ? 'Papers related to this label that you don\'t have yet' : 'Papers related to your library that you don\'t have yet – choose a label on the left to focus on one topic';
+  }
   if (state.view.type === 'attention' && list.length) $('#view-sub').innerHTML = 'Retracted or corrected papers, and preprints now published in a journal – open a paper to see the details';
   Smart.gapsHint();
   const stale = state.area === 'reading' && ['reading', 'status'].includes(state.view.type) ? Smart.staleBanner() : '';
@@ -848,6 +857,8 @@ function openExport() {
     <label class="opt ${sel.length ? '' : 'disabled'}"><input type="radio" name="scope" value="sel" ${sel.length ? 'checked' : ''}><span>Selected papers <small>${sel.length} selected</small></span></label>
     <label class="opt"><input type="radio" name="scope" value="view" ${sel.length ? '' : 'checked'}><span>Current view: ${esc(viewTitle())}<small>${vis.length} paper${vis.length === 1 ? '' : 's'}${state.keyword || state.search ? ', with the active filters' : ''}</small></span></label>
     <label class="opt"><input type="radio" name="scope" value="all"><span>Whole library<small>${state.papers.length} papers</small></span></label>
+    ${state.groups.length || (state.shares || []).length ? `<label class="opt"><input type="radio" name="scope" value="labels"><span>Papers with these labels<small id="exp-lab-n">Pick one or more – a paper with any of them is included</small>
+      <span class="exp-labels">${treeOrder().map(g => `<button type="button" class="exp-lab"${chipStyle(g.color)} data-explab="g:${g.id}" title="${esc(groupPath(g.id))}">${labelIcon(g.color, 'tag')}${esc(g.name)}</button>`).join('')}${(state.shares || []).map(x => `<button type="button" class="exp-lab"${chipStyle(x.color)} data-explab="s:${esc(x.id)}">${labelIcon(x.color, 'group')}${esc(x.name)}</button>`).join('')}</span></span></label>` : ''}
     <div id="exp-style-box">
       <div class="section-label">Style</div>
       <select class="input wide" id="exp-style">${styleOpts}</select>
@@ -870,16 +881,35 @@ function openExport() {
     $('#exp-tags-box', m.el).style.display = ['ris', 'bibtex'].includes(fmt) ? '' : 'none';
   };
   $$('input[name=fmt]', m.el).forEach(r => r.addEventListener('change', sync)); sync();
+  // export a subset: the papers with any of the chosen labels (sub-labels included) or groups
+  const picked = new Set();
+  const labelIds = () => {
+    const out = new Set();
+    for (const k of picked) {
+      if (k.startsWith('g:')) { const ids = descendants(+k.slice(2)); state.papers.forEach(p => { if (p.group_ids.some(g => ids.has(g))) out.add(p.id); }); }
+      else { const sid = k.slice(2); state.papers.forEach(p => { if ((p.share_ids || []).includes(sid)) out.add(p.id); }); }
+    }
+    return [...out];
+  };
+  m.el.addEventListener('click', e => {
+    const b = e.target.closest('[data-explab]'); if (!b) return;
+    e.preventDefault();
+    const k = b.dataset.explab; picked.has(k) ? picked.delete(k) : picked.add(k); b.classList.toggle('on', picked.has(k));
+    const r = $('input[name=scope][value=labels]', m.el); if (r) r.checked = picked.size > 0 || r.checked;
+    const n = labelIds().length;
+    $('#exp-lab-n', m.el).textContent = picked.size ? `${n} paper${n === 1 ? '' : 's'} with ${picked.size === 1 ? 'this label' : 'any of these labels'}` : 'Pick one or more – a paper with any of them is included';
+  });
   $('#exp-notes', m.el).onclick = () => {
     const scope = $('input[name=scope]:checked', m.el).value;
     m.close(); Notes.exportDialog(scope === 'sel' ? sel : scope === 'view' ? vis : state.papers.map(p => p.id));
   };
   $('#exp-go', m.el).onclick = async () => {
     const scope = $('input[name=scope]:checked', m.el).value; const fmt = $('input[name=fmt]:checked', m.el).value;
-    const ids = scope === 'sel' ? sel : scope === 'view' ? vis : state.papers.map(p => p.id);
-    if (!ids.length) { toast('There are no papers to export.', 'error'); return; }
+    const ids = scope === 'sel' ? sel : scope === 'view' ? vis : scope === 'labels' ? labelIds() : state.papers.map(p => p.id);
+    if (!ids.length) { toast(scope === 'labels' ? 'Pick at least one label with papers.' : 'There are no papers to export.', 'error'); return; }
     const style = $('#exp-style', m.el).value;
-    const name = 'references' + (scope === 'view' && groupName ? '_' + groupName : '') + (['txt', 'rtf'].includes(fmt) ? '_' + style : '');
+    const labName = scope === 'labels' ? [...picked].map(k => k.startsWith('g:') ? state.groups.find(g => g.id === +k.slice(2))?.name : state.shares.find(x => x.id === k.slice(2))?.name).filter(Boolean).slice(0, 3).join('+') : '';
+    const name = 'references' + (scope === 'view' && groupName ? '_' + groupName : '') + (labName ? '_' + labName : '') + (['txt', 'rtf'].includes(fmt) ? '_' + style : '');
     try {
       const r = await fetch('/api/export', {method: 'POST', headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ids, format: fmt, name, style, order: $('#exp-order', m.el).checked ? 'list' : 'alpha', group_tags: $('#exp-tags', m.el).checked})});
@@ -910,6 +940,8 @@ function openSettings(startTab) {
     <div class="stab-panel" data-panel="general">
     <div class="section-label">Open PaperShelf on</div>
     <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option></select>
+    <div class="section-label">Look</div>
+    <div class="seg look-seg"><button type="button" data-look="metal" class="${(s.look || 'metal') === 'metal' ? 'on' : ''}">✦ Metallic</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
     <div class="section-label">PaperShelf as an app <button class="help-q" data-help="updates" title="Explain this">?</button></div>
     <div id="ia-section"><p class="muted small">…</p></div>
     <details class="more"><summary>Other ways to start it</summary>
@@ -1013,6 +1045,11 @@ function openSettings(startTab) {
     try { const d = await api('/api/settings', {method: 'PUT', body: {start_page: e.target.value}}); state.settings = d.settings; toast('Saved – PaperShelf will open there next time.', 'ok'); }
     catch (err) { toast(err.message, 'error'); }
   };
+  m.el.addEventListener('click', async e => {
+    const b = e.target.closest('[data-look]'); if (!b) return;
+    $$('[data-look]', m.el).forEach(x => x.classList.toggle('on', x === b)); applyLook(b.dataset.look);
+    try { const d = await api('/api/settings', {method: 'PUT', body: {look: b.dataset.look}}); state.settings = d.settings; } catch (err) { toast(err.message, 'error'); }
+  });
   $('#set-stale', m.el).onchange = async e => {
     try { const d = await api('/api/settings', {method: 'PUT', body: {stale_days: e.target.value}}); state.settings = d.settings; renderList(); }
     catch (err) { toast(err.message, 'error'); }
@@ -1255,10 +1292,8 @@ async function brandMenu() {
   menu.innerHTML = `<div class="bm-head"><img src="/static/icons/icon-64.png" alt=""><div><b>PaperShelf ${esc(state.version || '')}</b><small>${state.papers.length} papers · ${state.groups.length} labels · ${(state.shares || []).length} groups</small></div></div>
     ${upd ? item('install-update', `⬆ Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') + '<div class="bm-sep"></div>' : ''}
     ${item('shares', '👥 Groups', 'Create a group, join one, invite people')}
-    ${item('topic', '🔎 Search papers by topic', 'Find papers online by meaning')}
-    ${item('export', '⤓ Export references or notes')}
+    ${item('export', '⤓ Export references or notes', 'All papers, a view, or chosen labels')}
     ${item('stats', '📊 Reading stats')}
-    ${item('checklib', '🩺 Check my library', 'Retractions, corrections, published preprints')}
     <div class="bm-sep"></div>
     ${installed ? '' : item('app', '⬇ Install PaperShelf as an app', 'Own icon in the Dock / taskbar')}
     ${item('quit', '⏻ Quit PaperShelf', 'Stops it on this computer')}`;
@@ -1269,7 +1304,7 @@ async function brandMenu() {
     const a = b.dataset.bm;
     if (a === 'update') syncNow();
     if (a === 'install-update' || a === 'check') Updates.open();
-    if (a === 'topic') { if (state.tab !== 'library' || state.area !== 'library') setTab('library'); setMode('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
+    if (a === 'topic') { setTab('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
     if (a === 'bulk') { if (state.tab !== 'library' || state.area !== 'reading') setTab('reading'); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
     if (a === 'export') openExport();
     if (a === 'feed') Feed.open();
@@ -1372,18 +1407,22 @@ async function handleEvent(e) {
     });
   }
 }
-function setTab(tab) {
-  if (tab === 'reading' || tab === 'library') {
-    // the Reading list / Library button always shows the whole list (no label or keyword selected)
-    state.area = tab; state.selected.clear(); state.keyword = null; state.lastIndex = null;
-    state.view = homeView();
-    if (tab === 'reading') state.mode = 'list';
+function setTab(tab, {keepView = false} = {}) {
+  if (tab === 'reading' || tab === 'library' || tab === 'discover') {
+    // each button shows its whole page (no label or keyword selected) – Discover can keep the label you were looking at
+    const area = tab === 'reading' ? 'reading' : 'library';
+    const keep = keepView && area === state.area && ['group', 'all'].includes(state.view.type);
+    state.area = area; state.selected.clear(); state.keyword = null; state.lastIndex = null;
+    if (!keep) state.view = homeView();
+    if (tab === 'discover') state.mode = 'discover';
+    else if (tab === 'reading' || state.mode === 'discover') state.mode = 'list';
     state.tab = 'library';
   } else state.tab = tab;
   savePrefs();
   document.body.classList.toggle('tab-people', state.tab === 'people');
   document.body.classList.toggle('area-reading', state.tab !== 'people' && state.area === 'reading');
-  const on = state.tab === 'people' ? 'people' : state.area;
+  document.body.classList.toggle('tab-discover', isDiscover());
+  const on = state.tab === 'people' ? 'people' : isDiscover() ? 'discover' : state.area;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
   document.body.classList.remove('side-open'); Side.apply();
   if (state.tab === 'people') { Graph.stop(); People.show(); } else { closeDetail(); renderAll(); renderMode(true); }
@@ -1511,7 +1550,7 @@ function chooseNoteTarget(T, title) {
 
 /* ------------------------------------------------------------------ modes */
 function renderMode(scopeChanged = false) {
-  $('#mode-seg').style.display = state.area === 'reading' ? 'none' : '';   // the reading list is just the list
+  $('#mode-seg').style.display = state.area === 'reading' || state.mode === 'discover' ? 'none' : '';   // the reading list is just the list; Discover is a page of its own
   if (state.area === 'reading') state.mode = 'list';
   $$('#mode-seg [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
   $('#list').style.display = state.mode === 'list' ? '' : 'none';
@@ -1777,7 +1816,7 @@ function bind() {
   });
   document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
   document.addEventListener('click', e => { if (e.target.closest('[data-focus-add]')) { e.preventDefault(); if (state.area !== 'reading' || state.tab !== 'library') setTab('reading'); $('#add-input').focus(); } });
-  $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setMode('discover'); });
+  $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setTab('discover', {keepView: true}); });
   $('#view-title').addEventListener('click', e => { if (e.target.closest('[data-view-clear]')) setView(homeView()); });
   $('#select-all').addEventListener('change', e => {
     if (e.target.checked) state.visible.forEach(id => state.selected.add(id)); else state.selected.clear();

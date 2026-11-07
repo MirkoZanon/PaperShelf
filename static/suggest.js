@@ -17,7 +17,7 @@ const Suggest = (() => {
     $('#add-form').appendChild(box);
     box.addEventListener('mousedown', e => e.preventDefault()); // keep the focus in the input
     box.addEventListener('click', e => {
-      if (e.target.closest('[data-topic]')) { const q = lastQ || input().value.trim(); close(); input().value = ''; setMode('discover'); Discover.searchFor(q); return; }
+      if (e.target.closest('[data-topic]')) { const q = lastQ || input().value.trim(); close(); input().value = ''; setTab('discover'); Discover.searchFor(q); return; }
       const it = e.target.closest('[data-si]'); if (it) pick(+it.dataset.si);
       if (e.target.closest('[data-sclose]')) close();
     });

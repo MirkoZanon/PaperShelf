@@ -2,6 +2,20 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.9 – 2026-11-07
+
+- **Discover has its own tab** – next to Library and Researchers. It suggests papers for the whole
+  library, or for the label you pick in the sidebar, and has the search by topic. The Library keeps
+  List, Map and Table.
+- **Metallic look** – brushed-steel top bar and sidebar, polished buttons and switches, a green that
+  shines a little; dark mode becomes graphite. New icon to match (steel tile, metal-coloured books).
+  ⚙︎ Settings → General → *Look*: *Metallic* (default) or *Flat*. (An app already installed in the Dock /
+  taskbar may keep the old icon until it is installed again.)
+- **Export by labels** – *Papers with these labels*: pick one or more labels or groups (sub-labels
+  included) and export only those papers.
+- **Simpler logo menu** – *Check my library* is gone (⟳ already does it) and so is *Search by topic*
+  (it's in Discover).
+
 ## 2.8 – 2026-11-07
 
 - **Fix: option buttons in dialogs** – in *Create a group*, *Export* and other windows the round option

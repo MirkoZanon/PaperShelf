@@ -121,7 +121,7 @@ is used); browser buttons that save the page you are reading. Duplicates are rec
 (highlighted, first) and want to read, each with a PDF button and *✓ Read* to tick it off – just the
 list, filtered from the sidebar by labels and keywords (click a selected label again, or the *Reading
 list* button, to see everything). The **Library** tab has all your papers, read ones included, with the
-map, review tables, Discover and statistics. Choose the start page in Settings.
+map, review tables and statistics; **Discover** (its own tab) suggests related papers. Choose the start page in Settings.
 
 **Organising** – **labels** that work like tags (a paper can have many; dragging adds, never moves):
 your own topics, nested if you like, used by the map and statistics – kept apart from *Groups* (see below). Automatic
@@ -171,7 +171,7 @@ locally); under a label, how many **key references** cited by several of its pap
 limitations…), filled as you like with the paper's notes and highlights at hand; exported as CSV or
 Markdown. Handy for a literature review or a thesis chapter.
 
-**Search by topic** – in Discover, describe a subject, a question or an abstract: OpenAlex semantic
+**Search by topic** – in the Discover tab, describe a subject, a question or an abstract: OpenAlex semantic
 search finds papers about the same idea even when they use other words (or classic search by words).
 
 **Map** – the papers of a label as a network linked by **citations** (with the important papers you
@@ -212,7 +212,7 @@ be sent as `.papershelf` files. Guide in the app: **? → Groups**.
 **Citation styles** – APA 7, Nature, Science, Cell Press (Cell, Neuron, Current Biology, Cell Reports,
 iScience), Royal Society (Proc B), J Neurosci, eLife, PNAS, PLOS / Vancouver.
 
-**Export** – reference lists (.txt, Word/Pages .rtf), RIS (Zotero/EndNote/Mendeley, with PDFs linked
+**Export** – the whole library, the current view or the papers with chosen labels: reference lists (.txt, Word/Pages .rtf), RIS (Zotero/EndNote/Mendeley, with PDFs linked
 and labels as tags), BibTeX, CSL-JSON, CSV. In Zotero: *File → Import…*.
 
 ---

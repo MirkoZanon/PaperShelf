@@ -262,7 +262,7 @@ def get_settings(db=None, secrets=True) -> dict:
          "update_auto": "1", "just_updated": "", "own_window": "1",
          "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
          "display_name": "", "list_checkboxes": "", "start_page": "reading", "stale_days": "60",
-         "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]"}
+         "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]", "look": "metal"}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
@@ -1897,6 +1897,8 @@ def write_settings():
     if "stale_days" in body:
         sd = _int(body.get("stale_days"))
         set_setting(db, "stale_days", str(sd) if sd and 7 <= sd <= 730 else "")
+    if body.get("look") in ("metal", "flat"):
+        set_setting(db, "look", body["look"])
     if body.get("start_page") in ("reading", "library", "people"):
         set_setting(db, "start_page", body["start_page"])
     if "display_name" in body:
@@ -2687,7 +2689,7 @@ def quit_app():
 def web_manifest():
     data = {"name": "PaperShelf", "short_name": "PaperShelf", "id": "/", "start_url": "/", "scope": "/", "display": "standalone",
             "launch_handler": {"client_mode": ["focus-existing", "auto"]},
-            "background_color": "#f5f4f0", "theme_color": "#2e7d55",
+            "background_color": "#f3f4f6", "theme_color": "#e9ecf0",
             "description": "Your private library of scientific papers",
             "icons": [{"src": f"/static/icons/icon-{n}.png", "sizes": f"{n}x{n}", "type": "image/png"} for n in (192, 512)]}
     return Response(json.dumps(data), mimetype="application/manifest+json")

@@ -19,7 +19,8 @@ const Help = (() => {
       ${step(3, `Open a paper and click <b>⬇ Find &amp; download PDF</b>. If it isn't free, use <b>🔐 Open article &amp; log in with my university</b>. <a href="#" data-help="university">More</a>`)}
       ${step(4, `Click <b>📖 Read &amp; highlight</b> to read the PDF and highlight passages.`)}
       ${step(5, `Click <b>⤓ Export references</b> to get your reference list in APA, Nature, Cell… or to move papers to Zotero.`)}
-      ${tip('At the top right: 🔔 What\'s new, <b>⟳</b> update everything (sync, groups, new versions), <b>?</b> this guide, ⚙︎ settings. The <b>PaperShelf logo</b> at the top left has the rest: groups, search by topic, export, reading stats, library check, quit.')}
+      ${tip('At the top right: 🔔 What\'s new, <b>⟳</b> update everything (sync, groups, new versions), <b>?</b> this guide, ⚙︎ settings. The <b>PaperShelf logo</b> at the top left has the rest: groups, export, reading stats, quit.')}
+      <p class="muted">The look (metallic or flat) is in ⚙︎ Settings → General → <i>Look</i>.</p>
       <h4>Starting and stopping</h4>
       <p><b>The first time</b>, start PaperShelf with <code>start.command</code> (Mac) or <code>start.bat</code> (Windows) in the app folder: it sets itself up (about a minute).</p>
       <p><b>Then install it as an app</b> (recommended): ⚙︎ Settings → General → <b>⬇ Install PaperShelf as an app</b>. Chrome, Edge or Brave make PaperShelf a real app with its own icon: in the Dock or taskbar it shows a dot while open, clicking it brings back the open window instead of opening a new one, and right-click → <i>Quit</i> closes it. Keep it in the Dock (right-click → Options → Keep in Dock) or pin it to the taskbar, and remove the old icon. If PaperShelf isn't running when you open the app, it shows a <b>Start PaperShelf</b> button; with <i>Start PaperShelf in the background when I log in</i> it is always ready.</p>
@@ -63,7 +64,7 @@ const Help = (() => {
       <h4>Reading list and Library</h4>
       <p>PaperShelf has two pages over the same papers (tabs at the top):</p>
       <ul><li><b>📖 Reading list</b> – only what you are reading and want to read. <i>Reading now</i> comes first, highlighted; then <i>To read</i>. Every paper you add is <i>To read</i>. Opening a PDF from the list (<b>PDF</b> button) moves the paper to <i>Reading now</i>; hover a paper and click <b>✓ Read</b> when you are done: it leaves the list and stays in the Library. It is just the list: its sidebar has only <b>labels</b> and <b>keywords</b> to filter it. Click a selected label again – or the <b>×</b> next to the title, or the <b>Reading list</b> button – to see the whole list again.</li>
-        <li><b>📚 Library</b> – all your papers, read ones included, with the <b>Map</b>, the review <b>Table</b>, <b>Discover</b>, statistics and exports. Clicking the <b>Library</b> button (or a selected label again) shows all papers. Its menu: <i>All papers</i>; <i>Read</i>, <i>Starred</i>, <i>To read</i>, <i>Reading now</i>, <i>Without labels</i> and <i>Without PDF</i> under <b>More</b>.</li></ul>
+        <li><b>📚 Library</b> – all your papers, read ones included, with the <b>Map</b>, the review <b>Table</b>, statistics and exports. Clicking the <b>Library</b> button (or a selected label again) shows all papers. Its menu: <i>All papers</i>; <i>Read</i>, <i>Starred</i>, <i>To read</i>, <i>Reading now</i>, <i>Without labels</i> and <i>Without PDF</i> under <b>More</b>.</li></ul>
       <h4>Grouped by label</h4>
       <p>Above the list, the menu <b>No grouping</b> can show the papers in groups instead – on the Reading list and in the Library separately, the list stays the default:</p>
       <ul><li><b>Group by label</b>: a section for each label, with its sub-labels nested inside it, then one for each group; a paper with several labels appears in each of them (its other labels show as chips; the header says how many are also elsewhere). Papers without labels come last.</li>
@@ -119,7 +120,7 @@ const Help = (() => {
       <h4>🩺 Library check</h4>
       <ul><li><b>Retractions and corrections</b>: when you press ⟳, papers are checked about once a week against Crossref (notices published by the journals and the <b>Retraction Watch</b> database) and OpenAlex. A retracted paper gets a red <span class="al-badge lvl-retracted">⚠ Retracted</span> badge, a corrected one a <span class="al-badge lvl-corrected">✎ Corrected</span> badge; the details panel links to the notice.</li>
         <li><b>Published preprints</b>: for arXiv, bioRxiv, medRxiv… papers, PaperShelf looks for the journal version (the DOI the authors added on arXiv, the preprint server's link, or an exact title + first-author match). <span class="pub-badge">📰 Published</span> → open the paper → <b>Use the published version</b>: title, journal, DOI and pages become those of the article; labels, notes, highlights and the PDF stay.</li>
-        <li>All of them are listed under <b>⚠ Needs attention</b> in the sidebar. Logo menu → <b>🩺 Check my library</b> checks everything now. Turn it off in ⚙︎ Settings → General.</li></ul>
+        <li>All of them are listed under <b>⚠ Needs attention</b> in the sidebar. It runs by itself with ⟳; turn it off in ⚙︎ Settings → General.</li></ul>
       ${tip('Only DOIs and arXiv IDs are sent to these public services – nothing about you.')}
       <h4>⏳ Reading-list reminders</h4>
       <p>Papers waiting in the reading list for more than 2 months are pointed out at the top of the list. For each: <b>Keep</b> (remind me later), <b>✓ Read</b>, or <b>To Library</b> – it leaves the reading list without counting as read. Change or switch off the delay in ⚙︎ Settings → General.</p>
@@ -128,7 +129,7 @@ const Help = (() => {
       <h4>🏷 Label suggestions</h4>
       <p>In a paper's details, under its labels, PaperShelf suggests labels whose papers are similar (same words in title, abstract and keywords; citations between them). Click one to add it. Computed on your computer.</p>
       <h4>📚 Key references you don't have</h4>
-      <p>In a label, a link under the title tells you how many works are cited by several of its papers but are not in your library; it opens <b>💡 Discover</b> with them.</p>
+      <p>In a label, a link under the title tells you how many works are cited by several of its papers but are not in your library; it opens <b>Discover</b> with them.</p>
       <h4>▦ Review table</h4>
       <p>In the Library, open a label and choose <b>▦ Table</b>: one row per paper, with columns you choose (aim, method, data, main result, limitations… add, rename, move or delete them). It's saved as you type; <b>📝 notes</b> shows the paper's notes and highlights to copy from. Export it as <b>CSV</b> (Excel, Numbers) or <b>Markdown</b>. Tables of your own labels travel with your sync (💻 My computers); tables of groups stay on this computer.</p>`},
 
@@ -155,9 +156,9 @@ const Help = (() => {
         <li><b>Keywords</b> – the most common keywords become ◆ nodes and each paper is linked to its keywords, so papers on the same topics cluster together. Or choose <i>Papers linked by shared keywords</i> (thicker line = more keywords in common). Click a keyword ◆ to show only its papers.</li>
         <li><b>Labels</b> – your personal labels become ◆ nodes (a dashed line joins a sub-label to its parent) and each paper is linked to its labels: papers with several labels sit between them. Click a label ◆ to open it. Groups are not used here.</li></ul>
       <h4>Search by topic (in Discover)</h4>
-      <p>At the top of <b>💡 Discover</b>, describe what you're looking for – a few words, a question, or even a whole abstract – and click <b>Search</b>. <b>By meaning</b> (OpenAlex semantic search) compares your text with the titles and abstracts of 250+ million works, so it also finds papers that talk about the same idea in other words; <b>By words</b> is the classic search. Filter by year, type or free-to-read, and add any result with one click. From the Add box, the suggestions list offers <i>🔎 Search by topic</i> too. Only your search text is sent to OpenAlex.</p>
+      <p>At the top of <b>Discover</b> (its own tab, next to Library), describe what you're looking for – a few words, a question, or even a whole abstract – and click <b>Search</b>. <b>By meaning</b> (OpenAlex semantic search) compares your text with the titles and abstracts of 250+ million works, so it also finds papers that talk about the same idea in other words; <b>By words</b> is the classic search. Filter by year, type or free-to-read, and add any result with one click. From the Add box, the suggestions list offers <i>🔎 Search by topic</i> too. Only your search text is sent to OpenAlex.</p>
       <h4>Discover</h4>
-      <p><b>💡 Discover</b> suggests papers for the current label (or the whole library): works often cited by your papers, recent papers that cite yours, and related works. One click adds them.</p>
+      <p>The <b>Discover</b> tab suggests papers for the whole library – or for a label you choose in the sidebar: works often cited by your papers, recent papers that cite yours, and related works. One click adds them.</p>
       <h4>Citation data</h4>
       <p>Both use citation data from OpenAlex, a free scholarly database (needs internet). New papers get it automatically; for older ones click <b>Get citation data</b>.</p>
       ${tip('If you see “OpenAlex’s free daily allowance is used up”, add a free OpenAlex key – see <a href="#" data-help="keys">Optional keys</a>.')}`},
