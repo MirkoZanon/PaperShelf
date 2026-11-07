@@ -143,7 +143,7 @@ const Smart = {
   gapCache: {},
   async gapsHint() {
     const v = state.view;
-    if (!['group', 'share'].includes(v.type)) return;
+    if (!['group', 'share'].includes(v.type) || state.area !== 'library') return;   // Discover is in the Library
     const key = `${v.type}:${v.id}:${state.includeSub ? 1 : 0}:${state.papers.length}`;
     let d = Smart.gapCache[key];
     if (!d) {

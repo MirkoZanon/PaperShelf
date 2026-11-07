@@ -218,7 +218,9 @@ const People = (() => {
   }
   function hbars(items, color = 'var(--accent)') {
     const max = Math.max(1, ...items.map(i => i.value));
-    return items.length ? `<div class="hbars">${items.map(i => `<div class="hb"><span class="hb-l" title="${esc(i.label)}">${esc(i.label)}</span><span class="hb-bar"><i style="width:${100 * i.value / max}%;background:${i.color || color}"></i></span><b>${i.value}</b></div>`).join('')}</div>` : '<div class="muted small">No data</div>';
+    // long names (journals, venues) get their own line above the bar, so they can be read in full
+    const stack = items.some(i => String(i.label).length > 24);
+    return items.length ? `<div class="hbars${stack ? ' stack' : ''}">${items.map(i => `<div class="hb"><span class="hb-l" title="${esc(i.label)}">${esc(i.label)}</span><span class="hb-bar"><i style="width:${100 * i.value / max}%;background:${i.color || color}"></i></span><b>${i.value}</b></div>`).join('')}</div>` : '<div class="muted small">No data</div>';
   }
   function rolesChart(works) {
     const peer = works.filter(w => ['article', 'conference'].includes(cat(w)));
@@ -571,7 +573,7 @@ const People = (() => {
     el.innerHTML = `<div class="side-head">Researchers <span class="sh-btns"><button id="p-new" title="Find a researcher">＋</button><button class="side-pin-btn" data-sidepin type="button" title="Keep the sidebar open"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 1.8h4l-.6 4 2.6 2.4v1.2H8.6V14L8 14.8 7.4 14V9.4H4V8.2l2.6-2.4z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></button></span></div>
       ${S.list.length ? S.list.map(p => `<div class="person-item ${S.view === 'profile' && S.person?.id === p.id ? 'active' : ''}" data-pid="${p.id}">
           ${avatar(p, 34)}<div style="min-width:0"><div class="pi-name">${esc(p.name || p.orcid)}${p.is_me ? '<span class="me-badge">me</span>' : ''}</div>
-          <div class="pi-sub">${esc(p.current?.[0]?.organization || `${p.works} works`)}</div></div></div>`).join('')
+          <div class="pi-sub" title="${esc(p.current?.[0]?.organization || '')}">${esc(p.current?.[0]?.organization || `${p.works} works`)}</div></div></div>`).join('')
         : '<div class="empty-hint">Profiles you open are kept here.</div>'}
       <div class="empty-hint" style="margin-top:16px">Data from <a href="https://orcid.org" target="_blank" rel="noopener">ORCID</a> and <a href="https://openalex.org" target="_blank" rel="noopener">OpenAlex</a>. Needs internet to look up or refresh; saved profiles open offline.</div>`;
     if (typeof Side !== 'undefined') Side.apply();

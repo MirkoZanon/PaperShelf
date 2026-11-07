@@ -1087,3 +1087,95 @@ table.rv { border-collapse: separate; border-spacing: 0; font-size: 13px; min-wi
 /* reading list: no menu above the labels – the pin sits on the Labels row */
 body.area-reading aside > .side-head:first-child { height: 0; padding: 0; position: relative; }
 body.area-reading aside > .side-head:first-child #side-pin { position: absolute; right: 8px; top: 12px; z-index: 1; }
+/* bars with long names: the name on its own line, wrapped – never cut */
+.hbars.stack { gap: 9px; }
+.hbars.stack .hb { grid-template-columns: 1fr 30px; row-gap: 3px; }
+.hbars.stack .hb-l { grid-column: 1 / -1; white-space: normal; overflow: visible; line-height: 1.3; }
+
+/* ================================================================ 2.6: header, title row, list toolbar */
+header { gap: 10px; padding: 0 14px 0 12px; }
+.navtabs { display: contents; }
+.nt { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px; border: 0; border-radius: 10px; background: none;
+  color: var(--muted); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; white-space: nowrap; flex-shrink: 0; transition: background .12s, color .12s; }
+.nt:hover { background: var(--hover); color: var(--text); }
+.nt.on { background: var(--accent-soft); color: var(--accent); }
+.nt-ico { width: 19px; height: 19px; flex-shrink: 0; }
+.nt .tab-n { background: var(--chip); color: var(--muted); border-radius: 9px; padding: 1px 6px; font-size: 11px; opacity: 1; margin-left: 1px; }
+.nt.on .tab-n { background: var(--accent); color: var(--accent-ink); }
+/* Reading list + the Add box belong together */
+.nt-read-group { display: flex; align-items: center; gap: 8px; flex: 1 1 640px; min-width: 0; max-width: 820px; }
+body:not(.area-reading) #add-form { display: none; }
+#add-form { flex: 1; gap: 6px; max-width: none; align-items: center; }
+#add-form .add-plus { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--accent); font-weight: 700; pointer-events: none; font-size: 15px; }
+#add-form #add-input { height: 36px; padding-left: 32px; border-radius: 10px; background: var(--bg); }
+#add-form #add-btn { height: 36px; padding: 0 16px; border-radius: 10px; }
+#add-form #more-btn { height: 36px; width: 34px; border-radius: 10px; justify-content: center; }
+/* Library and Researchers: the tools, on the right */
+.nt-tools { display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: 12px; background: var(--bg); border: 1px solid var(--border-soft); flex-shrink: 0; }
+.nt-tools .nt { height: 32px; border-radius: 9px; }
+.nt-tools .nt.on { background: var(--panel); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px var(--border-soft); }
+.hdr-sep { width: 1px; height: 24px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
+header .grow { flex: 1 1 0; min-width: 8px; }
+header #search { margin-left: 0; }
+@media (max-width: 1180px) { body.area-reading .nt-tools .nt span:not(.tab-n) { display: none; } body.area-reading .nt-tools .nt { padding: 0 9px; } }
+@media (max-width: 980px) { .nt-read .nt-ico + span { display: none; } #add-form #add-btn { padding: 0 11px; } }
+
+/* title row: title on the left, search and views on the right */
+.view-head { padding: 16px 24px 10px; align-items: center; }
+.head-right { gap: 10px; }
+.search-box { display: flex; align-items: center; gap: 7px; height: 34px; width: 280px; padding: 0 8px 0 10px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--panel); color: var(--faint); cursor: text; transition: border-color .12s, box-shadow .12s, width .15s; }
+.search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--accent); width: 320px; }
+.search-box svg { width: 16px; height: 16px; flex-shrink: 0; }
+.search-box input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font: inherit; font-size: 13.5px; color: var(--text); padding: 0; width: auto; }
+.search-box input::-webkit-search-cancel-button { cursor: pointer; }
+.search-box kbd { font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--faint); border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; }
+.search-box:focus-within kbd { display: none; }
+@media (max-width: 1100px) { .search-box { width: 200px; } .search-box:focus-within { width: 240px; } }
+/* views: a quiet segmented control */
+.mode-seg { background: var(--bg); border: 1px solid var(--border-soft); border-radius: 11px; padding: 3px; gap: 2px; overflow: visible; }
+.mode-seg button { border: 0 !important; background: none; border-radius: 8px; padding: 0 12px; height: 28px; font-size: 13px; color: var(--muted); font-weight: 500; }
+.mode-seg button:hover { color: var(--text); background: var(--hover); }
+.mode-seg button.on { background: var(--panel); color: var(--accent); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px var(--border-soft); }
+
+/* list toolbar: the count is quiet, the view options are one compact group */
+.toolbar { min-height: 46px; padding: 6px 24px; gap: 10px; }
+.sel-all { display: inline-flex; align-items: center; width: 16px; opacity: 0; transition: opacity .12s; cursor: pointer; }
+.sel-all input { margin: 0; cursor: pointer; }
+.toolbar:hover .sel-all, .toolbar.has-sel .sel-all, .sel-all:focus-within { opacity: 1; }
+.count-label { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.toolbar.has-sel .count-label { color: var(--accent); font-weight: 600; }
+.view-opts { display: flex; align-items: stretch; height: 32px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--panel); overflow: hidden; }
+.vo { display: flex; align-items: center; gap: 6px; padding: 0 10px; color: var(--muted); font-size: 12.5px; cursor: pointer; border-right: 1px solid var(--border-soft); white-space: nowrap; }
+.vo:last-child { border-right: 0; }
+.vo:hover { background: var(--hover); color: var(--text); }
+.vo svg { width: 15px; height: 15px; flex-shrink: 0; }
+.toolbar .vo select { appearance: none; -webkit-appearance: none; border: 0; border-radius: 0; background: transparent; padding: 0 15px 0 0; font: inherit;
+  font-size: 12.5px; color: var(--text); cursor: pointer; outline: none; height: 100%; field-sizing: content;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 2px center; background-size: 9px 6px; }
+.toolbar .vo select:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
+.vo-toggle input { position: absolute; opacity: 0; pointer-events: none; width: 0; }
+.vo-toggle:has(input:checked) { background: var(--accent-soft); color: var(--accent); }
+.vo-toggle:has(input:focus-visible) { box-shadow: inset 0 0 0 2px var(--accent); }
+.vo-export { height: 32px; border-radius: 10px; padding: 0 12px; color: var(--muted); border-color: var(--border-soft); }
+.vo-export svg { width: 15px; height: 15px; }
+.vo-export:hover { color: var(--text); }
+#incl-sub-wrap { font-size: 12.5px; }
+/* instant tooltip for names cut short */
+.tip-pop { position: fixed; z-index: 200; max-width: 380px; padding: 6px 9px; border-radius: 7px; background: var(--text); color: var(--panel);
+  font-size: 12.5px; line-height: 1.35; pointer-events: none; box-shadow: var(--shadow); white-space: normal; }
+
+.head-right { flex-wrap: nowrap; min-width: 0; }
+.vh-left { flex: 1 1 auto; min-width: 0; }
+.search-box { flex: 0 1 280px; min-width: 150px; }
+/* while papers are selected the toolbar shows only what you can do with them */
+.toolbar.selecting .view-opts, .toolbar.selecting .vo-export, .toolbar.selecting #incl-sub-wrap { display: none !important; }
+#bulk { gap: 6px; }
+#bulk select, #bulk .btn { height: 30px; font-size: 12.5px; border-radius: 8px; }
+#bulk select { padding: 0 8px; border: 1px solid var(--border-soft); background: var(--panel); }
+#bulk .btn { padding: 0 10px; border-color: var(--border-soft); }
+.mode-seg button { white-space: nowrap; }
+main.narrow .mode-seg button .ml, main.narrow .vo span, main.narrow .vo-export span { display: none; }
+main.narrow .mode-seg button { padding: 0 10px; }
+#bulk select { field-sizing: content; max-width: 220px; }

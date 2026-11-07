@@ -14,7 +14,7 @@ const Help = (() => {
         lets you read and highlight them, organise them with labels and export reference lists.</p>
       <p>It runs <b>on your computer</b>. The browser is only its window: your library is not online and works offline too.</p>
       <h4>Your first five minutes</h4>
-      ${step(1, `Paste a <b>DOI</b> or a <b>link</b> to an article (journal, arXiv, PubMed…) in the box at the top and press ${kbd('Enter')} – or just type <b>a few words of the title</b> (or authors and year): a list of matching papers appears, pick one. Title, authors, journal, year, abstract and keywords are filled in automatically.`)}
+      ${step(1, `Paste a <b>DOI</b> or a <b>link</b> to an article (journal, arXiv, PubMed…) in the <b>＋ Add a paper</b> box at the top (next to Reading list) and press ${kbd('Enter')} – or just type <b>a few words of the title</b> (or authors and year): a list of matching papers appears, pick one. Title, authors, journal, year, abstract and keywords are filled in automatically.`)}
       ${step(2, `Create a <b>label</b> with ＋ next to “Labels → Personal” and drag papers onto it. A paper can have many labels. <a href="#" data-help="organising">More</a>`)}
       ${step(3, `Open a paper and click <b>⬇ Find &amp; download PDF</b>. If it isn't free, use <b>🔐 Open article &amp; log in with my university</b>. <a href="#" data-help="university">More</a>`)}
       ${step(4, `Click <b>📖 Read &amp; highlight</b> to read the PDF and highlight passages.`)}
@@ -76,7 +76,7 @@ const Help = (() => {
       <h4>Status, stars, notes</h4>
       <p>Mark papers <i>To read / Reading / Read</i>, star the important ones, write notes in the details panel.</p>
       <h4>Search and shortcuts</h4>
-      <p>The search box (top right) looks in titles, authors, journals, keywords, abstracts and notes – <b>and inside your PDFs</b>: PaperShelf indexes the text of every PDF on this computer in the background, so a word written anywhere in a paper is found too. Matches inside a PDF show the page and the sentence; click it to open the PDF at that page. Several words must all appear in the paper; use "quotes" for an exact phrase. Scanned PDFs without a text layer can't be searched. Shortcuts: ${kbd('/')} search · ${kbd('n')} add · ${kbd('Esc')} close · ${kbd('Delete')} delete selected.</p>`},
+      <p>The search box (🔍 above the list, on the right) looks in titles, authors, journals, keywords, abstracts and notes – <b>and inside your PDFs</b>: PaperShelf indexes the text of every PDF on this computer in the background, so a word written anywhere in a paper is found too. Matches inside a PDF show the page and the sentence; click it to open the PDF at that page. Several words must all appear in the paper; use "quotes" for an exact phrase. Scanned PDFs without a text layer can't be searched. Shortcuts: ${kbd('/')} search · ${kbd('n')} add · ${kbd('Esc')} close · ${kbd('Delete')} delete selected.</p>`},
 
     {id: 'pdfs', icon: '📄', title: 'Getting PDFs', html: () => `
       <p><b>⬇ Find &amp; download PDF</b> looks for a legal, free copy in this order: arXiv · the link found when the paper was added · Unpaywall · OpenAlex · Semantic Scholar · CORE (university repositories) · Europe PMC / PubMed Central · the publisher's page.</p>

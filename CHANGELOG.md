@@ -2,6 +2,19 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.6 – 2026-11-07
+
+- **New top bar** – on the left the **Reading list** with its **＋ Add a paper** box (shown on the
+  Reading list, where new papers go); on the right the tools, **Library** and **Researchers**, with icons;
+  then What's new, ⟳, help and settings.
+- **Title row** – the search box moved next to the title (🔍, shortcut `/`); the List / Map / Table /
+  Discover buttons are a quieter segmented control, icons only when the list is narrow.
+- **List toolbar** – the paper count is discreet and the select-all box appears only on hover or while
+  selecting; grouping, sorting and Details are one compact group with icons, next to Export. While papers
+  are selected the toolbar shows only the actions for them.
+- **Researchers** – long journal and venue names are no longer cut: they get their own line above the
+  bar. Everywhere, a name cut short shows in full as soon as the mouse is on it.
+
 ## 2.5.1 – 2026-11-07
 
 - **Simpler Reading list** – it is just the list: no Map / Table / Discover buttons (they stay in the

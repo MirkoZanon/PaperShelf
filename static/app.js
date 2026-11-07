@@ -420,7 +420,7 @@ function emptyHtml() {
   if (state.area === 'reading' && state.papers.length && !state.search && !state.keyword) return `<div class="empty"><div class="big">📖</div><h2>Nothing to read here</h2>
     <div>Papers you add are <b>To read</b> and appear here; when you mark them <b>Read</b> they stay in the <button class="linklike" data-goto-library>Library</button>.</div></div>`;
   if (!state.papers.length) return `<div class="empty"><div class="big">📄</div><h2>Your shelf is empty</h2>
-    <div>Paste something in the box at the top and press Enter. It understands:</div>
+    <div>Paste something in the <button class="linklike" data-focus-add>＋ Add a paper</button> box (next to Reading list, top left) and press Enter. It understands:</div>
     <ul><li>DOIs – <code>10.1038/s41586-020-2649-2</code></li><li>arXiv links or IDs – <code>2106.09685</code></li>
     <li>publisher, PubMed or Google Scholar result links</li><li>a paper title, or a whole reference you copied</li></ul>
     <div style="margin-top:14px">You can also drop PDF files onto this window, or add the browser button from ⚙︎ Settings.</div>
@@ -465,6 +465,8 @@ function renderList() {
   $('#incl-sub').checked = state.includeSub;
   const L = $('#list');
   L.classList.toggle('with-checks', state.settings.list_checkboxes === '1' || n > 0);  // boxes appear while you select
+  $('#list-toolbar').classList.toggle('has-sel', state.settings.list_checkboxes === '1' || n > 0);
+  $('#list-toolbar').classList.toggle('selecting', n > 0);
   L.classList.toggle('details', !!state.details);
   $('#details-toggle').checked = !!state.details;
   const grouped = (state.arrange || {})[state.area] === 'groups';
@@ -1269,8 +1271,8 @@ async function brandMenu() {
     const a = b.dataset.bm;
     if (a === 'update') syncNow();
     if (a === 'install-update' || a === 'check') Updates.open();
-    if (a === 'topic') { if (state.tab !== 'library') setTab(state.area); setMode('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
-    if (a === 'bulk') { if (state.tab !== 'library') setTab(state.area); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
+    if (a === 'topic') { if (state.tab !== 'library' || state.area !== 'library') setTab('library'); setMode('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
+    if (a === 'bulk') { if (state.tab !== 'library' || state.area !== 'reading') setTab('reading'); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
     if (a === 'export') openExport();
     if (a === 'feed') Feed.open();
     if (a === 'stats') Stats.open();
@@ -1776,6 +1778,7 @@ function bind() {
     state.lastIndex = idx; openDetail(id);
   });
   document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
+  document.addEventListener('click', e => { if (e.target.closest('[data-focus-add]')) { e.preventDefault(); if (state.area !== 'reading' || state.tab !== 'library') setTab('reading'); $('#add-input').focus(); } });
   $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setMode('discover'); });
   $('#view-title').addEventListener('click', e => { if (e.target.closest('[data-view-clear]')) setView(homeView()); });
   $('#select-all').addEventListener('change', e => {
@@ -1870,7 +1873,7 @@ function bind() {
     }
     if (typing || topModal() || Reader.isOpen() || Help.isOpen() || state.tab === 'people') return;
     if (e.key === '/') { e.preventDefault(); $('#search').focus(); }
-    if (e.key === 'n') { e.preventDefault(); $('#add-input').focus(); }
+    if (e.key === 'n') { e.preventDefault(); if (state.area !== 'reading') setTab('reading'); $('#add-input').focus(); }
     if ((e.key === 'Backspace' || e.key === 'Delete') && state.selected.size) deletePapers([...state.selected]);
   });
 
@@ -1904,3 +1907,29 @@ async function init() {
 
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+
+/* ------------------------------------------------------------------ names cut short: full text at once on hover */
+(() => {
+  let tip = null, host = null;
+  const hide = () => { if (host && host.dataset.ttl !== undefined) { host.title = host.dataset.ttl; delete host.dataset.ttl; } host = null; tip?.remove(); tip = null; };
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest?.('[title]');
+    if (!el || el === host || !el.title || el.closest('button, .btn') && !el.matches('.hb-l, .label, .pi-sub, .ho-title')) return;
+    const cut = el.scrollWidth > el.clientWidth + 1 || el.scrollHeight > el.clientHeight + 2;
+    if (!cut) return;
+    hide();
+    host = el; el.dataset.ttl = el.title; el.title = '';
+    tip = document.createElement('div'); tip.className = 'tip-pop'; tip.textContent = el.dataset.ttl; document.body.appendChild(tip);
+    const r = el.getBoundingClientRect(), t = tip.getBoundingClientRect();
+    tip.style.left = `${Math.max(8, Math.min(window.innerWidth - t.width - 8, r.left - 4))}px`;
+    tip.style.top = `${r.bottom + 6 + t.height > window.innerHeight ? r.top - t.height - 6 : r.bottom + 6}px`;
+  });
+  document.addEventListener('mouseout', e => { if (host && (e.target === host || host.contains(e.target)) && !host.contains(e.relatedTarget)) hide(); });
+  document.addEventListener('scroll', hide, true);
+})();
+
+/* a narrow list (details panel open, small window): icons only in the view buttons */
+document.addEventListener('DOMContentLoaded', () => {
+  const m = document.querySelector('main.tab-library-only'); if (!m || !window.ResizeObserver) return;
+  new ResizeObserver(() => m.classList.toggle('narrow', m.clientWidth < 760)).observe(m);
+});
