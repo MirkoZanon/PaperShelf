@@ -25,7 +25,7 @@ import time
 import uuid
 import webbrowser
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -1953,7 +1953,7 @@ def write_settings():
         set_setting(db, "stale_days", str(sd) if sd and 7 <= sd <= 730 else "")
     if body.get("look") in ("metal", "flat"):
         set_setting(db, "look", body["look"])
-    if body.get("start_page") in ("reading", "library", "people"):
+    if body.get("start_page") in ("reading", "library", "people", "lab"):
         set_setting(db, "start_page", body["start_page"])
     if "display_name" in body:
         dn = " ".join(str(body.get("display_name") or "").split())[:60]
@@ -3391,6 +3391,267 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     db.commit()
     return {**stats, "published": published, "errors": errors}
 
+# --------------------------------------------------------------------------- the group's lab
+# Ideas, experiments, questions, results and decisions with comments and 👍; plans and tasks.
+# It lives in the group's file like everything else (see sharing.py); readers only read.
+LAB_KIND_LABEL = {"idea": "Idea", "experiment": "Experiment", "question": "Question", "result": "Result",
+                  "decision": "Decision", "protocol": "Protocol / method", "note": "Note"}
+
+
+def _lab_payload(db, sid, st=None):
+    row, st0 = _load_share(db, sid)
+    st = st or st0
+    if not st:
+        return error("Group not found.", 404)
+    ident = share_identity(db)
+    me = {ident["user"], ident["local"]} - {""}
+    author = _my_author(st, ident)
+    names = sharing.profiles(st)
+    people = [{"id": p["id"], "name": p["name"] or p["id"]} for p in sharing.people(st)]
+    if author and author not in {p["id"] for p in people}:
+        people.insert(0, {"id": author, "name": _display_name(db, ident) or author})
+    pname = {p["id"]: p["name"] for p in people}
+    who = lambda a, n="": (pname.get(a) or n or names.get(a) or a or "")
+    keys = {r["item_key"]: r["paper_id"] for r in db.execute("SELECT item_key, paper_id FROM paper_shares WHERE share_id=?", (sid,))}
+    items = st.get("items") or {}
+    paper = lambda k: {"key": k, "paper_id": keys.get(k), "title": ((items.get(k) or {}).get("meta") or {}).get("title") or "A paper no longer in the group"}
+    v = sharing.lab_view(st)
+    titles = {p["id"]: p["title"] or LAB_KIND_LABEL.get(p["kind"], "Post") for p in v["posts"]}
+    posts = []
+    for p in v["posts"]:
+        posts.append({**{k: p.get(k) for k in ("id", "kind", "title", "body", "tags", "created", "at", "by", "pinned")},
+                      "name": who(p["by"], p.get("name")), "mine": p["by"] in me,
+                      "votes": [{"id": a, "name": who(a)} for a in p["votes"]], "voted": bool(me & set(p["votes"])),
+                      "papers": [paper(k) for k in p.get("papers") or []],
+                      "comments": [{**{k: c.get(k) for k in ("id", "body", "created", "at", "by")}, "name": who(c["by"], c.get("name")),
+                                    "mine": c["by"] in me} for c in p["comments"]],
+                      "tasks": sum(1 for t in v["tasks"] if t.get("post") == p["id"])})
+    tasks = [{**t, "status": t.get("status") or "todo", "prio": t.get("prio") or "normal", "assignee_name": who(t.get("assignee")) if t.get("assignee") else "",
+              "mine": t.get("assignee") in me, "paper": paper(t["paper"]) if t.get("paper") else None,
+              "post_title": titles.get(t.get("post") or "", ""), "by_name": who(t.get("by"))} for t in v["tasks"]]
+    return jsonify(group={"id": sid, "name": (st.get("name") or {}).get("v") or "Group"}, can_write=bool(author), me=author or ident["user"],
+                   display_name=_display_name(db, ident), people=people, posts=posts, plans=v["plans"], tasks=tasks,
+                   kinds=LAB_KIND_LABEL)
+
+
+def _lab_write(db, sid):
+    row, st = _load_share(db, sid)
+    if not st:
+        return None, None, error("Group not found.", 404)
+    author = _my_author(st, share_identity(db))
+    if not author:
+        return None, None, error("You are a reader of this group, so you can't write in its lab. Ask an editor to make you an editor.", 403)
+    return st, author, None
+
+
+def _lab_saved(db, sid, st):
+    _save_share(db, sid, st)
+    db.commit()
+    publish_soon(sid)
+    return _lab_payload(db, sid, st)
+
+
+def _lab_keys(db, sid, paper_ids) -> list:
+    out = []
+    for pid in paper_ids or []:
+        r = db.execute("SELECT item_key FROM paper_shares WHERE share_id=? AND paper_id=?", (sid, _int(pid))).fetchone()
+        if r:
+            out.append(r["item_key"])
+    return out
+
+
+def _lab_call(sid, fn):
+    """Run a change to the lab: fn(db, st, author, body) -> None or an error response."""
+    db = get_db()
+    st, author, err = _lab_write(db, sid)
+    if err:
+        return err
+    try:
+        res = fn(db, st, author, request.get_json(silent=True) or {})
+    except sharing.ShareError as exc:
+        return error(str(exc), 400)
+    if isinstance(res, (Response, tuple)):   # an error
+        return res
+    return _lab_saved(db, sid, st)
+
+
+@app.get("/api/shares/<sid>/lab")
+def lab_get(sid):
+    return _lab_payload(get_db(), sid)
+
+
+@app.post("/api/shares/<sid>/lab/posts")
+def lab_post_add(sid):
+    def fn(db, st, author, b):
+        if not (str(b.get("title") or "").strip() or str(b.get("body") or "").strip()):
+            return error("Write a title or a text first.")
+        sharing.add_post(st, author, _display_name(db), b.get("kind"), b.get("title"), b.get("body"),
+                         b.get("tags") or [], _lab_keys(db, sid, b.get("paper_ids")))
+    return _lab_call(sid, fn)
+
+
+@app.put("/api/shares/<sid>/lab/posts/<oid>")
+def lab_post_edit(sid, oid):
+    def fn(db, st, author, b):
+        f = {k: b[k] for k in ("kind", "title", "body", "tags") if k in b}
+        if "paper_ids" in b:
+            f["papers"] = _lab_keys(db, sid, b["paper_ids"])
+        sharing.edit_post(st, author, oid, name=_display_name(db), **f)
+    return _lab_call(sid, fn)
+
+
+@app.delete("/api/shares/<sid>/lab/posts/<oid>")
+def lab_post_delete(sid, oid):
+    return _lab_call(sid, lambda db, st, author, b: sharing.edit_post(st, author, oid, delete=True))
+
+
+@app.post("/api/shares/<sid>/lab/posts/<oid>/comments")
+def lab_comment_add(sid, oid):
+    def fn(db, st, author, b):
+        if not str(b.get("body") or "").strip():
+            return error("Write something first.")
+        sharing.add_comment(st, author, _display_name(db), oid, b["body"])
+    return _lab_call(sid, fn)
+
+
+@app.put("/api/shares/<sid>/lab/comments/<cid>")
+def lab_comment_edit(sid, cid):
+    def fn(db, st, author, b):
+        body = str(b.get("body") or "").strip()
+        sharing.edit_comment(st, author, cid, body=body or None, delete=not body)
+    return _lab_call(sid, fn)
+
+
+@app.delete("/api/shares/<sid>/lab/comments/<cid>")
+def lab_comment_delete(sid, cid):
+    return _lab_call(sid, lambda db, st, author, b: sharing.edit_comment(st, author, cid, delete=True))
+
+
+@app.post("/api/shares/<sid>/lab/posts/<oid>/vote")
+def lab_vote(sid, oid):
+    return _lab_call(sid, lambda db, st, author, b: sharing.set_vote(st, author, oid, bool(b.get("v"))))
+
+
+@app.post("/api/shares/<sid>/lab/posts/<oid>/pin")
+def lab_pin(sid, oid):
+    return _lab_call(sid, lambda db, st, author, b: sharing.set_pin(st, author, oid, bool(b.get("v"))))
+
+
+def _lab_fields(db, sid, coll, b) -> dict:
+    spec = sharing.PLAN_FIELDS if coll == "plans" else sharing.TASK_FIELDS
+    f = {k: b[k] for k in spec if k in b and k != "paper"}
+    if coll == "tasks" and "paper_id" in b:
+        keys = _lab_keys(db, sid, [b["paper_id"]]) if b.get("paper_id") else []
+        f["paper"] = keys[0] if keys else ""
+    return f
+
+
+@app.post("/api/shares/<sid>/lab/<coll>")
+def lab_obj_add(sid, coll):
+    if coll not in ("plans", "tasks"):
+        return error("Not found", 404)
+    def fn(db, st, author, b):
+        f = _lab_fields(db, sid, coll, b)
+        if not str(f.get("name" if coll == "plans" else "title") or "").strip():
+            return error("Give it a name first." if coll == "plans" else "Write what has to be done.")
+        if coll == "tasks":
+            f.setdefault("status", "todo")
+        sharing.set_fields(st, author, coll, None, **f)
+    return _lab_call(sid, fn)
+
+
+@app.put("/api/shares/<sid>/lab/<coll>/<oid>")
+def lab_obj_edit(sid, coll, oid):
+    if coll not in ("plans", "tasks"):
+        return error("Not found", 404)
+    return _lab_call(sid, lambda db, st, author, b: sharing.set_fields(st, author, coll, oid, **_lab_fields(db, sid, coll, b)))
+
+
+@app.delete("/api/shares/<sid>/lab/<coll>/<oid>")
+def lab_obj_delete(sid, coll, oid):
+    if coll not in ("plans", "tasks"):
+        return error("Not found", 404)
+    return _lab_call(sid, lambda db, st, author, b: sharing.set_fields(st, author, coll, oid, **{"del": True}))
+
+
+@app.get("/api/lab/overview")
+def lab_overview():
+    """All your groups at a glance: what is new, your open tasks, the latest decisions."""
+    db = get_db()
+    ident = share_identity(db)
+    me = {ident["user"], ident["local"]} - {""}
+    out, my_tasks = [], []
+    for r in db.execute("SELECT id FROM shares ORDER BY rowid").fetchall():
+        row, st = _load_share(db, r["id"])
+        if not st:
+            continue
+        v = sharing.lab_view(st)
+        name = (st.get("name") or {}).get("v") or "Group"
+        open_t = [t for t in v["tasks"] if (t.get("status") or "todo") != "done"]
+        for t in open_t:
+            if t.get("assignee") in me:
+                my_tasks.append({"group": r["id"], "group_name": name, "id": t["id"], "title": t.get("title") or "",
+                                 "due": t.get("due") or "", "status": t.get("status") or "todo", "prio": t.get("prio") or "normal"})
+        week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        out.append({"id": r["id"], "name": name, "can_write": bool(_my_author(st, ident)),
+                    "papers": len(sharing.items(st)), "members": len(sharing.people(st)),
+                    "posts": len(v["posts"]), "posts_week": sum(1 for p in v["posts"] if (p.get("created") or "") >= week),
+                    "comments_week": sum(1 for p in v["posts"] for c in p["comments"] if (c.get("created") or "") >= week),
+                    "open_tasks": len(open_t), "done_tasks": len(v["tasks"]) - len(open_t),
+                    "overdue": sum(1 for t in open_t if t.get("due") and t["due"] < date.today().isoformat()),
+                    "decisions": [{"id": p["id"], "title": p["title"], "created": p["created"]} for p in v["posts"] if p["kind"] == "decision"][:3],
+                    "latest": [{"id": p["id"], "kind": p["kind"], "title": p["title"] or (p.get("body") or "")[:80], "name": p.get("name") or p["by"],
+                                "created": p["created"], "comments": len(p["comments"])} for p in v["posts"][:3]]})
+    my_tasks.sort(key=lambda t: (t["due"] or "9999", {"high": 0, "normal": 1, "low": 2}.get(t["prio"], 1)))
+    return jsonify(groups=out, my_tasks=my_tasks, today=date.today().isoformat())
+
+
+@app.get("/api/shares/<sid>/lab/export")
+def lab_export(sid):
+    """The lab as a Markdown report (for a meeting, a lab notebook or the minutes)."""
+    db = get_db()
+    resp = _lab_payload(db, sid)
+    if resp.status_code != 200:
+        return resp
+    d = resp.get_json()
+    L = [f"# {d['group']['name']} – lab", "", f"_Exported from PaperShelf on {date.today().isoformat()}_", ""]
+    dec = [p for p in d["posts"] if p["kind"] == "decision"]
+    if dec:
+        L += ["## Decisions", ""] + [f"- **{p['title'] or 'Decision'}** ({p['name']}, {p['created'][:10]}){(': ' + ' '.join(p['body'].split())[:300]) if p['body'] else ''}" for p in dec] + [""]
+    if d["plans"] or d["tasks"]:
+        L += ["## Plans and tasks", ""]
+        for pl in d["plans"] + [{"id": "", "name": "Other tasks"}]:
+            ts = [t for t in d["tasks"] if (t.get("plan") or "") == pl["id"]]
+            if not ts and not pl["id"]:
+                continue
+            L += [f"### {pl['name']}" + (f" – due {pl['due']}" if pl.get("due") else ""), ""]
+            if pl.get("goal"):
+                L += [pl["goal"], ""]
+            for t in ts:
+                box = "x" if t["status"] == "done" else " "
+                extra = ", ".join(x for x in ((t["assignee_name"] and "👤 " + t["assignee_name"]), (t.get("due") and "📅 " + t["due"]),
+                                              ("doing" if t["status"] == "doing" else ""), (t["prio"] == "high" and "❗ high")) if x)
+                L.append(f"- [{box}] {t['title']}" + (f" ({extra})" if extra else ""))
+            L.append("")
+    posts = [p for p in d["posts"] if p["kind"] != "decision"]
+    if posts:
+        L += ["## Ideas and discussion", ""]
+        for p in posts:
+            L += [f"### {d['kinds'].get(p['kind'], 'Post')}: {p['title'] or '(untitled)'}", "",
+                  f"_{p['name']}, {p['created'][:10]}" + (f" · 👍 {len(p['votes'])}" if p["votes"] else "") + (" · #" + " #".join(p["tags"]) if p["tags"] else "") + "_", ""]
+            if p["body"]:
+                L += [p["body"], ""]
+            for pp in p["papers"]:
+                L.append(f"- 📄 {pp['title']}")
+            if p["papers"]:
+                L.append("")
+            for c in p["comments"]:
+                L += [f"> **{c['name']}** ({c['created'][:10]}): " + c["body"].replace("\n", "\n> "), ""]
+    name = re.sub(r"[^\w\- ]+", "", d["group"]["name"]).strip().replace(" ", "_") or "group"
+    return Response("\n".join(L), mimetype="text/markdown",
+                    headers={"Content-Disposition": f'attachment; filename="{name}_lab.md"'})
+
+
 # --------------------------------------------------------------------------- group activity (the 🔔)
 # What the other members did since the last update: a note, an entry in the group table, a paper added.
 # Kept only on this computer.
@@ -3412,6 +3673,23 @@ def record_activity(db, sid, before, after, me: set) -> int:
             for eid, n in cell.items():
                 if eid not in old and not n.get("del") and n.get("by") not in me and cid in cols:
                     rows.append((f"{sid}:entry:{eid}", "entry", n["by"], n.get("name") or names.get(n["by"]) or n["by"], key, title, cols[cid], n.get("body") or ""))
+    lab_b, lab_a = before.get("lab") or {}, after.get("lab") or {}
+    ptitle = lambda pid: (((lab_a.get("posts") or {}).get(pid) or {}).get("title") or "a post")[:300]
+    for oid, n in (lab_a.get("posts") or {}).items():
+        if oid not in (lab_b.get("posts") or {}) and not n.get("del") and n.get("by") not in me:
+            rows.append((f"{sid}:post:{oid}", "post", n["by"], n.get("name") or names.get(n["by"]) or n["by"], oid,
+                         n.get("title") or "", n.get("kind") or "idea", n.get("body") or ""))
+    for oid, n in (lab_a.get("comments") or {}).items():
+        if oid not in (lab_b.get("comments") or {}) and not n.get("del") and n.get("by") not in me:
+            rows.append((f"{sid}:comment:{oid}", "comment", n["by"], n.get("name") or names.get(n["by"]) or n["by"], n.get("post") or "",
+                         ptitle(n.get("post")), "", n.get("body") or ""))
+    for oid, o in (lab_a.get("tasks") or {}).items():
+        fa = (o.get("f") or {}).get("assignee") or {}
+        fb = (((lab_b.get("tasks") or {}).get(oid) or {}).get("f") or {}).get("assignee") or {}
+        if fa.get("v") in me and fb.get("v") != fa.get("v") and fa.get("s") and fa["s"][1] not in me:
+            by = fa["s"][1]
+            rows.append((f"{sid}:task:{oid}:{fa['s'][0]}", "task", by, names.get(by) or by, oid,
+                         ((o.get("f") or {}).get("title") or {}).get("v") or "a task", "", ""))
     n = 0
     for ref, kind, who, name, key, title, col, body in rows:
         excerpt = " ".join(re.sub(r"[*_`#>\[\]]+", "", body).split())[:160]

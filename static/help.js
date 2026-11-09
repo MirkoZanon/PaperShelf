@@ -32,7 +32,8 @@ const Help = (() => {
       <h4>Recommended (optional) settings</h4>
       <ul><li><b>E-mail for Unpaywall</b> – finds more free PDFs.</li><li><b>OpenAlex key</b> – more daily lookups for citation map, suggestions and researcher profiles.</li>
         <li><b>💻 My computers</b> – the same library on several computers. <a href="#" data-help="sync">How</a></li>
-        <li><b>👥 Groups</b> – share papers and notes with other people. <a href="#" data-help="sharing">How</a></li></ul>
+        <li><b>👥 Groups</b> – share papers and notes with other people. <a href="#" data-help="sharing">How</a></li>
+        <li><b>🧪 Lab</b> – the research space of a group: ideas, experiments, discussions, plans and tasks. <a href="#" data-help="lab">How</a></li></ul>
       <p>The keys are explained in <a href="#" data-help="keys">Optional keys</a>.</p>`},
 
     {id: 'adding', icon: '➕', title: 'Adding papers', html: () => `
@@ -296,6 +297,24 @@ const Help = (() => {
       <p>In a group's ⚙︎ → <i>Save as a file</i>, and send the <code>.papershelf</code> file by e-mail. It opens with <i>Groups ＋ → Open a group file</i>.</p>
       <h4>How it works</h4>
       <p>Each editor's PaperShelf keeps its copy of the group in a <b>secret gist</b> on their GitHub account (a small online file that isn't listed anywhere), reads the copies of the other editors and merges them – in any order, through any chain of people, without losing or reviving papers. Updates run at start, every 15 minutes and right after a change; ⟳ forces one. Joining editors are recognised by GitHub's signature, so nobody can join in someone else's name.</p>`},
+
+    {id: 'lab', icon: '🧪', title: 'Lab: ideas, plans & tasks of a group', html: () => `
+      <p>The <b>🧪 Lab</b> tab at the top is the shared space of your <a href="#" data-help="sharing">groups</a> for the research itself – beyond the notes on single papers. Pick a group on the left (or the 🏠 Overview).</p>
+      <h4>💡 Ideas & discussion</h4>
+      <ul><li>Click <b>＋ New post</b> and choose what it is: 💡 <b>Idea</b>, 🧪 <b>Experiment</b>, ❓ <b>Question</b>, 📊 <b>Result</b>, ✅ <b>Decision</b>, 📋 <b>Protocol</b> or 📝 <b>Note</b>. Give it a title and a text (Markdown works: <b>**bold**</b>, lists, quotes), <b>tags</b> and links to papers of the group (📄 Link papers).</li>
+        <li>Everybody can <b>💬 comment</b>, <b>👍 support</b> a post (one vote each) and <b>📌 pin</b> it at the top. Posts and comments are signed; only the author can edit or delete them.</li>
+        <li>Filter by type, click a <b>#tag</b>, search, or sort by <i>latest activity</i> or <i>most supported</i>. On the right: pinned posts, decisions, the most supported ideas and all the tags.</li>
+        <li>Record what the group agreed as a <b>Decision</b>: decisions are listed on the right, in the Overview and in the report.</li></ul>
+      <h4>✅ Plans & tasks</h4>
+      <ul><li>A <b>plan</b> is a milestone or a project (<i>Pilot study – by 18 Dec</i>) with a goal, a deadline and a progress bar.</li>
+        <li>A <b>task</b> is a step: what, <b>who</b>, <b>by when</b>, priority, plan, and optionally a paper (<i>present Smith 2024 at journal club</i>). The board has three columns – <b>To do, Doing, Done</b>: drag the cards, or click one to change it. <i>Only mine</i> shows your tasks.</li>
+        <li><b>＋ Task</b> on a post turns an idea into work: the task links back to the post.</li>
+        <li>Any editor can change plans and tasks; each field keeps the newest change, so two people moving different things never overwrite each other.</li></ul>
+      <h4>🏠 Overview</h4>
+      <p>Your <b>open tasks in every group</b> (overdue ones in red – tick the circle when done), and for each group what happened this week, the open tasks, the latest posts and decisions.</p>
+      <h4>Notifications and report</h4>
+      <p>The 🔔 tells you when someone posts, comments on a post, or gives you a task. <b>⤓ Report</b> downloads the whole lab as a Markdown file – decisions, plans with their tasks, posts with comments – for a lab meeting, the minutes or your lab notebook.</p>
+      ${tip('The Lab travels with the group (same secret gists, updates every 15 minutes or with ⟳). Readers see it but can\'t write. Nothing goes anywhere else.')}`},
 
     {id: 'notes', icon: '📝', title: 'Notes – private and public', html: () => `
       <p>Every paper has its own small <b>chat of notes</b>. The 📝 button on each row of the list shows how many notes a paper has, without opening it: <span class="note-btn priv" style="display:inline-flex">📝<b>2</b></span> private only, <span class="note-btn pub" style="display:inline-flex">📝<b>3</b></span> with public notes, <span class="note-btn both" style="display:inline-flex">📝<b>5</b></span> both. Click it (or <i>Open notes</i> in the paper's details) to read and write.</p>

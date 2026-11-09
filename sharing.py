@@ -178,6 +178,8 @@ def clock(st: dict) -> int:
     for col in (st.get("cols") or {}).values():
         if col.get("s"):
             c = max(c, col["s"][0])
+    if st.get("lab"):
+        c = max(c, _lab_stamps(st["lab"]))
     for e in st.get("items", {}).values():
         for cell in (e.get("cells") or {}).values():
             for n in cell.values():
@@ -372,6 +374,294 @@ def _merge_cols(x: dict, y: dict) -> dict:
     return out
 
 
+# --------------------------------------------------------------------------- the group's lab
+# A place for the group's own research, beyond single papers:
+#  - posts (ideas, experiments, questions, results, decisions…) with comments – each belongs to its
+#    author, exactly like public notes; members can 👍 support a post (one vote each) and pin it;
+#  - plans (milestones) and tasks (to do / doing / done, who, by when) that any editor can change:
+#    every field on its own, the newest change wins.
+LAB_KINDS = ("idea", "experiment", "question", "result", "decision", "protocol", "note")
+TASK_STATUS = ("todo", "doing", "done")
+TASK_PRIO = ("high", "normal", "low")
+MAX_POST, MAX_COMMENT = 20000, 5000
+LAB_LIMITS = {"posts": 2000, "comments": 10000, "plans": 300, "tasks": 3000}
+OID_RE = re.compile(r"^[a-f0-9]{8,32}$")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _lab(st) -> dict:
+    lab = st.setdefault("lab", {})
+    for k in ("posts", "comments", "votes", "pins", "plans", "tasks"):
+        lab.setdefault(k, {})
+    return lab
+
+
+def _clean_tags(tags) -> list:
+    out = []
+    for t in (tags or [])[:8]:
+        t = " ".join(str(t).replace("#", "").split())[:30]
+        if t and t.lower() not in [x.lower() for x in out]:
+            out.append(t)
+    return out
+
+
+def add_post(st, author, name, kind, title, body, tags=(), papers=()) -> str:
+    lab = _lab(st)
+    if len(lab["posts"]) >= LAB_LIMITS["posts"]:
+        raise ShareError("This group has too many posts.")
+    pid = uuid.uuid4().hex[:16]
+    s = tick(st, author)
+    lab["posts"][pid] = {"by": author, "name": (name or "")[:60], "kind": kind if kind in LAB_KINDS else "idea",
+                         "title": " ".join(str(title or "").split())[:200], "body": str(body or "")[:MAX_POST],
+                         "tags": _clean_tags(tags), "papers": [str(k)[:80] for k in (papers or [])][:20],
+                         "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0]}
+    return pid
+
+
+def edit_post(st, author, pid, delete=False, **fields):
+    n = _lab(st)["posts"].get(pid)
+    if not n or n.get("del"):
+        raise ShareError("Post not found.")
+    if n.get("by") != author:
+        raise ShareError("Only the author can change this post.")
+    if delete:
+        n.update(body="", title="", tags=[], papers=[], **{"del": True})
+    else:
+        if "kind" in fields and fields["kind"] in LAB_KINDS:
+            n["kind"] = fields["kind"]
+        if fields.get("title") is not None:
+            n["title"] = " ".join(str(fields["title"]).split())[:200]
+        if fields.get("body") is not None:
+            n["body"] = str(fields["body"])[:MAX_POST]
+        if fields.get("tags") is not None:
+            n["tags"] = _clean_tags(fields["tags"])
+        if fields.get("papers") is not None:
+            n["papers"] = [str(k)[:80] for k in fields["papers"]][:20]
+        if fields.get("name"):
+            n["name"] = str(fields["name"])[:60]
+    n.update(at=_now(), s=tick(st, author))
+
+
+def add_comment(st, author, name, post, body) -> str:
+    lab = _lab(st)
+    if post not in lab["posts"] or lab["posts"][post].get("del"):
+        raise ShareError("That post doesn't exist any more.")
+    if len(lab["comments"]) >= LAB_LIMITS["comments"]:
+        raise ShareError("This group has too many comments.")
+    cid = uuid.uuid4().hex[:16]
+    s = tick(st, author)
+    lab["comments"][cid] = {"post": post, "by": author, "name": (name or "")[:60], "body": str(body or "")[:MAX_COMMENT],
+                            "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0]}
+    return cid
+
+
+def edit_comment(st, author, cid, body=None, delete=False):
+    n = _lab(st)["comments"].get(cid)
+    if not n or n.get("del"):
+        raise ShareError("Comment not found.")
+    if n.get("by") != author:
+        raise ShareError("Only the author can change this comment.")
+    if delete:
+        n.update(body="", **{"del": True})
+    elif body is not None:
+        n["body"] = str(body)[:MAX_COMMENT]
+    n.update(at=_now(), s=tick(st, author))
+
+
+def set_vote(st, author, post, v: bool):
+    _lab(st)["votes"].setdefault(post, {})[author] = {"v": bool(v), "s": tick(st, author)}
+
+
+def set_pin(st, author, post, v: bool):
+    _lab(st)["pins"][post] = {"v": bool(v), "s": tick(st, author)}
+
+
+PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "pos": None, "del": None, "done": None}
+TASK_FIELDS = {"title": 300, "notes": 5000, "status": None, "assignee": 60, "due": 10, "plan": 32, "paper": 80,
+               "post": 32, "prio": None, "pos": None, "del": None}
+
+
+def _field_ok(coll, k, v):
+    """The cleaned value of a field of a plan or task, or raise ValueError."""
+    spec = (PLAN_FIELDS if coll == "plans" else TASK_FIELDS)
+    if k not in spec:
+        raise ValueError(k)
+    if k in ("del", "done"):
+        return bool(v)
+    if k == "pos":
+        return float(v or 0)
+    if k == "status":
+        if v not in TASK_STATUS:
+            raise ValueError(k)
+        return v
+    if k == "prio":
+        return v if v in TASK_PRIO else "normal"
+    v = str(v or "")
+    if k == "due" and v and not DATE_RE.match(v):
+        raise ValueError(k)
+    if k in ("plan", "post") and v and not OID_RE.match(v):
+        raise ValueError(k)
+    return (" ".join(v.split()) if k in ("title", "name", "assignee") else v)[:spec[k]]
+
+
+def set_fields(st, author, coll, oid=None, **fields) -> str:
+    """Create (oid None) or change a plan or a task: each field keeps its newest value."""
+    lab = _lab(st)
+    if oid is None:
+        if len(lab[coll]) >= LAB_LIMITS[coll]:
+            raise ShareError("This group has too many " + coll + ".")
+        oid = uuid.uuid4().hex[:16]
+        lab[coll][oid] = {"by": author, "created": _now(), "f": {}}
+    o = lab[coll].get(oid)
+    if not o:
+        raise ShareError("Not found.")
+    s = tick(st, author)
+    for k, v in fields.items():
+        try:
+            o["f"][k] = {"v": _field_ok(coll, k, v), "s": s}
+        except (ValueError, TypeError):
+            raise ShareError(f"Invalid value for {k}.")
+    return oid
+
+
+def obj_fields(o) -> dict:
+    return {k: f.get("v") for k, f in (o.get("f") or {}).items()}
+
+
+def lab_view(st) -> dict:
+    """Everything visible in the lab, ready for the app."""
+    lab = st.get("lab") or {}
+    alive = lambda d: {k: dict(v, id=k) for k, v in (d or {}).items() if not v.get("del")}
+    posts, comments = alive(lab.get("posts")), alive(lab.get("comments"))
+    for c in comments.values():
+        if c["post"] in posts:
+            posts[c["post"]].setdefault("comments", []).append(c)
+    for pid, p in posts.items():
+        p["comments"] = sorted(p.get("comments") or [], key=lambda c: (c.get("created") or "", c.get("c") or 0))
+        p["votes"] = sorted(a for a, v in ((lab.get("votes") or {}).get(pid) or {}).items() if v.get("v"))
+        p["pinned"] = bool(((lab.get("pins") or {}).get(pid) or {}).get("v"))
+    objs = lambda d: [dict(obj_fields(o), id=k, by=o.get("by"), created=o.get("created")) for k, o in (d or {}).items()
+                      if not obj_fields(o).get("del")]
+    return {"posts": sorted(posts.values(), key=lambda p: (p.get("created") or ""), reverse=True),
+            "plans": sorted(objs(lab.get("plans")), key=lambda p: (p.get("pos") or 0, p.get("created") or "")),
+            "tasks": sorted(objs(lab.get("tasks")), key=lambda t: (t.get("pos") or 0, t.get("created") or ""))}
+
+
+def _merge_fields(x: dict, y: dict) -> dict:
+    out = {}
+    for oid in set(x) | set(y):
+        a, b = x.get(oid), y.get(oid)
+        if not a or not b:
+            out[oid] = json.loads(json.dumps(a or b))
+            continue
+        first = a if (a.get("created") or "9") <= (b.get("created") or "9") else b
+        f = {}
+        for k in set(a.get("f") or {}) | set(b.get("f") or {}):
+            fa, fb = (a.get("f") or {}).get(k), (b.get("f") or {}).get(k)
+            f[k] = dict(fb if fa is None or (fb is not None and newer(fb.get("s"), fa.get("s"))) else fa)
+        out[oid] = {"by": first.get("by"), "created": first.get("created"), "f": f}
+    return out
+
+
+def _merge_lab(a: dict, b: dict) -> dict:
+    a, b = a or {}, b or {}
+    out = {"posts": _merge_notes(a.get("posts") or {}, b.get("posts") or {}),
+           "comments": _merge_notes(a.get("comments") or {}, b.get("comments") or {}),
+           "plans": _merge_fields(a.get("plans") or {}, b.get("plans") or {}),
+           "tasks": _merge_fields(a.get("tasks") or {}, b.get("tasks") or {}), "votes": {}, "pins": {}}
+    for pid in set(a.get("votes") or {}) | set(b.get("votes") or {}):
+        va, vb = (a.get("votes") or {}).get(pid) or {}, (b.get("votes") or {}).get(pid) or {}
+        d = {}
+        for who in set(va) | set(vb):
+            cands = [v for v in (va.get(who), vb.get(who)) if v and v.get("s") and v["s"][1] == who]
+            if cands:
+                d[who] = dict(max(cands, key=lambda v: tuple(v["s"])))
+        if d:
+            out["votes"][pid] = d
+    for pid in set(a.get("pins") or {}) | set(b.get("pins") or {}):
+        x, y = (a.get("pins") or {}).get(pid), (b.get("pins") or {}).get(pid)
+        out["pins"][pid] = dict(y if x is None or (y is not None and newer(y.get("s"), x.get("s"))) else x)
+    return out
+
+
+def _lab_stamps(lab) -> int:
+    c = 0
+    for k in ("posts", "comments"):
+        for n in (lab.get(k) or {}).values():
+            c = max(c, (n.get("s") or [0])[0])
+    for k in ("plans", "tasks"):
+        for o in (lab.get(k) or {}).values():
+            for f in (o.get("f") or {}).values():
+                c = max(c, (f.get("s") or [0])[0])
+    for d in (lab.get("votes") or {}).values():
+        for v in d.values():
+            c = max(c, (v.get("s") or [0])[0])
+    for v in (lab.get("pins") or {}).values():
+        c = max(c, (v.get("s") or [0])[0])
+    return c
+
+
+def _validate_lab(raw) -> dict:
+    lab = {"posts": {}, "comments": {}, "votes": {}, "pins": {}, "plans": {}, "tasks": {}}
+    if not isinstance(raw, dict):
+        return lab
+    ok_name = lambda a: bool(NAME_RE.match(a) or a.startswith("local-"))
+    for coll, lim in (("posts", MAX_POST), ("comments", MAX_COMMENT)):
+        src = raw.get(coll) if isinstance(raw.get(coll), dict) else {}
+        for oid, n in list(src.items())[:LAB_LIMITS[coll]]:
+            if not (isinstance(n, dict) and OID_RE.match(str(oid))):
+                continue
+            by, stp = str(n.get("by") or ""), _stamp(n.get("s"))
+            if not ok_name(by) or not stp or stp[1] != by:
+                continue
+            o = {"by": by, "name": str(n.get("name") or "")[:60], "body": str(n.get("body") or "")[:lim],
+                 "created": str(n.get("created") or "")[:40], "at": str(n.get("at") or "")[:40], "del": bool(n.get("del")), "s": stp,
+                 "c": n["c"] if isinstance(n.get("c"), int) and 0 <= n["c"] <= stp[0] else stp[0]}
+            if coll == "posts":
+                o.update(kind=n.get("kind") if n.get("kind") in LAB_KINDS else "idea", title=" ".join(str(n.get("title") or "").split())[:200],
+                         tags=_clean_tags(n.get("tags") if isinstance(n.get("tags"), list) else []),
+                         papers=[str(k)[:80] for k in (n.get("papers") if isinstance(n.get("papers"), list) else [])][:20])
+            else:
+                if not OID_RE.match(str(n.get("post") or "")):
+                    continue
+                o["post"] = str(n["post"])
+            lab[coll][str(oid)] = o
+    for coll in ("plans", "tasks"):
+        src = raw.get(coll) if isinstance(raw.get(coll), dict) else {}
+        for oid, o in list(src.items())[:LAB_LIMITS[coll]]:
+            if not (isinstance(o, dict) and OID_RE.match(str(oid)) and isinstance(o.get("f"), dict)):
+                continue
+            f = {}
+            for k, fv in o["f"].items():
+                stp = _stamp(fv.get("s")) if isinstance(fv, dict) else None
+                if not stp or not ok_name(stp[1]):
+                    continue
+                try:
+                    f[str(k)] = {"v": _field_ok(coll, k, fv.get("v")), "s": stp}
+                except (ValueError, TypeError):
+                    continue
+            if f:
+                by = str(o.get("by") or "")
+                lab[coll][str(oid)] = {"by": by if ok_name(by) else "", "created": str(o.get("created") or "")[:40], "f": f}
+    votes = raw.get("votes") if isinstance(raw.get("votes"), dict) else {}
+    for pid, d in list(votes.items())[:LAB_LIMITS["posts"]]:
+        if not (OID_RE.match(str(pid)) and isinstance(d, dict)):
+            continue
+        ok = {}
+        for who, v in list(d.items())[:MAX_MEMBERS * 2]:
+            stp = _stamp(v.get("s")) if isinstance(v, dict) else None
+            if stp and stp[1] == who and ok_name(str(who)):
+                ok[str(who)] = {"v": bool(v.get("v")), "s": stp}
+        if ok:
+            lab["votes"][str(pid)] = ok
+    pins = raw.get("pins") if isinstance(raw.get("pins"), dict) else {}
+    for pid, v in list(pins.items())[:LAB_LIMITS["posts"]]:
+        stp = _stamp(v.get("s")) if isinstance(v, dict) else None
+        if stp and OID_RE.match(str(pid)) and ok_name(stp[1]):
+            lab["pins"][str(pid)] = {"v": bool(v.get("v")), "s": stp}
+    return lab
+
+
 def trust_author_copy(st: dict, owner: str, copy: dict):
     """The copy published by `owner` (read from owner's own gist) is the authority on owner's notes:
     a version of one of owner's notes found in someone else's copy but not in owner's is dropped,
@@ -379,6 +669,24 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
     theirs_p = (copy.get("profiles") or {}).get(owner)
     if theirs_p and (st.get("profiles") or {}).get(owner) != theirs_p:
         st.setdefault("profiles", {})[owner] = dict(theirs_p)
+    if st.get("lab"):   # the same for the owner's posts, comments and votes in the lab
+        their_lab = copy.get("lab") or {}
+        for coll in ("posts", "comments"):
+            theirs_l = their_lab.get(coll) or {}
+            for oid, n in list((st["lab"].get(coll) or {}).items()):
+                if n.get("by") != owner:
+                    continue
+                if oid not in theirs_l:
+                    del st["lab"][coll][oid]
+                elif n != theirs_l[oid]:
+                    st["lab"][coll][oid] = dict(theirs_l[oid])
+        for pid, d in (st["lab"].get("votes") or {}).items():
+            tv = ((their_lab.get("votes") or {}).get(pid) or {}).get(owner)
+            if owner in d and d[owner] != tv:
+                if tv:
+                    d[owner] = dict(tv)
+                else:
+                    del d[owner]
     for key, e in (st.get("items") or {}).items():
         mine = ((copy.get("items") or {}).get(key) or {})
         if not mine:
@@ -465,6 +773,8 @@ def merge(a: dict, b: dict) -> dict:
     cols = _merge_cols(a.get("cols") or {}, b.get("cols") or {})
     if cols:
         out["cols"] = cols
+    if a.get("lab") or b.get("lab"):
+        out["lab"] = _merge_lab(a.get("lab"), b.get("lab"))
     return out
 
 
@@ -550,6 +860,8 @@ def validate(data) -> dict:
     c = data.get("creator") if isinstance(data.get("creator"), dict) else None
     if c and (NAME_RE.match(str(c.get("by") or "")) or str(c.get("by") or "").startswith("local-")):
         st["creator"] = {"by": str(c["by"])[:60], "name": str(c.get("name") or "")[:60], "at": str(c.get("at") or "")[:40]}
+    if data.get("lab"):
+        st["lab"] = _validate_lab(data.get("lab"))
     st["clock"] = clock(st)
     return st
 

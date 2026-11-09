@@ -652,10 +652,16 @@ const Bell = (() => {
     const btn = $('#feed-btn');
     if (btn) btn.title = [act.unseen ? `${plural(act.unseen, 'new thing')} in your groups` : '', feedN() ? `${plural(feedN(), 'new paper')} in What's new` : ''].filter(Boolean).join(' · ') || 'Notifications – your groups and What\'s new';
   }
-  const what = i => i.kind === 'note' ? `added a note on <i>${esc(truncate(i.title, 90))}</i>`
+  const LABK = {idea: 'an idea', experiment: 'an experiment', question: 'a question', result: 'a result', decision: 'a decision', protocol: 'a protocol', note: 'a note'};
+  const what = i => i.kind === 'post' ? `posted ${LABK[i.col] || 'an idea'} in the Lab${i.title ? `: <i>${esc(truncate(i.title, 90))}</i>` : ''}`
+    : i.kind === 'comment' ? `commented on <i>${esc(truncate(i.title, 90))}</i>`
+    : i.kind === 'task' ? `assigned you a task: <i>${esc(truncate(i.title, 90))}</i>`
+    : i.kind === 'note' ? `added a note on <i>${esc(truncate(i.title, 90))}</i>`
     : i.kind === 'entry' ? `added an entry in <b>${esc(i.col)}</b> on <i>${esc(truncate(i.title, 90))}</i>`
     : `added <i>${esc(truncate(i.title, 90))}</i> to the group`;
-  const plainWhat = i => i.kind === 'note' ? `added a note on “${truncate(i.title, 60)}”` : i.kind === 'entry' ? `added an entry in ${i.col} on “${truncate(i.title, 60)}”` : `added “${truncate(i.title, 60)}” to ${i.share_name}`;
+  const plainWhat = i => i.kind === 'post' ? `posted ${LABK[i.col] || 'an idea'} in ${i.share_name}: “${truncate(i.title || '', 60)}”`
+    : i.kind === 'comment' ? `commented on “${truncate(i.title, 60)}”` : i.kind === 'task' ? `assigned you a task: “${truncate(i.title, 60)}”`
+    : i.kind === 'note' ? `added a note on “${truncate(i.title, 60)}”` : i.kind === 'entry' ? `added an entry in ${i.col} on “${truncate(i.title, 60)}”` : `added “${truncate(i.title, 60)}” to ${i.share_name}`;
   async function load({toastNew = true} = {}) {
     try { act = await api('/api/activity'); } catch { return; }
     badge(); if (pop) paint();
@@ -676,8 +682,8 @@ const Bell = (() => {
       <div class="bl-list">${act.items.length ? act.items.map(i => `<button class="bl-item ${i.seen ? '' : 'new'}" data-blid="${i.id}">
           <span class="bl-av" style="background:hsl(${hue(i.who)} 50% 42%)">${esc(initials(i.name))}</span>
           <span class="bl-txt"><span><b>${esc(i.name)}</b> ${what(i)}</span>${i.excerpt ? `<span class="bl-ex">“${esc(truncate(i.excerpt, 120))}”</span>` : ''}
-            <span class="bl-meta">${i.kind === 'note' ? '📝' : i.kind === 'entry' ? '▦' : '📄'} ${esc(i.share_name)} · ${esc(ago(i.at))}</span></span></button>`).join('')
-        : '<div class="bl-empty muted small">Nothing yet. When someone adds a note, an entry in the group table or a paper in one of your groups, it appears here (groups update every 15 minutes, or with ⟳).</div>'}</div>`;
+            <span class="bl-meta">${{note: '📝', entry: '▦', post: '🧪', comment: '💬', task: '✅'}[i.kind] || '📄'} ${esc(i.share_name)} · ${esc(ago(i.at))}</span></span></button>`).join('')
+        : '<div class="bl-empty muted small">Nothing yet. When someone adds a note, an entry in the group table, a paper, a post or a comment in the Lab, or gives you a task in one of your groups, it appears here (groups update every 15 minutes, or with ⟳).</div>'}</div>`;
   }
   function close() { pop?.remove(); pop = null; document.removeEventListener('mousedown', outside, true); }
   function outside(e) { if (pop && !pop.contains(e.target) && !e.target.closest('#feed-btn')) close(); }
@@ -694,6 +700,8 @@ const Bell = (() => {
       if (t.closest('[data-blclear]')) { await api('/api/activity', {method: 'DELETE'}); act = {items: [], unseen: 0}; badge(); paint(); return; }
       const b = t.closest('[data-blid]'); if (!b) return;
       const i = act.items.find(x => x.id === +b.dataset.blid); close(); if (!i) return;
+      if (i.kind === 'post' || i.kind === 'comment') { Lab.openGroup(i.share_id, {post: i.item_key}); return; }
+      if (i.kind === 'task') { Lab.openGroup(i.share_id, {task: i.item_key}); return; }
       const goGroup = () => { if (state.tab !== 'library' || state.area !== 'library') setTab('library'); setView({type: 'share', id: i.share_id}); };
       if (!i.paper_id) { goGroup(); return; }
       if (i.kind === 'note') Notes.open(i.paper_id);

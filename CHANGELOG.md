@@ -2,6 +2,25 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.13 – 2026-11-09
+
+- **🧪 Lab – a new tab for the research of your groups**, beyond the notes on single papers:
+  - **💡 Ideas & discussion** – posts that are ideas, experiments, questions, results, decisions, protocols
+    or notes, with Markdown, tags and links to the group's papers. Members comment, 👍 support and 📌 pin
+    them; filter by type or tag, search, sort by latest activity or most supported. Pinned posts,
+    decisions, the most supported ideas and the tags are listed on the side. Posts and comments are signed
+    and only their author can change them.
+  - **✅ Plans & tasks** – plans (milestones with goal, deadline and progress) and a task board – To do /
+    Doing / Done – with who, by when, priority and an optional paper; drag the cards between the columns.
+    *＋ Task* on a post turns an idea into work. Any editor can change them, field by field, without
+    overwriting the others.
+  - **🏠 Overview** – your open tasks in every group (overdue in red, tick to finish them) and, per group,
+    what happened this week, open tasks, latest posts and decisions.
+  - **⤓ Report** – the whole lab as a Markdown file for a lab meeting, the minutes or a lab notebook.
+  - The 🔔 also tells you about new posts, comments and tasks given to you.
+- The Lab travels with the group like papers and notes; readers see it without writing. *Open PaperShelf
+  on* can now also be the Lab.
+
 ## 2.12.1 – 2026-11-09
 
 - **Change who can read a note or a table entry** – hover one of your notes and click *🌐 Make public* or

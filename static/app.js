@@ -32,7 +32,7 @@ function loadPrefs() {
     if (typeof p.includeSub === 'boolean') state.includeSub = p.includeSub;
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
-    if (p.tab === 'people') state.tab = 'people';
+    if (p.tab === 'people' || p.tab === 'lab') state.tab = p.tab;
     state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.arrange = p.arrange || {}; state.grpMode = p.grpMode === 'combo' ? 'combo' : 'each'; state.grpClosed = new Set(p.grpClosed || []); state.grpRank = p.grpRank || {}; state.closed = new Set(p.v >= 2 ? (p.closed || []) : []); state.sidePin = p.sidePin || {};  // v2.2.1: sections open again once
   } catch (e) { /* storage unavailable */ }
 }
@@ -130,6 +130,7 @@ async function loadLibrary() {
   if (state.openId && !ids.has(state.openId)) state.openId = null;
   renderAll();
   if (typeof Bell !== 'undefined' && state.shares.length) Bell.load();   // the groups may have news
+  if (typeof Lab !== 'undefined') Lab.refresh();
 }
 function upsertPaper(p) {
   const i = state.papers.findIndex(x => x.id === p.id);
@@ -963,7 +964,7 @@ function openSettings(startTab) {
 
     <div class="stab-panel" data-panel="general">
     <div class="section-label">Open PaperShelf on</div>
-    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option></select>
+    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option><option value="lab" ${s.start_page === 'lab' ? 'selected' : ''}>🧪 Lab</option></select>
     <div class="section-label">Look</div>
     <div class="seg look-seg"><button type="button" data-look="metal" class="${(s.look || 'metal') === 'metal' ? 'on' : ''}">✦ Green glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
     <div class="section-label">PaperShelf as an app <button class="help-q" data-help="updates" title="Explain this">?</button></div>
@@ -1445,12 +1446,15 @@ function setTab(tab, {keepView = false} = {}) {
   } else state.tab = tab;
   savePrefs();
   document.body.classList.toggle('tab-people', state.tab === 'people');
-  document.body.classList.toggle('area-reading', state.tab !== 'people' && state.area === 'reading');
+  document.body.classList.toggle('tab-lab', state.tab === 'lab');
+  document.body.classList.toggle('area-reading', state.tab === 'library' && state.area === 'reading');
   document.body.classList.toggle('tab-discover', isDiscover());
-  const on = state.tab === 'people' ? 'people' : isDiscover() ? 'discover' : state.area;
+  const on = state.tab === 'people' || state.tab === 'lab' ? state.tab : isDiscover() ? 'discover' : state.area;
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
   document.body.classList.remove('side-open'); Side.apply();
-  if (state.tab === 'people') { Graph.stop(); People.show(); } else { closeDetail(); renderAll(); renderMode(true); }
+  if (state.tab === 'people') { Graph.stop(); People.show(); }
+  else if (state.tab === 'lab') { Graph.stop(); closeDetail(); Lab.show(); }
+  else { closeDetail(); renderAll(); renderMode(true); }
 }
 
 /* ------------------------------------------------------------------ styles, sync, citations */
@@ -1936,7 +1940,7 @@ function bind() {
       if (typing) { document.activeElement.blur(); return; }
       if (state.openId) closeDetail(); else if (state.selected.size) { state.selected.clear(); renderList(); }
     }
-    if (typing || topModal() || Reader.isOpen() || Help.isOpen() || state.tab === 'people') return;
+    if (typing || topModal() || Reader.isOpen() || Help.isOpen() || state.tab === 'people' || state.tab === 'lab') return;
     if (e.key === '/') { e.preventDefault(); $('#search').focus(); }
     if (e.key === 'n') { e.preventDefault(); if (state.area !== 'reading') setTab('reading'); $('#add-input').focus(); }
     if ((e.key === 'Backspace' || e.key === 'Delete') && state.selected.size) deletePapers([...state.selected]);
@@ -1964,7 +1968,7 @@ async function init() {
   loadPrefs(); bind();
   try { await loadLibrary(); } catch (err) { toast(err.message, 'error', 0); }
   const start = state.settings.start_page || 'reading';  // Settings → General → Open PaperShelf on
-  setTab(start === 'library' || start === 'people' ? start : 'reading');
+  setTab(['library', 'people', 'lab'].includes(start) ? start : 'reading');
   handleHash();
   try { lastEvent = (await api('/api/events?after=999999999')).last_id || 0; } catch (e) { /* ignore */ }
   schedulePoll(3000);
