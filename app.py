@@ -2808,7 +2808,7 @@ def share_table_make_private(sid, eid):
         n = (((st["items"][key].get("cells") or {}).get(cid)) or {}).get(eid)
         if not n or n.get("del"):
             return error("Entry not found.", 404)
-        if n.get("by") != author:
+        if sharing.canon(st, n.get("by")) != author:
             return error("Only the author can change this entry.", 403)
         row, d, uid, _ = _priv_target(db, sid, b)
         body = str(b.get("body") or "").strip() or n.get("body") or ""
@@ -3359,6 +3359,8 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
         elif ident["user"] in mem and mem[ident["user"]] != ident["src"]:
             sharing.set_member(st, ident["user"], ident["user"], ident["src"])  # you just joined as a member
             announce = True
+        if ident["user"] in sharing.members(st) and ident["local"] in sharing.members(st):
+            sharing.adopt_local(st, ident["user"], ident["local"])   # this computer's placeholder is you
     me = _my_author(st, ident)
     dn = get_settings(db).get("display_name") or ""
     if me and dn:
@@ -4016,7 +4018,7 @@ def _move_note(db, pid, nid, src, dst, body):
         n = (st0["items"][key0].get("notes") or {}).get(nid)
         if not n or n.get("del"):
             return error("Note not found.", 404)
-        if not author0 or n.get("by") != author0:
+        if not author0 or sharing.canon(st0, n.get("by")) != author0:
             return error("Only the author can change who reads this note.", 403)
         created = n.get("created") or ""
     if dst:   # into a group

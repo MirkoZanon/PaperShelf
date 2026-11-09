@@ -180,6 +180,8 @@ def clock(st: dict) -> int:
             c = max(c, col["s"][0])
     if st.get("lab"):
         c = max(c, _lab_stamps(st["lab"]))
+    for x in (st.get("aliases") or {}).values():
+        c = max(c, (x.get("s") or [0])[0])
     for e in st.get("items", {}).values():
         for cell in (e.get("cells") or {}).values():
             for n in cell.values():
@@ -225,7 +227,35 @@ def set_profile(st, author, name) -> bool:
 
 
 def profiles(st) -> dict:
-    return {k: v.get("name") or "" for k, v in (st.get("profiles") or {}).items()}
+    out = {k: v.get("name") or "" for k, v in (st.get("profiles") or {}).items()}
+    for loc, a in (st.get("aliases") or {}).items():   # what you wrote before publishing shows your name
+        if a.get("v"):
+            out.setdefault(loc, out.get(a["v"]) or a["v"])
+    return out
+
+
+# --------------------------------------------------------------------------- your computer's placeholder
+# A group created before you set up GitHub has you as "local-<computer>". When you start publishing,
+# that placeholder becomes you: it leaves the members and everything it wrote shows your name.
+# If two people ever claim the same placeholder, nobody gets it (it stays a nameless placeholder).
+def adopt_local(st, user, local) -> bool:
+    if not local.startswith("local-") or not NAME_RE.match(user):
+        return False
+    changed = False
+    al = st.setdefault("aliases", {})
+    if local not in al:
+        al[local] = {"v": user, "s": tick(st, user)}
+        changed = True
+    m = (st.get("members") or {}).get(local)
+    if m and present(m):
+        set_member(st, user, local, remove=True)
+        changed = True
+    return changed
+
+
+def canon(st, a) -> str:
+    """The real member behind an author id (a computer's placeholder → its owner)."""
+    return ((st.get("aliases") or {}).get(a) or {}).get("v") or a
 
 
 def add_item(st, author, meta) -> str:
@@ -265,8 +295,9 @@ def edit_note(st, author, key, nid, body=None, name=None, delete=False):
     n = ((st["items"].get(key) or {}).get("notes") or {}).get(nid)
     if not n:
         raise ShareError("Note not found.")
-    if n.get("by") != author:
+    if n.get("by") != author and canon(st, n.get("by")) != author:
         raise ShareError("Only the author can change this note for everybody.")
+    n["by"] = author
     n.update(at=_now(), s=tick(st, author))
     if delete:
         n.update(body="", **{"del": True})
@@ -350,8 +381,9 @@ def edit_cell(st, author, key, cid, eid, body=None, name=None, delete=False):
     n = (((st["items"].get(key) or {}).get("cells") or {}).get(cid) or {}).get(eid)
     if not n:
         raise ShareError("Entry not found.")
-    if n.get("by") != author:
+    if n.get("by") != author and canon(st, n.get("by")) != author:
         raise ShareError("Only the author can change this entry.")
+    n["by"] = author
     n.update(at=_now(), s=tick(st, author))
     if delete:
         n.update(body="", **{"del": True})
@@ -437,8 +469,9 @@ def edit_post(st, author, pid, delete=False, **fields):
     n = _lab(st)["posts"].get(pid)
     if not n or n.get("del"):
         raise ShareError("Post not found.")
-    if n.get("by") != author:
+    if n.get("by") != author and canon(st, n.get("by")) != author:
         raise ShareError("Only the author can change this post.")
+    n["by"] = author
     if delete:
         n.update(body="", title="", tags=[], papers=[], **{"del": True})
     else:
@@ -477,8 +510,9 @@ def edit_comment(st, author, cid, body=None, delete=False, to=None):
     n = _lab(st)["comments"].get(cid)
     if not n or n.get("del"):
         raise ShareError("Comment not found.")
-    if n.get("by") != author:
+    if n.get("by") != author and canon(st, n.get("by")) != author:
         raise ShareError("Only the author can change this comment.")
+    n["by"] = author
     if delete:
         n.update(body="", **{"del": True})
     else:
@@ -810,6 +844,14 @@ def merge(a: dict, b: dict) -> dict:
         out["cols"] = cols
     if a.get("lab") or b.get("lab"):
         out["lab"] = _merge_lab(a.get("lab"), b.get("lab"))
+    if a.get("aliases") or b.get("aliases"):
+        out["aliases"] = {}
+        for loc in set(a.get("aliases") or {}) | set(b.get("aliases") or {}):
+            c = [x for x in ((a.get("aliases") or {}).get(loc), (b.get("aliases") or {}).get(loc)) if x]
+            if len({x.get("v") for x in c}) > 1 or any(x.get("x") for x in c):   # two people claim it: nobody gets it
+                out["aliases"][loc] = {"v": "", "x": True, "s": max((x["s"] for x in c), key=tuple)}
+            else:
+                out["aliases"][loc] = dict(c[0])
     return out
 
 
@@ -897,6 +939,14 @@ def validate(data) -> dict:
         st["creator"] = {"by": str(c["by"])[:60], "name": str(c.get("name") or "")[:60], "at": str(c.get("at") or "")[:40]}
     if data.get("lab"):
         st["lab"] = _validate_lab(data.get("lab"))
+    raw_al = data.get("aliases") if isinstance(data.get("aliases"), dict) else {}
+    for loc, x in list(raw_al.items())[:MAX_MEMBERS * 2]:
+        stp = _stamp(x.get("s")) if isinstance(x, dict) else None
+        v = str((x or {}).get("v") or "") if isinstance(x, dict) else ""
+        if stp and str(loc).startswith("local-") and len(str(loc)) <= 40 and NAME_RE.match(v) and stp[1] == v:
+            st.setdefault("aliases", {})[str(loc)] = {"v": v, "s": stp}
+        elif stp and str(loc).startswith("local-") and len(str(loc)) <= 40 and x.get("x"):
+            st.setdefault("aliases", {})[str(loc)] = {"v": "", "x": True, "s": stp}
     st["clock"] = clock(st)
     return st
 
@@ -905,7 +955,8 @@ def summary(st: dict) -> dict:
     its = items(st)
     return {"id": st["id"], "name": st["name"]["v"], "description": (st.get("description") or {}).get("v", ""),
             "papers": len(its), "members": members(st), "updated_at": st.get("updated_at"),
-            "creator": st.get("creator") or {},
+            "creator": ({**st["creator"], "by": canon(st, st["creator"].get("by")),
+                         "name": st["creator"].get("name") or profiles(st).get(st["creator"].get("by")) or ""} if st.get("creator") else {}),
             "notes": sum(len(notes_of(e)) for e in its.values()),
             "people": people(st)}
 
@@ -915,11 +966,11 @@ def people(st: dict) -> list:
     its, prof = items(st), st.get("profiles") or {}
     added, notes = {}, {}
     for e in its.values():
-        a = (e.get("add") or [0, ""])[1]
+        a = canon(st, (e.get("add") or [0, ""])[1])
         added[a] = added.get(a, 0) + 1
         for n in notes_of(e):
-            notes[n["by"]] = notes.get(n["by"], 0) + 1
-    creator = (st.get("creator") or {}).get("by")
+            notes[canon(st, n["by"])] = notes.get(canon(st, n["by"]), 0) + 1
+    creator = canon(st, (st.get("creator") or {}).get("by"))
     out = []
     for name, m in members(st).items():
         pr = prof.get(name) or {}

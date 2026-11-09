@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.14.2 – 2026-11-09
+
+- **Fix: you appeared twice in a group, once as "local-…"** – a group created before GitHub was set up
+  had you as a placeholder for that computer (*local-…*), and it stayed among the members after you
+  started publishing. Now, at the next update, the placeholder becomes you: it leaves the members, and
+  the papers and notes it added show your name (and you can edit those notes again).
+
 ## 2.14.1 – 2026-11-09
 
 - **Plans & tasks, clearer** – plans are listed on the left (click one to see only its tasks); the chosen
