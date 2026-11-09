@@ -402,7 +402,7 @@ const Review = (() => {
     };
     function bubble(e) {
       const who = e.kind === 'private' ? 'You' : e.mine ? `${e.name || 'You'} (you)` : (e.name || e.by);
-      const acts = !e.mine ? '' : `<button data-cwedit title="Edit">✎ Edit</button>${e.kind === 'private' && W ? '<button data-cwpub title="Make it public: the group will see it, signed with your name">🌐 Make public</button>' : ''}<button data-cwdel title="${e.kind === 'private' ? 'Delete' : 'Delete for everybody'}">🗑</button>`;
+      const acts = !e.mine ? '' : `<button data-cwedit title="Edit (also who can read it)">✎ Edit</button>${e.kind === 'private' && W ? '<button data-cwpub title="Make it public: the group will see it, signed with your name">🌐 Make public</button>' : ''}${e.kind === 'public' ? '<button data-cwpriv title="Make it private: it is removed from the group and stays only on this computer">🔒 Make private</button>' : ''}<button data-cwdel title="${e.kind === 'private' ? 'Delete' : 'Delete for everybody'}">🗑</button>`;
       const av = e.mine ? '' : `<span class="nb-av" style="background:hsl(${hue(e.by)} 55% 46%)">${esc(initials(e.name || e.by))}</span>`;
       return `<div class="nb ${e.mine ? 'mine' : 'theirs'} ${e.kind} ${cw.editing === e.id ? 'cw-editing' : ''}" data-eid="${esc(e.id)}" data-kind="${e.kind}">${av}<div class="nb-box">
         <div class="nb-meta"><span class="nb-who">${esc(who)}</span><span class="nb-tag ${e.kind}">${e.kind === 'private' ? '🔒 Private' : '🌐 Public'}</span>
@@ -414,18 +414,21 @@ const Review = (() => {
       th.innerHTML = E.length ? E.map(bubble).join('') : '<div class="notes-empty muted">Nothing in this cell yet – write the first entry below.</div>';
       const ed = cw.editing && E.find(e => e.id === cw.editing);
       if (cw.editing && !ed) cw.editing = null;
-      $('.cw-mode', m.el).innerHTML = ed ? `<b>✎ Editing your ${ed.kind} entry</b><span class="grow"></span><button class="linklike small" data-cwcancel>Cancel editing</button>`
+      $('.cw-mode', m.el).innerHTML = ed ? `<b>✎ Editing your entry</b>${cw.editVis !== ed.kind ? `<span class="muted small">– it will become ${cw.editVis === 'public' ? '🌐 public' : '🔒 private'} when you save</span>` : ''}<span class="grow"></span><button class="linklike small" data-cwcancel>Cancel editing</button>`
         : `<b>＋ New entry</b><span class="muted small">${cw.vis === 'public' ? '– signed with your name, the group sees it' : '– only you see it, it stays on this computer'}</span>`;
       $('[data-cwsave]', m.el).textContent = ed ? 'Save changes' : 'Add entry';
-      $$('.cw-vis button', m.el).forEach(b => { b.classList.toggle('on', b.dataset.vis === (ed ? ed.kind : cw.vis)); if (ed) b.disabled = true; else b.disabled = b.dataset.vis === 'public' && !W; });
+      $$('.cw-vis button', m.el).forEach(b => { b.classList.toggle('on', b.dataset.vis === (ed ? cw.editVis : cw.vis)); b.disabled = b.dataset.vis === 'public' && !W; });
       $('.cw-composer', m.el).classList.toggle('editing', !!ed);
       const target = scrollTo && $(`.nb[data-eid="${CSS.escape(scrollTo)}"]`, th);
       if (target) { target.scrollIntoView({block: 'nearest'}); target.classList.add('cw-flash'); setTimeout(() => target.classList.remove('cw-flash'), 1200); }
       else th.scrollTop = th.scrollHeight;
     }
+    const confirmVis = (from, to) => to === 'public'
+      ? confirmBox('Make this entry public?', 'All the members of the group will see it, signed with your name. You can still edit it, delete it or make it private again.', {ok: '🌐 Make public'})
+      : confirmBox('Make this entry private?', 'It is removed from the group – the other members will no longer see it (from their next update). It stays on this computer, only for you.', {ok: '🔒 Make private'});
     function startEdit(id) {
       const e = cellEntries(pid, cid).find(x => x.id === id); if (!e || !e.mine) return;
-      cw.editing = id; cw.orig = e.body; ta.value = e.body; paint(id); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+      cw.editing = id; cw.editVis = e.kind; cw.orig = e.body; ta.value = e.body; paint(id); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
     }
     function stopEdit() { cw.editing = null; cw.orig = ''; ta.value = ''; paint(); ta.focus(); }
     async function run(path, opts) {
@@ -436,7 +439,10 @@ const Review = (() => {
       const body = ta.value.trim(); if (!body) { ta.focus(); return; }
       const btn = $('[data-cwsave]', m.el); if (btn.disabled) return; btn.disabled = true;
       const loc = {paper_id: pid, col: cid}, e = cw.editing && cellEntries(pid, cid).find(x => x.id === cw.editing);
-      const ok = e ? await run(`/${e.kind === 'private' ? 'private' : 'cells'}/${encodeURIComponent(e.id)}`, {method: 'PUT', body: {...loc, body}})
+      if (e && cw.editVis !== e.kind && !(await confirmVis(e.kind, cw.editVis))) { btn.disabled = false; return; }
+      const ok = e && cw.editVis !== e.kind
+        ? await run(e.kind === 'private' ? `/private/${encodeURIComponent(e.id)}/publish` : `/cells/${encodeURIComponent(e.id)}/private`, {method: 'POST', body: {...loc, body}})
+        : e ? await run(`/${e.kind === 'private' ? 'private' : 'cells'}/${encodeURIComponent(e.id)}`, {method: 'PUT', body: {...loc, body}})
         : await run(cw.vis === 'private' ? '/private' : '/cells', {method: 'POST', body: {...loc, body}});
       btn.disabled = false;
       if (ok) { const was = cw.editing; cw.editing = null; cw.orig = ''; ta.value = ''; paint(was); ta.focus(); }
@@ -446,7 +452,12 @@ const Review = (() => {
       if (t.closest('[data-cwclose]')) return m.close();
       if (t.closest('[data-cwsave]')) return saveIt();
       if (t.closest('[data-cwcancel]')) return stopEdit();
-      const v = t.closest('[data-vis]'); if (v && !v.disabled && !cw.editing) { cw.vis = v.dataset.vis; if (W) lsSet('papershelf-table-vis', cw.vis); paint(); ta.focus(); return; }
+      const v = t.closest('[data-vis]');
+      if (v && !v.disabled) {
+        if (cw.editing) cw.editVis = v.dataset.vis;
+        else { cw.vis = v.dataset.vis; if (W) lsSet('papershelf-table-vis', cw.vis); }
+        paint(cw.editing); ta.focus(); return;
+      }
       if (!e) return;
       if (t.closest('[data-cwedit]')) return startEdit(e.id);
       if (t.closest('[data-cwdel]')) {
@@ -455,8 +466,14 @@ const Review = (() => {
         if (await run(`/${e.kind === 'private' ? 'private' : 'cells'}/${encodeURIComponent(e.id)}?paper=${pid}&col=${encodeURIComponent(cid)}`, {method: 'DELETE'})) paint();
         return;
       }
+      if (t.closest('[data-cwpriv]')) {
+        if (!(await confirmVis('public', 'private'))) return;
+        if (cw.editing === e.id) { cw.editing = null; cw.orig = ''; ta.value = ''; }
+        if (await run(`/cells/${encodeURIComponent(e.id)}/private`, {method: 'POST', body: {paper_id: pid, col: cid}})) paint();
+        return;
+      }
       if (t.closest('[data-cwpub]')) {
-        if (!(await confirmBox('Make this entry public?', 'All the members of the group will see it, signed with your name. You can still edit or delete it.', {ok: '🌐 Make public'}))) return;
+        if (!(await confirmVis('private', 'public'))) return;
         if (cw.editing === e.id) { cw.editing = null; cw.orig = ''; ta.value = ''; }
         if (await run(`/private/${encodeURIComponent(e.id)}/publish`, {method: 'POST', body: {paper_id: pid, col: cid}})) paint();
       }

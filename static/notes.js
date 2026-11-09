@@ -117,23 +117,29 @@ const Notes = (() => {
     const meta = `<span class="nb-who">${esc(n.kind === 'private' ? 'You' : n.mine ? `${n.who} (you)` : n.who)}</span>
       <span class="nb-tag ${n.kind}">${n.kind === 'private' ? '🔒 Private' : `🌐 ${esc(n.share_name)}`}</span>
       <span class="nb-time" title="${n.at && n.at !== n.created ? 'edited ' + esc(when(n.at)) : ''}">${esc(when(n.created))}${n.at && n.at !== n.created ? ' · edited' : ''}</span>`;
+    const canPub = cur.data.public.some(g => g.can_write);
+    const move = n.kind === 'public' ? '<button data-nmove title="Make it private: it is removed from the group and stays only in your library">🔒 Make private</button>'
+      : canPub ? '<button data-nmove title="Make it public: the members of the group will see it, signed with your name">🌐 Make public</button>' : '';
     const acts = n.mine
-      ? `<button data-nedit title="Edit">✎</button><button data-ndel title="${n.kind === 'private' ? 'Delete' : 'Delete for everybody'}">🗑</button>`
+      ? `${move}<button data-nedit title="Edit (also who can read it)">✎</button><button data-ndel title="${n.kind === 'private' ? 'Delete' : 'Delete for everybody'}">🗑</button>`
       : `<button data-nhide title="${n.hidden ? 'Show it again' : 'Hide it on this computer (the others still see it)'}">${n.hidden ? '👁 Show' : '🙈 Hide'}</button>`;
     const avatar = n.mine ? '' : `<span class="nb-av" style="background:hsl(${hue(n.by)} 55% 46%)" title="${esc(n.by)}">${esc(initials(n.who))}</span>`;
     return `<div class="nb ${n.mine ? 'mine' : 'theirs'} ${n.kind} ${n.hidden ? 'hidden-note' : ''}" data-nid="${esc(n.id)}" data-kind="${n.kind}" data-share="${esc(n.share_id || '')}">
       ${avatar}<div class="nb-box"><div class="nb-meta">${meta}<span class="grow"></span><span class="nb-acts">${acts}</span></div>
-      ${editing ? composerHtml({value: n.body, editing: true}) : `<div class="nb-body md">${md(n.body)}</div>`}</div></div>`;
+      ${editing ? composerHtml({value: n.body, editing: true, where: n.kind === 'public' ? n.share_id : ''}) : `<div class="nb-body md">${md(n.body)}</div>`}</div></div>`;
   }
   function targets() {
     const d = cur.data;
     return [{v: '', label: '🔒 Private – only me', ok: true}].concat(d.public.map(g => ({v: g.share_id, label: `🌐 Public in the group “${g.share_name}”`, ok: g.can_write})));
   }
-  function composerHtml({value = '', editing = false} = {}) {
+  function composerHtml({value = '', editing = false, where = ''} = {}) {
     const tb = [['b', 'B', 'Bold'], ['i', '<i>I</i>', 'Italic'], ['s', '<s>S</s>', 'Strike-through'], ['mark', '<mark>H</mark>', 'Highlight'],
       ['h', 'H', 'Heading'], ['ul', '• List', 'List'], ['task', '☐', 'To-do item'], ['q', '❝', 'Quote'], ['code', '&lt;/&gt;', 'Code'], ['link', '🔗', 'Link']];
     const colors = Object.entries(COLORS).filter(([k]) => k !== 'gray').map(([k, c]) => `<button data-tb="color" data-c="${k}" title="${k}" class="nc-dot" style="background:${c}"></button>`).join('');
-    const vis = editing ? '' : `<select class="input nc-vis" title="Who can read it">${targets().map(t => `<option value="${esc(t.v)}" ${t.ok ? '' : 'disabled'}>${esc(t.label)}${t.ok ? '' : ' (you only read it)'}</option>`).join('')}</select>`;
+    const opts = targets();
+    const vis = editing
+      ? (opts.length > 1 ? `<select class="input nc-vis" title="Who can read it – change it to make the note private or public">${opts.map(t => `<option value="${esc(t.v)}" ${t.v === where ? 'selected' : ''} ${t.ok || t.v === where ? '' : 'disabled'}>${esc(t.label)}${t.ok || t.v === where ? '' : ' (you only read it)'}</option>`).join('')}</select>` : '')
+      : `<select class="input nc-vis" title="Who can read it">${opts.map(t => `<option value="${esc(t.v)}" ${t.ok ? '' : 'disabled'}>${esc(t.label)}${t.ok ? '' : ' (you only read it)'}</option>`).join('')}</select>`;
     return `<div class="nc ${editing ? 'nc-edit' : ''}">
       <div class="nc-tools">${tb.map(([k, l, t]) => `<button data-tb="${k}" title="${t}">${l}</button>`).join('')}<span class="nc-sep"></span>${colors}<span class="grow"></span><button data-tb="preview" class="nc-prev-btn" title="Preview">👁 Preview</button></div>
       <textarea class="input nc-text" rows="${editing ? 4 : 3}" placeholder="Write a note… Markdown: **bold**, *italic*, ==highlight==, {red}colour{/}, - list, > quote">${esc(value)}</textarea>
@@ -155,7 +161,7 @@ const Notes = (() => {
       ${!d.public.length ? `<p class="muted small notes-hint">🔒 Notes are private. To discuss this paper with colleagues, put it in a <b>group</b>: you can then also write public notes that all its members see.</p>` : ''}`;
     $('.notes-title', cur.m.el).textContent = p.title || 'Notes';
     const th = $('.notes-thread', cur.m.el); th.scrollTop = th.scrollHeight;
-    const vis = $('.nc-vis', cur.m.el);
+    const vis = $('.nc:not(.nc-edit) .nc-vis', cur.m.el);
     if (vis) { vis.value = cur.target ?? ''; if (vis.selectedOptions[0]?.disabled) vis.value = ''; vis.onchange = () => { cur.target = vis.value; }; }
     if (!cur.editing) setTimeout(() => $('.nc:not(.nc-edit) .nc-text', cur.m.el)?.focus({preventScroll: true}), 20);
     else setTimeout(() => { const t = $('.nc-edit .nc-text', cur.m.el); if (t && document.activeElement !== t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 20);
@@ -210,6 +216,15 @@ const Notes = (() => {
     else if (share_id) toast('Public note saved – the group will see it at their next update.', 'ok');
   }
 
+  // changing who can read a note
+  const gName = sid => cur.data.public.find(g => g.share_id === sid)?.share_name || 'the group';
+  async function confirmMove(from, to) {
+    if (to && !(await ensureName())) return false;
+    if (!to) return confirmBox('Make this note private?', `It is removed from “${gName(from)}” – the other members will no longer see it (from their next update). It stays in your library, only for you.`, {ok: '🔒 Make private'});
+    return confirmBox('Make this note public?', `All the members of “${gName(to)}” will see it, signed with your name.${from ? ` It is removed from “${gName(from)}”.` : ''} You can still edit it, delete it or make it private again.`, {ok: '🌐 Make public'});
+  }
+  const movedToast = to => toast(to ? `Note made public in “${gName(to)}” – the group will see it at their next update.` : 'Note made private – only you can read it now.', 'ok');
+
   async function open(id, {filter = 'all'} = {}) {
     let d;
     try { d = await api(`/api/papers/${id}/notes`); } catch (err) { toast(err.message, 'error'); return; }
@@ -234,7 +249,22 @@ const Notes = (() => {
       if (t.closest('[data-ncancel]')) { cur.editing = null; render(); return; }
       if (t.closest('[data-nsave]')) {
         const body = $('.nc-edit .nc-text', nb).value; if (!body.trim()) return;
-        if (await call(`/api/papers/${cur.id}/notes/${nid}`, {method: 'PUT', body: {body, share_id: kind === 'public' ? sid : ''}})) { cur.editing = null; render(); }
+        const from = kind === 'public' ? sid : '', to = $('.nc-edit .nc-vis', nb)?.value ?? from;
+        if (to !== from && !(await confirmMove(from, to))) return;
+        if (await call(`/api/papers/${cur.id}/notes/${nid}`, {method: 'PUT', body: {body, share_id: from, to}})) { cur.editing = null; render(); if (to !== from) movedToast(to); }
+        return;
+      }
+      if (t.closest('[data-nmove]')) {
+        const n = allNotes(cur.data).find(x => x.id === nid); if (!n) return;
+        const from = kind === 'public' ? sid : '';
+        let to = '';
+        if (!from) {
+          const w = cur.data.public.filter(g => g.can_write);
+          if (w.length !== 1) { cur.editing = nid; render(); setTimeout(() => $('.nc-edit .nc-vis', cur.m.el)?.focus(), 40); toast('Choose the group in “Who can read it”, then Save.'); return; }
+          to = w[0].share_id;
+        }
+        if (!(await confirmMove(from, to))) return;
+        if (await call(`/api/papers/${cur.id}/notes/${nid}`, {method: 'PUT', body: {body: n.body, share_id: from, to}})) movedToast(to);
         return;
       }
       if (t.closest('[data-ndel]')) {

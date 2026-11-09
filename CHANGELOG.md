@@ -2,6 +2,14 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.12.1 – 2026-11-09
+
+- **Change who can read a note or a table entry** – hover one of your notes and click *🌐 Make public* or
+  *🔒 Make private*, or edit it ✎ and choose in *Who can read it* (also to move it to another group). In
+  the group table: *🔒 Make private* / *🌐 Make public* on your entries, or the Public / Private buttons
+  while editing one. The note keeps its date; made private, it is removed from the group for everybody
+  at their next update.
+
 ## 2.12 – 2026-11-09
 
 - **🔔 Notifications from your groups** – when another member adds a public note, an entry in the group

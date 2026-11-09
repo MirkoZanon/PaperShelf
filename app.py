@@ -2783,10 +2783,38 @@ def share_table_priv_publish(sid, eid):
         if not e:
             return error("Entry not found.", 404)
         key, _ = _cell_target(db, sid, st, b)
-        sharing.add_cell(st, author, key, cid, e["body"], _display_name(db))
+        body = str(b.get("body") or "").strip() or e["body"]
+        new = sharing.add_cell(st, author, key, cid, body, _display_name(db))
+        st["items"][key]["cells"][cid][new]["created"] = e.get("created") or st["items"][key]["cells"][cid][new]["created"]
     except sharing.ShareError as exc:
         return error(str(exc))
     lst.remove(e)
+    _priv_save(db, sid, d)
+    return _table_saved(db, sid, st)
+
+
+@app.post("/api/shares/<sid>/table/cells/<eid>/private")
+def share_table_make_private(sid, eid):
+    """One of your public entries becomes private: removed from the group, kept only on this computer."""
+    b = request.get_json(silent=True) or {}
+    db = get_db()
+    st, author, err = _table_write(db, sid)
+    if err:
+        return err
+    try:
+        key, cid = _cell_target(db, sid, st, b)
+        n = (((st["items"][key].get("cells") or {}).get(cid)) or {}).get(eid)
+        if not n or n.get("del"):
+            return error("Entry not found.", 404)
+        if n.get("by") != author:
+            return error("Only the author can change this entry.", 403)
+        row, d, uid, _ = _priv_target(db, sid, b)
+        body = str(b.get("body") or "").strip() or n.get("body") or ""
+        d["entries"].setdefault(uid, {}).setdefault(cid, []).append(
+            {"id": uuid.uuid4().hex[:16], "body": body[:5000], "created": n.get("created") or now(), "at": now()})
+        sharing.edit_cell(st, author, key, cid, eid, delete=True)
+    except sharing.ShareError as exc:
+        return error(str(exc))
     _priv_save(db, sid, d)
     return _table_saved(db, sid, st)
 
@@ -3637,6 +3665,58 @@ def paper_note_add(pid):
     return _notes_payload(db, pid)
 
 
+def _move_note(db, pid, nid, src, dst, body):
+    """Change who can read a note of yours: private ⇄ public in a group (or from a group to another).
+    It keeps its date; a public note made private is removed from the group for everybody."""
+    created = ""
+    if not src:
+        lst = _private_notes(db, pid)
+        n = next((x for x in lst if x["id"] == nid), None)
+        if not n:
+            return error("Note not found.", 404)
+        created = n.get("created") or ""
+    else:
+        st0, key0, author0, err = _public_target(db, pid, src)
+        if err:
+            return err
+        n = (st0["items"][key0].get("notes") or {}).get(nid)
+        if not n or n.get("del"):
+            return error("Note not found.", 404)
+        if not author0 or n.get("by") != author0:
+            return error("Only the author can change who reads this note.", 403)
+        created = n.get("created") or ""
+    if dst:   # into a group
+        st1, key1, author1, err = _public_target(db, pid, dst)
+        if err:
+            return err
+        if not author1:
+            return error("You are a reader of that group, so you can't write public notes in it.", 403)
+        new = sharing.add_note(st1, author1, key1, body, _display_name(db))
+        if created:
+            st1["items"][key1]["notes"][new]["created"] = created
+        _save_share(db, dst, st1)
+    else:     # into your private notes
+        lst = _private_notes(db, pid)
+        if len(lst) >= notesmod.MAX_NOTES:
+            return error("Too many notes on this paper.")
+        new = notesmod.add(lst, body)
+        if created:
+            new["created"] = created
+        _set_private(db, pid, lst)
+    if not src:
+        lst = _private_notes(db, pid)
+        notesmod.remove(lst, nid)
+        _set_private(db, pid, lst)
+    else:
+        st0, key0, author0, _ = _public_target(db, pid, src)   # again: dst may have been the same state file
+        sharing.edit_note(st0, author0, key0, nid, delete=True)
+        _save_share(db, src, st0)
+    db.commit()
+    for x in {src, dst} - {""}:
+        publish_soon(x)
+    return None
+
+
 @app.put("/api/papers/<int:pid>/notes/<nid>")
 def paper_note_edit(pid, nid):
     b = request.get_json(silent=True) or {}
@@ -3645,6 +3725,9 @@ def paper_note_edit(pid, nid):
     if not body.strip():
         return error("The note is empty.")
     sid = b.get("share_id") or ""
+    if "to" in b and str(b.get("to") or "") != sid:      # also change who can read it
+        err = _move_note(db, pid, nid, sid, str(b.get("to") or ""), body)
+        return err or _notes_payload(db, pid)
     if not sid:
         lst = _private_notes(db, pid)
         if not notesmod.edit(lst, nid, body):
