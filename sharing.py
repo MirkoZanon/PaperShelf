@@ -396,6 +396,21 @@ def _lab(st) -> dict:
     return lab
 
 
+def clean_people(v) -> list:
+    """A list of members (who a task is for, or who a post or comment is addressed to)."""
+    out = []
+    for a in (v if isinstance(v, list) else [])[:12]:
+        a = str(a)[:60]
+        if (NAME_RE.match(a) or a.startswith("local-")) and a not in out:
+            out.append(a)
+    return out
+
+
+def task_people(t) -> list:
+    """Who a task is for (several people since 2.13.1; one before)."""
+    return t.get("assignees") if isinstance(t.get("assignees"), list) else ([t["assignee"]] if t.get("assignee") else [])
+
+
 def _clean_tags(tags) -> list:
     out = []
     for t in (tags or [])[:8]:
@@ -405,7 +420,7 @@ def _clean_tags(tags) -> list:
     return out
 
 
-def add_post(st, author, name, kind, title, body, tags=(), papers=()) -> str:
+def add_post(st, author, name, kind, title, body, tags=(), papers=(), to=()) -> str:
     lab = _lab(st)
     if len(lab["posts"]) >= LAB_LIMITS["posts"]:
         raise ShareError("This group has too many posts.")
@@ -414,7 +429,7 @@ def add_post(st, author, name, kind, title, body, tags=(), papers=()) -> str:
     lab["posts"][pid] = {"by": author, "name": (name or "")[:60], "kind": kind if kind in LAB_KINDS else "idea",
                          "title": " ".join(str(title or "").split())[:200], "body": str(body or "")[:MAX_POST],
                          "tags": _clean_tags(tags), "papers": [str(k)[:80] for k in (papers or [])][:20],
-                         "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0]}
+                         "to": clean_people(list(to or [])), "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0]}
     return pid
 
 
@@ -437,12 +452,14 @@ def edit_post(st, author, pid, delete=False, **fields):
             n["tags"] = _clean_tags(fields["tags"])
         if fields.get("papers") is not None:
             n["papers"] = [str(k)[:80] for k in fields["papers"]][:20]
+        if fields.get("to") is not None:
+            n["to"] = clean_people(fields["to"])
         if fields.get("name"):
             n["name"] = str(fields["name"])[:60]
     n.update(at=_now(), s=tick(st, author))
 
 
-def add_comment(st, author, name, post, body) -> str:
+def add_comment(st, author, name, post, body, to=()) -> str:
     lab = _lab(st)
     if post not in lab["posts"] or lab["posts"][post].get("del"):
         raise ShareError("That post doesn't exist any more.")
@@ -451,11 +468,12 @@ def add_comment(st, author, name, post, body) -> str:
     cid = uuid.uuid4().hex[:16]
     s = tick(st, author)
     lab["comments"][cid] = {"post": post, "by": author, "name": (name or "")[:60], "body": str(body or "")[:MAX_COMMENT],
+                            "to": clean_people(list(to or [])),
                             "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0]}
     return cid
 
 
-def edit_comment(st, author, cid, body=None, delete=False):
+def edit_comment(st, author, cid, body=None, delete=False, to=None):
     n = _lab(st)["comments"].get(cid)
     if not n or n.get("del"):
         raise ShareError("Comment not found.")
@@ -463,8 +481,11 @@ def edit_comment(st, author, cid, body=None, delete=False):
         raise ShareError("Only the author can change this comment.")
     if delete:
         n.update(body="", **{"del": True})
-    elif body is not None:
-        n["body"] = str(body)[:MAX_COMMENT]
+    else:
+        if body is not None:
+            n["body"] = str(body)[:MAX_COMMENT]
+        if to is not None:
+            n["to"] = clean_people(to)
     n.update(at=_now(), s=tick(st, author))
 
 
@@ -477,7 +498,7 @@ def set_pin(st, author, post, v: bool):
 
 
 PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "pos": None, "del": None, "done": None}
-TASK_FIELDS = {"title": 300, "notes": 5000, "status": None, "assignee": 60, "due": 10, "plan": 32, "paper": 80,
+TASK_FIELDS = {"title": 300, "notes": 5000, "status": None, "assignee": 60, "assignees": None, "due": 10, "plan": 32, "paper": 80,
                "post": 32, "prio": None, "pos": None, "del": None}
 
 
@@ -496,6 +517,8 @@ def _field_ok(coll, k, v):
         return v
     if k == "prio":
         return v if v in TASK_PRIO else "normal"
+    if k == "assignees":
+        return clean_people(v)
     v = str(v or "")
     if k == "due" and v and not DATE_RE.match(v):
         raise ValueError(k)
@@ -617,6 +640,8 @@ def _validate_lab(raw) -> dict:
             o = {"by": by, "name": str(n.get("name") or "")[:60], "body": str(n.get("body") or "")[:lim],
                  "created": str(n.get("created") or "")[:40], "at": str(n.get("at") or "")[:40], "del": bool(n.get("del")), "s": stp,
                  "c": n["c"] if isinstance(n.get("c"), int) and 0 <= n["c"] <= stp[0] else stp[0]}
+            if n.get("to"):
+                o["to"] = clean_people(n.get("to"))
             if coll == "posts":
                 o.update(kind=n.get("kind") if n.get("kind") in LAB_KINDS else "idea", title=" ".join(str(n.get("title") or "").split())[:200],
                          tags=_clean_tags(n.get("tags") if isinstance(n.get("tags"), list) else []),

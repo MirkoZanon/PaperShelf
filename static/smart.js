@@ -647,6 +647,8 @@ const Bell = (() => {
   }
   const feedN = () => Feed.data?.count || 0;
   function badge() {
+    const forMe = act.items.filter(i => !i.seen && (i.kind === 'task' || i.kind === 'mention')).length;
+    const lb = $('#tab-lab-n'); if (lb) { lb.textContent = forMe || ''; lb.title = forMe ? `${plural(forMe, 'new thing')} for you in the Lab (tasks, messages)` : ''; }
     const n = act.unseen + feedN();
     const b = $('#feed-n'); if (b) b.textContent = n ? (n > 99 ? '99+' : n) : '';
     const btn = $('#feed-btn');
@@ -656,11 +658,13 @@ const Bell = (() => {
   const what = i => i.kind === 'post' ? `posted ${LABK[i.col] || 'an idea'} in the Lab${i.title ? `: <i>${esc(truncate(i.title, 90))}</i>` : ''}`
     : i.kind === 'comment' ? `commented on <i>${esc(truncate(i.title, 90))}</i>`
     : i.kind === 'task' ? `assigned you a task: <i>${esc(truncate(i.title, 90))}</i>`
+    : i.kind === 'mention' ? (i.col === 'posts' ? `wrote to you in the Lab: <i>${esc(truncate(i.title, 90))}</i>` : `replied to you on <i>${esc(truncate(i.title, 90))}</i>`)
     : i.kind === 'note' ? `added a note on <i>${esc(truncate(i.title, 90))}</i>`
     : i.kind === 'entry' ? `added an entry in <b>${esc(i.col)}</b> on <i>${esc(truncate(i.title, 90))}</i>`
     : `added <i>${esc(truncate(i.title, 90))}</i> to the group`;
   const plainWhat = i => i.kind === 'post' ? `posted ${LABK[i.col] || 'an idea'} in ${i.share_name}: “${truncate(i.title || '', 60)}”`
-    : i.kind === 'comment' ? `commented on “${truncate(i.title, 60)}”` : i.kind === 'task' ? `assigned you a task: “${truncate(i.title, 60)}”`
+    : i.kind === 'comment' ? `commented on “${truncate(i.title, 60)}”` : i.kind === 'task' ? `assigned you a task in ${i.share_name}: “${truncate(i.title, 60)}”`
+    : i.kind === 'mention' ? (i.col === 'posts' ? `wrote to you in ${i.share_name}: “${truncate(i.title, 60)}”` : `replied to you on “${truncate(i.title, 60)}”`)
     : i.kind === 'note' ? `added a note on “${truncate(i.title, 60)}”` : i.kind === 'entry' ? `added an entry in ${i.col} on “${truncate(i.title, 60)}”` : `added “${truncate(i.title, 60)}” to ${i.share_name}`;
   async function load({toastNew = true} = {}) {
     try { act = await api('/api/activity'); } catch { return; }
@@ -670,7 +674,7 @@ const Bell = (() => {
     const fresh = act.items.filter(i => i.id > last && !i.seen);
     if (top > last) lsSet(top);
     if (!toastNew || !fresh.length) return;
-    if (fresh.length <= 2) fresh.slice().reverse().forEach(i => toast(`🔔 ${i.name} ${plainWhat(i)}`, 'info', 7000));
+    if (fresh.length <= 2) fresh.slice().reverse().forEach(i => toast(`${i.kind === 'task' ? '✅' : i.kind === 'mention' ? '📨' : '🔔'} ${i.name} ${plainWhat(i)}`, i.kind === 'task' || i.kind === 'mention' ? 'ok' : 'info', i.kind === 'task' || i.kind === 'mention' ? 12000 : 7000));
     else toast(`🔔 ${plural(fresh.length, 'new thing')} in your groups – click the bell to see them.`, 'info', 7000);
   }
   function paint() {
@@ -682,7 +686,7 @@ const Bell = (() => {
       <div class="bl-list">${act.items.length ? act.items.map(i => `<button class="bl-item ${i.seen ? '' : 'new'}" data-blid="${i.id}">
           <span class="bl-av" style="background:hsl(${hue(i.who)} 50% 42%)">${esc(initials(i.name))}</span>
           <span class="bl-txt"><span><b>${esc(i.name)}</b> ${what(i)}</span>${i.excerpt ? `<span class="bl-ex">“${esc(truncate(i.excerpt, 120))}”</span>` : ''}
-            <span class="bl-meta">${{note: '📝', entry: '▦', post: '🧪', comment: '💬', task: '✅'}[i.kind] || '📄'} ${esc(i.share_name)} · ${esc(ago(i.at))}</span></span></button>`).join('')
+            <span class="bl-meta">${{note: '📝', entry: '▦', post: '🧪', comment: '💬', task: '✅', mention: '📨'}[i.kind] || '📄'} ${esc(i.share_name)} · ${esc(ago(i.at))}</span></span></button>`).join('')
         : '<div class="bl-empty muted small">Nothing yet. When someone adds a note, an entry in the group table, a paper, a post or a comment in the Lab, or gives you a task in one of your groups, it appears here (groups update every 15 minutes, or with ⟳).</div>'}</div>`;
   }
   function close() { pop?.remove(); pop = null; document.removeEventListener('mousedown', outside, true); }
@@ -700,7 +704,7 @@ const Bell = (() => {
       if (t.closest('[data-blclear]')) { await api('/api/activity', {method: 'DELETE'}); act = {items: [], unseen: 0}; badge(); paint(); return; }
       const b = t.closest('[data-blid]'); if (!b) return;
       const i = act.items.find(x => x.id === +b.dataset.blid); close(); if (!i) return;
-      if (i.kind === 'post' || i.kind === 'comment') { Lab.openGroup(i.share_id, {post: i.item_key}); return; }
+      if (i.kind === 'post' || i.kind === 'comment' || i.kind === 'mention') { Lab.openGroup(i.share_id, {post: i.item_key}); return; }
       if (i.kind === 'task') { Lab.openGroup(i.share_id, {task: i.item_key}); return; }
       const goGroup = () => { if (state.tab !== 'library' || state.area !== 'library') setTab('library'); setView({type: 'share', id: i.share_id}); };
       if (!i.paper_id) { goGroup(); return; }
@@ -710,12 +714,13 @@ const Bell = (() => {
     });
     if (act.unseen) {   // seen once the panel is open (they stay highlighted until it closes)
       try { await api('/api/activity/seen', {method: 'POST'}); } catch { /* ignore */ }
-      act.unseen = 0; badge();
+      act.unseen = 0;
       act.items.forEach(i => { i.seen = true; });
+      badge();
     }
   }
   function start() {
-    load({toastNew: false});
+    load();
     clearInterval(timer); timer = setInterval(() => load(), 90000);
   }
   return {load, badge, open, close, start};

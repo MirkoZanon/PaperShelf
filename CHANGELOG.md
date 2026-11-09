@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.13.1 – 2026-11-09
+
+- **Tasks for one or more people** – in a task, click the names under *Who*: everyone chosen sees it in
+  *My tasks* and gets a notification (also when they are added later).
+- **Posts and comments addressed to someone** – *📨 For* in a new post, *＠* under a comment. The people
+  chosen get a notification; for them the post is marked *📨 For you*, appears in the Overview under
+  *For you*, and the *📨 For you* filter collects everything addressed to them.
+- Notifications for you (tasks and messages) pop up as a message and show a red number on the Lab tab.
+
 ## 2.13 – 2026-11-09
 
 - **🧪 Lab – a new tab for the research of your groups**, beyond the notes on single papers:

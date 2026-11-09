@@ -7,7 +7,7 @@
    🏠 Overview: your tasks in every group, what happened this week, the latest decisions.
    Everything lives in the group's file and travels with it (see sharing.py). Readers only read. */
 const Lab = (() => {
-  const S = {sid: null, sub: 'ideas', data: null, ov: null, loading: false, open: new Set(), composing: null,
+  const S = {sid: null, sub: 'ideas', data: null, ov: null, loading: false, open: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, focus: null};
   try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = p.sub === 'plans' ? 'plans' : 'ideas'; } catch { /* storage unavailable */ }
   const save = () => { try { localStorage.setItem('papershelf-lab', JSON.stringify({sid: S.sid, sub: S.sub})); } catch { /* ignore */ } };
@@ -33,6 +33,11 @@ const Lab = (() => {
   }
   const dueTxt = d => { if (!d) return ''; const t = new Date(d + 'T12:00'); return t.toLocaleDateString(undefined, {day: 'numeric', month: 'short'}); };
   const dueCls = (d, status) => !d || status === 'done' ? '' : d < today() ? 'overdue' : d <= new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10) ? 'soon' : '';
+  // the members as chips to click (who a task is for, who a post or a comment is addressed to)
+  const pplChips = (sel, {id = '', disabled = false} = {}) => `<div class="lab-ppl" ${id ? `id="${id}"` : ''}>${(S.data?.people || []).map(p =>
+    `<button type="button" class="lab-pp ${sel.includes(p.id) ? 'on' : ''}" data-pp="${esc(p.id)}" ${disabled ? 'disabled' : ''}>${av(p.id, p.name, 18)}${esc(p.id === S.data.me ? `${p.name} (you)` : p.name)}</button>`).join('')}</div>`;
+  const pplRead = box => box ? $$('.lab-pp.on', box).map(b => b.dataset.pp) : [];
+  const toLine = (to, cls = '') => to?.length ? `<span class="lab-to ${cls} ${to.some(x => x.me) ? 'me' : ''}" title="Addressed to ${esc(to.map(x => x.name).join(', '))}">→ ${to.map(x => esc(x.me ? 'you' : x.name)).join(', ')}</span>` : '';
   const main = () => $('#lab-main');
   const groups = () => state.shares || [];
   const W = () => !!S.data?.can_write;
@@ -104,11 +109,16 @@ const Lab = (() => {
     const mt = ov.my_tasks || [];
     return `<div class="lab-head"><div><h2>Overview</h2><div class="muted small">Your groups at a glance – updated with the groups (every 15 minutes, or ⟳)</div></div><span class="grow"></span><button class="btn small" data-help="lab">📘 Guide</button></div>
       <div class="lab-ov">
+        <div class="lab-ov-left">
         <section class="lab-card lab-mytasks"><h3>✅ My tasks <span class="muted small">${mt.length ? plural(mt.length, 'open task') : ''}</span></h3>
           ${mt.length ? mt.map(t => `<div class="lab-mt ${dueCls(t.due, t.status)}"><button class="lab-check" data-ovdone="${esc(t.group)}|${esc(t.id)}" title="Mark it done"></button>
               <button class="linklike lab-mt-t" data-ovtask="${esc(t.group)}|${esc(t.id)}">${t.prio === 'high' ? '<span class="lab-prio">❗</span>' : ''}${esc(t.title)}</button>
               <span class="lab-chip">${esc(t.group_name)}</span>${t.status === 'doing' ? '<span class="lab-chip doing">doing</span>' : ''}${t.due ? `<span class="lab-due ${dueCls(t.due, t.status)}">📅 ${esc(dueTxt(t.due))}</span>` : ''}</div>`).join('')
             : '<p class="muted small">Nothing assigned to you. 🎉</p>'}</section>
+        ${(ov.for_me || []).length ? `<section class="lab-card lab-forme"><h3>📨 For you</h3>${ov.for_me.map(x => `<button class="lab-gc-post" data-ovpost="${esc(x.group)}|${esc(x.post)}"><span>${x.kind === 'post' ? '📨' : '💬'}</span>
+            <span class="lab-gc-pt"><b>${esc(x.name)}</b> ${x.kind === 'post' ? 'wrote to you' : 'replied to you on'} <i>${esc(truncate(x.title || '', 60))}</i></span>
+            <span class="muted small">${x.excerpt ? `“${esc(truncate(x.excerpt, 90))}” · ` : ''}${esc(x.group_name)} · ${esc(ago(x.created))}</span></button>`).join('')}</section>` : ''}
+        </div>
         <div class="lab-gcards">${(ov.groups || []).map(g => `<section class="lab-card lab-gcard">
             <div class="lab-gc-h"><span class="lab-g-dot big" style="background:hsl(${hue(g.id)} 45% 48%)">${esc(initials(g.name))}</span><div><h3>${esc(g.name)}</h3><div class="muted small">${plural(g.members, 'member')} · ${plural(g.papers, 'paper')}${g.can_write ? '' : ' · reader'}</div></div>
               <span class="grow"></span><button class="btn small primary" data-lg="${esc(g.id)}">Open</button></div>
@@ -137,7 +147,8 @@ const Lab = (() => {
   /* ---------------------------------------------------- ideas */
   function postsShown() {
     const f = S.f, q = f.q.trim().toLowerCase();
-    let P = S.data.posts.filter(p => (f.kind === 'all' || p.kind === f.kind) && (!f.tag || p.tags.includes(f.tag))
+    const forMe = p => p.for_me || p.comments.some(c => c.for_me);
+    let P = S.data.posts.filter(p => (f.kind === 'all' || (f.kind === 'forme' ? forMe(p) : p.kind === f.kind)) && (!f.tag || p.tags.includes(f.tag))
       && (!q || [p.title, p.body, p.name, ...p.tags, ...p.comments.map(c => c.body)].join(' ').toLowerCase().includes(q)));
     const last = p => [p.created, ...p.comments.map(c => c.created)].sort().pop() || '';
     if (f.sort === 'votes') P = P.slice().sort((a, b) => b.votes.length - a.votes.length || (b.created || '').localeCompare(a.created || ''));
@@ -147,12 +158,13 @@ const Lab = (() => {
   function ideasHtml() {
     const d = S.data, P = postsShown(), f = S.f;
     const counts = {}; d.posts.forEach(p => { counts[p.kind] = (counts[p.kind] || 0) + 1; });
+    const nForMe = d.posts.filter(p => p.for_me || p.comments.some(c => c.for_me)).length;
     const tags = {}; d.posts.forEach(p => p.tags.forEach(t => { tags[t] = (tags[t] || 0) + 1; }));
     const pinned = d.posts.filter(p => p.pinned), decisions = d.posts.filter(p => p.kind === 'decision').slice(0, 6);
     const top = d.posts.filter(p => p.votes.length).sort((a, b) => b.votes.length - a.votes.length).slice(0, 5);
     return `<div class="lab-ideas"><div class="lab-feed">
         ${W() ? (S.composing ? composerHtml() : `<button class="lab-new" data-lnew><span>${av(d.me, d.display_name, 30)}</span><span class="lab-new-ph">Share an idea, an experiment, a question, a result…</span><span class="btn small primary">＋ New post</span></button>`) : ''}
-        <div class="lab-filters"><div class="lab-kinds"><button data-lkf="all" class="${f.kind === 'all' ? 'on' : ''}">All <span>${d.posts.length}</span></button>${KINDS.filter(([k]) => counts[k]).map(([k, i, l]) => `<button data-lkf="${k}" class="${f.kind === k ? 'on' : ''}">${i} ${l}s <span>${counts[k]}</span></button>`).join('')}</div>
+        <div class="lab-filters"><div class="lab-kinds"><button data-lkf="all" class="${f.kind === 'all' ? 'on' : ''}">All <span>${d.posts.length}</span></button>${nForMe ? `<button data-lkf="forme" class="forme ${f.kind === 'forme' ? 'on' : ''}" title="Posts and comments addressed to you">📨 For you <span>${nForMe}</span></button>` : ''}${KINDS.filter(([k]) => counts[k]).map(([k, i, l]) => `<button data-lkf="${k}" class="${f.kind === k ? 'on' : ''}">${i} ${l}s <span>${counts[k]}</span></button>`).join('')}</div>
           <span class="grow"></span>${f.tag ? `<button class="lab-tag on" data-ltag="">#${esc(f.tag)} ✕</button>` : ''}
           <input class="input lab-q" id="lab-q" placeholder="Search posts and comments…" value="${esc(f.q)}">
           <select class="input lab-sort" id="lab-sort"><option value="new" ${f.sort === 'new' ? 'selected' : ''}>Newest</option><option value="active" ${f.sort === 'active' ? 'selected' : ''}>Latest activity</option><option value="votes" ${f.sort === 'votes' ? 'selected' : ''}>Most supported 👍</option></select></div>
@@ -171,8 +183,8 @@ const Lab = (() => {
     const open = S.open.has(p.id), editing = S.composing?.id === p.id;
     if (editing) return composerHtml();
     const long = (p.body || '').length > 600 || (p.body || '').split('\n').length > 10;
-    return `<article class="lp k-${p.kind} ${p.pinned ? 'pinned' : ''}" data-post="${esc(p.id)}">
-      <div class="lp-head"><span class="lp-kind">${K[p.kind]?.i || '💡'} ${K[p.kind]?.l || 'Post'}</span>${p.pinned ? '<span class="lp-pin" title="Pinned">📌 Pinned</span>' : ''}<span class="grow"></span>
+    return `<article class="lp k-${p.kind} ${p.pinned ? 'pinned' : ''} ${p.for_me ? 'for-me' : ''}" data-post="${esc(p.id)}">
+      <div class="lp-head"><span class="lp-kind">${K[p.kind]?.i || '💡'} ${K[p.kind]?.l || 'Post'}</span>${p.pinned ? '<span class="lp-pin" title="Pinned">📌 Pinned</span>' : ''}${p.for_me ? '<span class="lab-foryou">📨 For you</span>' : ''}${toLine(p.to)}<span class="grow"></span>
         <span class="lp-meta">${av(p.by, p.name, 22)}<b>${esc(p.mine ? `${p.name} (you)` : p.name)}</b><span class="muted" title="${esc(new Date(p.created).toLocaleString())}${p.at && p.at !== p.created ? ' · edited ' + esc(new Date(p.at).toLocaleString()) : ''}">· ${esc(ago(p.created))}${p.at && p.at !== p.created ? ' · edited' : ''}</span></span></div>
       ${p.title ? `<h3 class="lp-title">${esc(p.title)}</h3>` : ''}
       ${p.body ? `<div class="lp-body md ${long && !open ? 'clamp' : ''}">${md(p.body)}</div>${long && !open ? '<button class="linklike small" data-lmore>Show more</button>' : ''}` : ''}
@@ -187,10 +199,13 @@ const Lab = (() => {
       ${open ? commentsHtml(p) : ''}</article>`;
   }
   function commentsHtml(p) {
-    return `<div class="lp-comments">${p.comments.map(c => `<div class="lc ${c.mine ? 'mine' : ''}" data-cid="${esc(c.id)}">${av(c.by, c.name, 26)}<div class="lc-box">
-        <div class="lc-meta"><b>${esc(c.mine ? `${c.name} (you)` : c.name)}</b><span class="muted">${esc(ago(c.created))}${c.at && c.at !== c.created ? ' · edited' : ''}</span><span class="grow"></span>${c.mine && W() ? '<button data-lcedit title="Edit">✎</button><button data-lcdel title="Delete">🗑</button>' : ''}</div>
+    const cto = S.cto[p.id];
+    return `<div class="lp-comments">${p.comments.map(c => `<div class="lc ${c.mine ? 'mine' : ''} ${c.for_me ? 'for-me' : ''}" data-cid="${esc(c.id)}">${av(c.by, c.name, 26)}<div class="lc-box">
+        <div class="lc-meta"><b>${esc(c.mine ? `${c.name} (you)` : c.name)}</b>${toLine(c.to)}<span class="muted">${esc(ago(c.created))}${c.at && c.at !== c.created ? ' · edited' : ''}</span><span class="grow"></span>${c.mine && W() ? '<button data-lcedit title="Edit">✎</button><button data-lcdel title="Delete">🗑</button>' : ''}</div>
         ${S.focus === 'c:' + c.id ? `<textarea class="input lc-edit" rows="2">${esc(c.body)}</textarea><div class="lc-foot"><button class="linklike small" data-lccancel>Cancel</button><button class="btn small primary" data-lcsave>Save</button></div>` : `<div class="lc-body md">${md(c.body)}</div>`}</div></div>`).join('')}
-      ${W() ? `<div class="lc-new">${av(S.data.me, S.data.display_name, 26)}<textarea class="input lc-text" rows="1" placeholder="Write a comment… (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to send)"></textarea><button class="btn small primary" data-lcsend>Comment</button></div>` : ''}</div>`;
+      ${W() ? `<div class="lc-new">${av(S.data.me, S.data.display_name, 26)}<div class="lc-newbox"><textarea class="input lc-text" rows="1" placeholder="Write a comment… (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to send)"></textarea>
+          ${cto ? `<div class="lc-to-row"><span class="muted small">To:</span>${pplChips(cto)}</div>` : ''}</div>
+          <button class="btn small ${cto?.length ? 'on' : ''}" data-lcto title="Address the comment to someone: they get a notification">＠${cto?.length ? ' ' + cto.length : ''}</button><button class="btn small primary" data-lcsend>Comment</button></div>` : ''}</div>`;
   }
   function composerHtml() {
     const c = S.composing, papers = c.papers.map(id => paperById(id)).filter(Boolean);
@@ -201,19 +216,21 @@ const Lab = (() => {
       <div class="lcp-row"><input class="input" id="lc-tags" placeholder="Tags, separated by commas – e.g. opto, V1, pilot" value="${esc(c.tags.join(', '))}">
         <button class="btn small" data-lpick>📄 Link papers${papers.length ? ` (${papers.length})` : ''}</button></div>
       ${papers.length ? `<div class="lp-links">${papers.map(p => `<span class="lab-paper">📄 ${esc(truncate(p.title || 'Untitled', 60))}<button data-lunlink="${p.id}" title="Remove the link">✕</button></span>`).join('')}</div>` : ''}
+      <div class="lcp-to"><span class="muted small">📨 For <i>(optional – they get a notification)</i>:</span>${pplChips(c.to || [], {id: 'lc-to'})}</div>
       <div class="lc-foot"><span class="muted small">🌐 Everyone in the group sees it, signed with your name</span><span class="grow"></span>
         <button class="btn" data-lcancel>Cancel</button><button class="btn primary" data-lsave>${c.id ? 'Save changes' : 'Post'}</button></div></div>`;
   }
   function readComposer() {
     const c = S.composing; if (!c) return;
     const v = id => $(id, main())?.value;
+    if ($('#lc-to', main())) c.to = pplRead($('#lc-to', main()));
     if ($('#lc-title', main())) { c.title = v('#lc-title'); c.body = v('#lc-body'); c.tags = (v('#lc-tags') || '').split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean); }
   }
   async function savePost() {
     readComposer(); const c = S.composing;
     if (!c.title.trim() && !c.body.trim()) { toast('Write a title or a text first.'); $('#lc-title', main())?.focus(); return; }
     if (!(await Notes.ensureName())) return;
-    const body = {kind: c.kind, title: c.title, body: c.body, tags: c.tags, paper_ids: c.papers};
+    const body = {kind: c.kind, title: c.title, body: c.body, tags: c.tags, paper_ids: c.papers, to: c.to || []};
     const d = await call(c.id ? `/posts/${encodeURIComponent(c.id)}` : '/posts', {method: c.id ? 'PUT' : 'POST', body});
     if (d) { S.composing = null; render(); toast(c.id ? 'Post updated.' : 'Posted – the group will see it at their next update.', 'ok'); }
   }
@@ -259,7 +276,7 @@ const Lab = (() => {
     return `<div class="lab-task prio-${t.prio} ${t.mine ? 'mine' : ''}" data-task="${esc(t.id)}" ${W() ? 'draggable="true"' : ''}>
       <div class="lab-task-t">${t.prio === 'high' ? '<span class="lab-prio" title="High priority">❗</span>' : ''}${esc(t.title)}</div>
       ${t.notes ? `<div class="lab-task-n muted small">${esc(truncate(t.notes, 110))}</div>` : ''}
-      <div class="lab-task-m">${t.assignee ? av(t.assignee, t.assignee_name, 20) + `<span class="small">${esc(t.mine ? 'You' : t.assignee_name)}</span>` : '<span class="muted small">Unassigned</span>'}
+      <div class="lab-task-m">${t.people.length ? `<span class="lab-task-ppl">${t.people.map(x => av(x.id, x.name, 20)).join('')}</span><span class="small lab-task-who">${esc(t.people.map(x => x.me ? 'You' : x.name.split(' ')[0]).join(', '))}</span>` : '<span class="muted small">Unassigned</span>'}
         <span class="grow"></span>${t.due ? `<span class="lab-due ${dueCls(t.due, t.status)}">📅 ${esc(dueTxt(t.due))}</span>` : ''}</div>
       ${pl || t.paper || t.post ? `<div class="lab-task-l">${pl && S.plan === 'all' ? `<span class="lab-chip">${esc(truncate(pl.name, 28))}</span>` : ''}${t.paper ? '<span class="lab-chip" title="' + esc(t.paper.title) + '">📄</span>' : ''}${t.post ? `<span class="lab-chip" title="${esc(t.post_title)}">💬</span>` : ''}</div>` : ''}</div>`;
   }
@@ -271,7 +288,7 @@ const Lab = (() => {
       <div class="fld"><label>What has to be done</label><input class="input" id="tk-title" maxlength="300" value="${esc(x.title)}" placeholder="e.g. Order the virus" ${ro}></div>
       <div class="fld"><label>Details <span class="muted small">(optional)</span></label><textarea class="input" id="tk-notes" rows="3" ${ro} placeholder="Steps, links, what “done” means…">${esc(x.notes || '')}</textarea></div>
       <div class="tk-grid">
-        <div class="fld"><label>Who</label><select class="input" id="tk-who" ${ro}><option value="">Nobody yet</option>${d.people.map(p => `<option value="${esc(p.id)}" ${x.assignee === p.id ? 'selected' : ''}>${esc(p.id === d.me ? `${p.name} (you)` : p.name)}</option>`).join('')}</select></div>
+        <div class="fld tk-who-fld"><label>Who <span class="muted small">– one or more people; they get a notification</span></label>${pplChips(x.assignees || (x.assignee ? [x.assignee] : []), {id: 'tk-who', disabled: !w})}</div>
         <div class="fld"><label>By when</label><input class="input" type="date" id="tk-due" value="${esc(x.due || '')}" ${ro}></div>
         <div class="fld"><label>Status</label><select class="input" id="tk-status" ${ro}>${STATUS.map(([k, l]) => `<option value="${k}" ${x.status === k ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="fld"><label>Priority</label><select class="input" id="tk-prio" ${ro}><option value="high" ${x.prio === 'high' ? 'selected' : ''}>❗ High</option><option value="normal" ${x.prio !== 'high' && x.prio !== 'low' ? 'selected' : ''}>Normal</option><option value="low" ${x.prio === 'low' ? 'selected' : ''}>Low</option></select></div>
@@ -289,12 +306,18 @@ const Lab = (() => {
     });
     $('#tk-save', m.el)?.addEventListener('click', async () => {
       const v = id => $(id, m.el).value;
-      const body = {title: v('#tk-title').trim(), notes: v('#tk-notes'), assignee: v('#tk-who'), due: v('#tk-due'), status: v('#tk-status'), prio: v('#tk-prio'), plan: v('#tk-plan'), paper_id: v('#tk-paper') ? +v('#tk-paper') : ''};
+      const who = pplRead($('#tk-who', m.el)), before = t ? t.assignees : [];
+      const body = {title: v('#tk-title').trim(), notes: v('#tk-notes'), assignees: who, due: v('#tk-due'), status: v('#tk-status'), prio: v('#tk-prio'), plan: v('#tk-plan'), paper_id: v('#tk-paper') ? +v('#tk-paper') : ''};
       if (!body.title) { toast('Write what has to be done.'); $('#tk-title', m.el).focus(); return; }
       if (!t && x.post) body.post = x.post;
-      if (await call(t ? `/tasks/${encodeURIComponent(t.id)}` : '/tasks', {method: t ? 'PUT' : 'POST', body})) { m.close(); if (!t) toast('Task added.', 'ok'); }
+      if (await call(t ? `/tasks/${encodeURIComponent(t.id)}` : '/tasks', {method: t ? 'PUT' : 'POST', body})) {
+        m.close();
+        const fresh = who.filter(a => !before.includes(a) && a !== S.data.me);
+        toast(fresh.length ? `${t ? 'Task saved' : 'Task added'} – ${fresh.map(a => S.data.people.find(p => p.id === a)?.name || a).join(', ')} will get a notification at their next update.` : (t ? 'Task saved.' : 'Task added.'), 'ok', fresh.length ? 6000 : 3000);
+      }
     });
     m.el.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('#tk-save', m.el)?.click(); });
+    m.el.addEventListener('click', e => { const pp = e.target.closest('[data-pp]'); if (pp && !pp.disabled) pp.classList.toggle('on'); });
   }
   function planDialog(pl = null) {
     const m = modal(`<h3>${pl ? 'Plan' : 'New plan'}</h3>
@@ -341,7 +364,14 @@ const Lab = (() => {
       if (t.closest('[data-lsync]')) { const b = t.closest('[data-lsync]'); b.disabled = true; await Shares.syncNow(S.sid); await load(); render(); return; }
       if (t.closest('[data-lexport]')) { const a = document.createElement('a'); a.href = `/api/shares/${sidQ()}/lab/export`; a.download = ''; document.body.appendChild(a); a.click(); a.remove(); toast('Report saved in your Downloads (Markdown).', 'ok'); return; }
       // ideas
-      if (t.closest('[data-lnew]')) { S.composing = {id: null, kind: 'idea', title: '', body: '', tags: [], papers: []}; render(); return; }
+      if (t.closest('[data-lnew]')) { S.composing = {id: null, kind: 'idea', title: '', body: '', tags: [], papers: [], to: []}; render(); return; }
+      const pp = t.closest('[data-pp]');
+      if (pp && !pp.disabled) {
+        pp.classList.toggle('on');
+        const art = pp.closest('[data-post]');
+        if (art && pp.closest('.lc-to-row')) { S.cto[art.dataset.post] = pplRead(pp.closest('.lab-ppl')); const b = $('[data-lcto]', art); if (b) b.textContent = '＠' + (S.cto[art.dataset.post].length ? ' ' + S.cto[art.dataset.post].length : ''); }
+        return;
+      }
       const kb = t.closest('[data-lkind]'); if (kb) { readComposer(); S.composing.kind = kb.dataset.lkind; render(); $('#lc-body', main())?.focus(); return; }
       if (t.closest('[data-lpick]')) { pickPapers(); return; }
       const ul = t.closest('[data-lunlink]'); if (ul) { readComposer(); S.composing.papers = S.composing.papers.filter(id => id !== +ul.dataset.lunlink); render(); return; }
@@ -361,7 +391,8 @@ const Lab = (() => {
         if (t.closest('[data-lpin]')) { call(`${q}/pin`, {method: 'POST', body: {v: !p.pinned}}); return; }
         if (t.closest('[data-lmktask]')) { S.sub = 'plans'; save(); render(); taskDialog(null, {title: p.title || truncate(p.body || '', 80), post: p.id, post_title: p.title}); return; }
         if (t.closest('[data-ltasks]')) { S.sub = 'plans'; S.plan = 'all'; save(); render(); return; }
-        if (t.closest('[data-ledit]')) { S.composing = {id: p.id, kind: p.kind, title: p.title, body: p.body, tags: [...p.tags], papers: p.papers.map(x => x.paper_id).filter(Boolean)}; render(); return; }
+        if (t.closest('[data-lcto]')) { S.cto[p.id] = S.cto[p.id] ? undefined : []; if (!S.cto[p.id]) delete S.cto[p.id]; render(); return; }
+        if (t.closest('[data-ledit]')) { S.composing = {id: p.id, kind: p.kind, title: p.title, body: p.body, tags: [...p.tags], to: p.to.map(x => x.id), papers: p.papers.map(x => x.paper_id).filter(Boolean)}; render(); return; }
         if (t.closest('[data-ldel]')) { if (await confirmBox('Delete this post?', 'It is deleted for everybody in the group, with its comments.', {ok: 'Delete', danger: true})) call(q, {method: 'DELETE'}); return; }
         if (t.closest('[data-lcsend]')) { sendComment(art, p); return; }
         const lc = t.closest('[data-cid]');
@@ -417,7 +448,9 @@ const Lab = (() => {
     const ta = $('.lc-text', art), body = ta?.value.trim(); if (!body) { ta?.focus(); return; }
     if (!(await Notes.ensureName())) return;
     ta.disabled = true; ta.value = '';
-    const d = await call(`/posts/${encodeURIComponent(p.id)}/comments`, {method: 'POST', body: {body}});
+    const to = S.cto[p.id] || [];
+    const d = await call(`/posts/${encodeURIComponent(p.id)}/comments`, {method: 'POST', body: {body, to}});
+    if (d) { delete S.cto[p.id]; render(); if (to.length) toast(`Comment sent – ${plural(to.length, 'person', 'people')} will get a notification.`, 'ok'); }
     if (!d) { const t2 = $(`[data-post="${CSS.escape(p.id)}"] .lc-text`, main()); if (t2) { t2.disabled = false; t2.value = body; } return; }
     $(`[data-post="${CSS.escape(p.id)}"] .lc-text`, main())?.focus();
   }
