@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.14 – 2026-11-09
+
+- **A calmer, cleaner look** – the glass look is now neutral and translucent: frosted, almost colourless
+  panels, quiet buttons and tabs (the chosen one is a raised white pill), no more green backgrounds and
+  metallic gradients. The colour only marks what matters: main buttons, the selected tab or item,
+  focus, badges.
+- **Choose the colour** – ⚙︎ Settings → General → *Colour*: green, teal, blue, violet, rose, amber or
+  graphite. It applies at once, in light and dark mode, and is remembered.
+
 ## 2.13.1 – 2026-11-09
 
 - **Tasks for one or more people** – in a task, click the names under *Who*: everyone chosen sees it in

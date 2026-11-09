@@ -268,7 +268,7 @@ def get_settings(db=None, secrets=True) -> dict:
          "update_auto": "1", "just_updated": "", "own_window": "1",
          "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
          "display_name": "", "list_checkboxes": "", "start_page": "reading", "stale_days": "60",
-         "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]", "look": "metal"}
+         "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]", "look": "glass", "accent": "green"}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
@@ -1951,8 +1951,10 @@ def write_settings():
     if "stale_days" in body:
         sd = _int(body.get("stale_days"))
         set_setting(db, "stale_days", str(sd) if sd and 7 <= sd <= 730 else "")
-    if body.get("look") in ("metal", "flat"):
-        set_setting(db, "look", body["look"])
+    if body.get("look") in ("glass", "metal", "flat"):
+        set_setting(db, "look", "glass" if body["look"] == "metal" else body["look"])
+    if body.get("accent") in ("green", "teal", "blue", "violet", "rose", "amber", "graphite"):
+        set_setting(db, "accent", body["accent"])
     if body.get("start_page") in ("reading", "library", "people", "lab"):
         set_setting(db, "start_page", body["start_page"])
     if "display_name" in body:
@@ -3073,7 +3075,7 @@ def quit_app():
 def web_manifest():
     data = {"name": "PaperShelf", "short_name": "PaperShelf", "id": "/", "start_url": "/", "scope": "/", "display": "standalone",
             "launch_handler": {"client_mode": ["focus-existing", "auto"]},
-            "background_color": "#eaf3ee", "theme_color": "#e6f2ec",
+            "background_color": "#f2f3f5", "theme_color": "#f2f3f5",
             "description": "Your private library of scientific papers",
             "icons": [{"src": f"/static/icons/icon-{n}.png?v={_icon_version()}", "sizes": f"{n}x{n}", "type": "image/png",
                        "purpose": "any"} for n in (192, 512)]}

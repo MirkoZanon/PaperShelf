@@ -120,7 +120,7 @@ function setBusy(btn, busy, label) {
 async function loadLibrary() {
   const d = await api('/api/library');
   state.papers = d.papers; state.groups = d.groups; state.shares = d.shares || []; state.settings = d.settings; state.dataDir = d.data_dir;
-  applyLook(state.settings.look);
+  applyLook(state.settings.look, state.settings.accent);
   state.styles = d.styles || []; state.platform = d.platform || ''; state.version = d.version || ''; state.appDir = d.app_dir || '';
   updateSyncButton();
   const ids = new Set(state.papers.map(p => p.id));
@@ -250,7 +250,15 @@ function viewTitle() {
     || (v.type === 'status' ? (v.value === 'reading' ? 'Reading now' : STATUS_LABEL[v.value]) : v.type === 'group' ? groupPath(v.id)
       : v.type === 'share' ? (state.shares.find(x => x.id === v.id)?.name || 'Group') : 'Papers');
 }
-function applyLook(look) { document.body.classList.toggle('look-metal', (look || 'metal') === 'metal'); }
+// ⚙︎ Settings → General: Look (glass or flat) and Colour (the accent of buttons, tabs, selection)
+const ACCENTS = [['green', '#2e7d55', 'Green'], ['teal', '#0e7c80', 'Teal'], ['blue', '#2f62d0', 'Blue'], ['violet', '#6a4fd1', 'Violet'],
+  ['rose', '#c0396b', 'Rose'], ['amber', '#b2620c', 'Amber'], ['graphite', '#3f4652', 'Graphite']];
+function applyLook(look, accent) {
+  document.body.classList.toggle('look-glass', (look || 'glass') !== 'flat');
+  const a = accent ?? state.settings?.accent;
+  if (a && a !== 'green') document.body.dataset.accent = a; else delete document.body.dataset.accent;
+  try { localStorage.setItem('papershelf-look', JSON.stringify({look: look || 'glass', accent: a || 'green'})); } catch { /* ignore */ }
+}
 const treeOrder = (pid = null) => childrenOf(pid).flatMap(g => [g, ...treeOrder(g.id)]);   // labels as in the sidebar
 const isDiscover = () => state.tab === 'library' && state.area === 'library' && state.mode === 'discover';
 const homeView = () => ({type: state.area === 'reading' ? 'reading' : 'all'});   // the whole list of the page
@@ -966,7 +974,9 @@ function openSettings(startTab) {
     <div class="section-label">Open PaperShelf on</div>
     <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option><option value="lab" ${s.start_page === 'lab' ? 'selected' : ''}>🧪 Lab</option></select>
     <div class="section-label">Look</div>
-    <div class="seg look-seg"><button type="button" data-look="metal" class="${(s.look || 'metal') === 'metal' ? 'on' : ''}">✦ Green glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
+    <div class="seg look-seg"><button type="button" data-look="glass" class="${s.look !== 'flat' ? 'on' : ''}">✦ Glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
+    <div class="section-label">Colour <span class="muted small">– buttons, tabs and what is selected</span></div>
+    <div class="acc-row">${ACCENTS.map(([k, c, l]) => `<button type="button" class="acc-sw ${(s.accent || 'green') === k ? 'on' : ''}" data-accent="${k}" style="--c:${c}" title="${l}" aria-label="${l}"></button>`).join('')}</div>
     <div class="section-label">PaperShelf as an app <button class="help-q" data-help="updates" title="Explain this">?</button></div>
     <div id="ia-section"><p class="muted small">…</p></div>
     <details class="more"><summary>Other ways to start it</summary>
@@ -1071,8 +1081,14 @@ function openSettings(startTab) {
     catch (err) { toast(err.message, 'error'); }
   };
   m.el.addEventListener('click', async e => {
+    const ac = e.target.closest('.acc-sw[data-accent]');
+    if (ac) {
+      $$('.acc-sw', m.el).forEach(x => x.classList.toggle('on', x === ac)); applyLook(state.settings.look, ac.dataset.accent);
+      try { const d = await api('/api/settings', {method: 'PUT', body: {accent: ac.dataset.accent}}); state.settings = d.settings; } catch (err) { toast(err.message, 'error'); }
+      return;
+    }
     const b = e.target.closest('[data-look]'); if (!b) return;
-    $$('[data-look]', m.el).forEach(x => x.classList.toggle('on', x === b)); applyLook(b.dataset.look);
+    $$('[data-look]', m.el).forEach(x => x.classList.toggle('on', x === b)); applyLook(b.dataset.look, state.settings.accent);
     try { const d = await api('/api/settings', {method: 'PUT', body: {look: b.dataset.look}}); state.settings = d.settings; } catch (err) { toast(err.message, 'error'); }
   });
   $('#set-stale', m.el).onchange = async e => {

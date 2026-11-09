@@ -20,7 +20,7 @@ const Help = (() => {
       ${step(4, `Click <b>📖 Read &amp; highlight</b> to read the PDF and highlight passages.`)}
       ${step(5, `Click <b>⤓ Export references</b> to get your reference list in APA, Nature, Cell… or to move papers to Zotero.`)}
       ${tip('At the top right: 🔔 notifications (your groups and What\'s new), <b>⟳</b> update everything (sync, groups, new versions), <b>?</b> this guide, ⚙︎ settings. The <b>PaperShelf logo</b> at the top left has the rest: groups, export, reading stats, quit.')}
-      <p class="muted">The look (green glass or flat) is in ⚙︎ Settings → General → <i>Look</i>.</p>
+      <p class="muted">The look (glass or flat) and the <b>colour</b> of buttons, tabs and selection (green, teal, blue, violet, rose, amber or graphite) are in ⚙︎ Settings → General.</p>
       <h4>Starting and stopping</h4>
       <p><b>The first time</b>, start PaperShelf with <code>start.command</code> (Mac) or <code>start.bat</code> (Windows) in the app folder: it sets itself up (about a minute).</p>
       <p><b>Then install it as an app</b> (recommended): ⚙︎ Settings → General → <b>⬇ Install PaperShelf as an app</b>. Chrome, Edge or Brave make PaperShelf a real app with its own icon: in the Dock or taskbar it shows a dot while open, clicking it brings back the open window instead of opening a new one, and right-click → <i>Quit</i> closes it. Keep it in the Dock (right-click → Options → Keep in Dock) or pin it to the taskbar, and remove the old icon. If PaperShelf isn't running when you open the app, it shows a <b>Start PaperShelf</b> button; with <i>Start PaperShelf in the background when I log in</i> it is always ready.</p>

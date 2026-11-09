@@ -8,13 +8,14 @@
 <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
 <link rel="apple-touch-icon" href="/static/icons/icon-180.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#e6f2ec" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#16231c" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f3f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#17181b" media="(prefers-color-scheme: dark)">
 <meta name="application-name" content="PaperShelf">
 <meta name="apple-mobile-web-app-title" content="PaperShelf">
 <link rel="stylesheet" href="/static/style.css">
 </head>
-<body class="look-metal">
+<body class="look-glass">
+<script>/* the look before anything is drawn (no flash of the wrong colour) */ try { const l = JSON.parse(localStorage.getItem('papershelf-look') || '{}'); if (l.look === 'flat') document.body.classList.remove('look-glass'); if (l.accent && l.accent !== 'green') document.body.dataset.accent = l.accent; } catch (e) { /* ignore */ }</script>
 <div class="app">
   <header>
     <div class="menu-wrap brand-wrap">
