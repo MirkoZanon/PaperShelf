@@ -307,12 +307,13 @@ const Help = (() => {
         <li>Record what the group agreed as a <b>Decision</b>: decisions are listed on the right, in the Overview and in the report.</li>
         <li><b>Address a post or a comment to someone</b>: in a new post choose the people under <i>📨 For</i>; under a comment click <b>＠</b> and pick them. They get a notification, the post is marked <b>📨 For you</b> for them and appears in their Overview; the filter <i>📨 For you</i> shows everything addressed to you.</li></ul>
       <h4>✅ Plans & tasks</h4>
-      <ul><li>A <b>plan</b> is a milestone or a project (<i>Pilot study – by 18 Dec</i>) with a goal, a deadline and a progress bar.</li>
+      <ul><li>A <b>plan</b> is a project or a milestone that <b>groups tasks</b> (<i>Pilot study – by 18 Dec</i>): a goal, a deadline, <b>who is responsible</b> (one or more people – they get a notification) and a progress bar. Plans are listed on the left: click one to see only its tasks; <i>＋ New task</i> then adds the task to that plan.</li>
         <li>A <b>task</b> is a step: what, <b>who</b> (one or more people – click their names), <b>by when</b>, priority, plan, and optionally a paper (<i>present Smith 2024 at journal club</i>). The board has three columns – <b>To do, Doing, Done</b>: drag the cards, or click one to change it. <i>Only mine</i> shows your tasks.</li>
+        <li>A task can have a <b>checklist</b> – small items to tick (<i>Calibrate the laser</i>, <i>Check the camera</i>…): add them in the task, then tick them right on the card (☑ 2/3 opens the list). Two people can tick different items at the same time.</li>
         <li><b>＋ Task</b> on a post turns an idea into work: the task links back to the post.</li>
         <li>Any editor can change plans and tasks; each field keeps the newest change, so two people moving different things never overwrite each other.</li></ul>
       <h4>🏠 Overview</h4>
-      <p>Your <b>open tasks in every group</b> (overdue ones in red – tick the circle when done), and for each group what happened this week, the open tasks, the latest posts and decisions.</p>
+      <p>Your <b>open tasks in every group</b> (overdue ones in red – tick the circle when done), the <b>plans you lead</b>, what was written <b>for you</b>, and for each group what happened this week, the open tasks, the latest posts and decisions.</p>
       <h4>Notifications and report</h4>
       <p>The 🔔 tells you when someone posts, comments on a post, writes to you or gives you a task – the ones for you also pop up as a message and show a red number on the <b>🧪 Lab</b> tab. They arrive when the groups update (every 15 minutes, or ⟳). <b>⤓ Report</b> downloads the whole lab as a Markdown file – decisions, plans with their tasks, posts with comments – for a lab meeting, the minutes or your lab notebook.</p>
       ${tip('The Lab travels with the group (same secret gists, updates every 15 minutes or with ⟳). Readers see it but can\'t write. Nothing goes anywhere else.')}`},

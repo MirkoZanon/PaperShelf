@@ -7,7 +7,7 @@
    🏠 Overview: your tasks in every group, what happened this week, the latest decisions.
    Everything lives in the group's file and travels with it (see sharing.py). Readers only read. */
 const Lab = (() => {
-  const S = {sid: null, sub: 'ideas', data: null, ov: null, loading: false, open: new Set(), composing: null, cto: {},
+  const S = {sid: null, sub: 'ideas', data: null, ov: null, loading: false, open: new Set(), openTasks: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, focus: null};
   try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = p.sub === 'plans' ? 'plans' : 'ideas'; } catch { /* storage unavailable */ }
   const save = () => { try { localStorage.setItem('papershelf-lab', JSON.stringify({sid: S.sid, sub: S.sub})); } catch { /* ignore */ } };
@@ -64,9 +64,10 @@ const Lab = (() => {
     await load(); render(); main().scrollTop = 0;
   }
   // from a notification, the overview or elsewhere
-  async function openGroup(sid, {post = null, task = null, sub = null} = {}) {
+  async function openGroup(sid, {post = null, task = null, sub = null, plan = null} = {}) {
     if (state.tab !== 'lab') setTab('lab');
-    await go(sid, sub || (task ? 'plans' : post ? 'ideas' : null));
+    await go(sid, sub || (task || plan ? 'plans' : post ? 'ideas' : null));
+    if (plan && S.data?.plans.some(x => x.id === plan)) { S.plan = plan; render(); }
     if (post) { S.open.add(post); render(); const el = $(`[data-post="${CSS.escape(post)}"]`, main()); if (el) { el.scrollIntoView({block: 'center'}); flash(el); } }
     if (task) { const t = S.data?.tasks.find(x => x.id === task); if (t) taskDialog(t); }
   }
@@ -113,8 +114,11 @@ const Lab = (() => {
         <section class="lab-card lab-mytasks"><h3>✅ My tasks <span class="muted small">${mt.length ? plural(mt.length, 'open task') : ''}</span></h3>
           ${mt.length ? mt.map(t => `<div class="lab-mt ${dueCls(t.due, t.status)}"><button class="lab-check" data-ovdone="${esc(t.group)}|${esc(t.id)}" title="Mark it done"></button>
               <button class="linklike lab-mt-t" data-ovtask="${esc(t.group)}|${esc(t.id)}">${t.prio === 'high' ? '<span class="lab-prio">❗</span>' : ''}${esc(t.title)}</button>
-              <span class="lab-chip">${esc(t.group_name)}</span>${t.status === 'doing' ? '<span class="lab-chip doing">doing</span>' : ''}${t.due ? `<span class="lab-due ${dueCls(t.due, t.status)}">📅 ${esc(dueTxt(t.due))}</span>` : ''}</div>`).join('')
+              <span class="lab-chip">${esc(t.group_name)}</span>${t.status === 'doing' ? '<span class="lab-chip doing">doing</span>' : ''}${t.checks?.[1] ? `<span class="lab-chip">☑ ${t.checks[0]}/${t.checks[1]}</span>` : ''}${t.due ? `<span class="lab-due ${dueCls(t.due, t.status)}">📅 ${esc(dueTxt(t.due))}</span>` : ''}</div>`).join('')
             : '<p class="muted small">Nothing assigned to you. 🎉</p>'}</section>
+        ${(ov.my_plans || []).length ? `<section class="lab-card"><h3>🧭 Plans you lead</h3>${ov.my_plans.map(p => `<button class="lab-gc-post" data-ovplan="${esc(p.group)}|${esc(p.id)}"><span>🧭</span>
+            <span class="lab-gc-pt"><b>${esc(p.name)}</b> <span class="lab-prog lab-prog-in"><span style="width:${p.n ? Math.round(100 * p.done / p.n) : 0}%"></span></span></span>
+            <span class="muted small">${p.done}/${p.n} tasks done · ${esc(p.group_name)}${p.due ? ` · <span class="lab-due ${dueCls(p.due, p.n && p.done === p.n ? 'done' : '')}">📅 ${esc(dueTxt(p.due))}</span>` : ''}</span></button>`).join('')}</section>` : ''}
         ${(ov.for_me || []).length ? `<section class="lab-card lab-forme"><h3>📨 For you</h3>${ov.for_me.map(x => `<button class="lab-gc-post" data-ovpost="${esc(x.group)}|${esc(x.post)}"><span>${x.kind === 'post' ? '📨' : '💬'}</span>
             <span class="lab-gc-pt"><b>${esc(x.name)}</b> ${x.kind === 'post' ? 'wrote to you' : 'replied to you on'} <i>${esc(truncate(x.title || '', 60))}</i></span>
             <span class="muted small">${x.excerpt ? `“${esc(truncate(x.excerpt, 90))}” · ` : ''}${esc(x.group_name)} · ${esc(ago(x.created))}</span></button>`).join('')}</section>` : ''}
@@ -248,37 +252,51 @@ const Lab = (() => {
 
   /* ---------------------------------------------------- plans & tasks */
   function plansHtml() {
-    const d = S.data;
+    const d = S.data, w = W();
     const T = d.tasks.filter(t => (S.plan === 'all' || (t.plan || '') === (S.plan === 'none' ? '' : S.plan)) && (!S.mine || t.mine));
     const prog = id => { const ts = d.tasks.filter(t => (t.plan || '') === id); const done = ts.filter(t => t.status === 'done').length; return {n: ts.length, done, pct: ts.length ? Math.round(100 * done / ts.length) : 0}; };
     const noPlan = d.tasks.filter(t => !t.plan).length;
-    return `<div class="lab-plans">
-      <div class="lab-planbar">
-        <button class="lab-plan ${S.plan === 'all' ? 'on' : ''}" data-lplan="all"><b>All tasks</b><span class="muted small">${plural(d.tasks.length, 'task')}</span></button>
-        ${d.plans.map(pl => { const g = prog(pl.id); return `<div class="lab-plan ${S.plan === pl.id ? 'on' : ''} ${dueCls(pl.due, g.n && g.done === g.n ? 'done' : '')}" data-lplan="${esc(pl.id)}" title="${esc(pl.goal || '')}">
-            <div class="lab-plan-h"><b>${esc(pl.name)}</b>${W() ? `<button class="lab-plan-ed" data-lplanedit="${esc(pl.id)}" title="Edit the plan">✎</button>` : ''}</div>
-            <div class="lab-prog"><span style="width:${g.pct}%"></span></div>
-            <span class="muted small">${g.done}/${g.n} done${pl.due ? ` · 📅 ${esc(dueTxt(pl.due))}` : ''}</span></div>`; }).join('')}
-        ${noPlan && d.plans.length ? `<button class="lab-plan ${S.plan === 'none' ? 'on' : ''}" data-lplan="none"><b>Without a plan</b><span class="muted small">${plural(noPlan, 'task')}</span></button>` : ''}
-        ${W() ? '<button class="lab-plan add" data-lnewplan>＋ Plan<span class="muted small">a milestone, a project, an experiment series</span></button>' : ''}
+    const pl = d.plans.find(x => x.id === S.plan);
+    if (S.plan !== 'all' && S.plan !== 'none' && !pl) S.plan = 'all';
+    const g = pl ? prog(pl.id) : null;
+    const head = pl ? `<div class="lab-phead"><div class="lab-phead-main"><div class="lab-phead-k">Plan</div><h3>${esc(pl.name)}</h3>
+          ${pl.goal ? `<div class="lab-goal">🎯 ${esc(pl.goal)}</div>` : ''}
+          <div class="lab-pmeta"><span>👤 ${pl.people.length ? pl.people.map(x => `<span class="lab-pp-s">${av(x.id, x.name, 18)}${esc(x.me ? 'You' : x.name)}</span>`).join('') : '<span class="muted">nobody responsible yet</span>'}</span>
+            ${pl.due ? `<span class="lab-due ${dueCls(pl.due, g.n && g.done === g.n ? 'done' : '')}">📅 ${esc(dueTxt(pl.due))}</span>` : ''}
+            <span class="lab-pbar"><span class="lab-prog"><span style="width:${g.pct}%"></span></span><span class="muted small">${g.done}/${g.n} tasks done</span></span></div></div>
+          ${w ? `<button class="btn small" data-lplanedit="${esc(pl.id)}">✎ Edit plan</button>` : ''}</div>`
+      : `<div class="lab-phead"><div class="lab-phead-main"><h3>${S.plan === 'none' ? 'Tasks without a plan' : 'All tasks'}</h3>
+          <div class="muted small lab-explain">A <b>plan</b> groups the tasks of one project or milestone (<i>Pilot study – by 18 Dec</i>): a goal, a deadline and who is responsible. A <b>task</b> is one step, with who does it and by when – and it can have a <b>checklist</b> of small items to tick.</div></div></div>`;
+    return `<div class="lab-plans2">
+      <div class="lab-plist">
+        <div class="lab-plist-h"><b>Plans</b>${w ? '<button class="btn small" data-lnewplan title="A project or a milestone that groups tasks">＋ New plan</button>' : ''}</div>
+        <button class="lab-pi ${S.plan === 'all' ? 'on' : ''}" data-lplan="all"><span class="lab-pi-h"><b>📋 All tasks</b><span class="lab-n">${d.tasks.length || ''}</span></span></button>
+        ${d.plans.map(p => { const x = prog(p.id); return `<button class="lab-pi ${S.plan === p.id ? 'on' : ''}" data-lplan="${esc(p.id)}" title="${esc(p.goal || '')}">
+            <span class="lab-pi-h"><b>${esc(p.name)}</b><span class="lab-task-ppl">${p.people.map(y => av(y.id, y.name, 18)).join('')}</span></span>
+            <span class="lab-prog"><span style="width:${x.pct}%"></span></span>
+            <span class="muted small">${x.done}/${x.n} done${p.due ? ` · <span class="lab-due ${dueCls(p.due, x.n && x.done === x.n ? 'done' : '')}">📅 ${esc(dueTxt(p.due))}</span>` : ''}</span></button>`; }).join('')}
+        ${noPlan && d.plans.length ? `<button class="lab-pi ${S.plan === 'none' ? 'on' : ''}" data-lplan="none"><span class="lab-pi-h"><b>Without a plan</b><span class="lab-n">${noPlan}</span></span></button>` : ''}
+        ${!d.plans.length ? `<p class="muted small lab-plist-hint">${w ? 'No plans yet. Create one for a project or a milestone, then add its tasks.' : 'No plans yet.'}</p>` : ''}
       </div>
-      <div class="lab-boardbar">${S.plan !== 'all' && S.plan !== 'none' ? (() => { const pl = d.plans.find(x => x.id === S.plan); return pl?.goal ? `<div class="lab-goal">🎯 ${esc(pl.goal)}</div>` : ''; })() : ''}
-        <span class="grow"></span><label class="lab-mine"><input type="checkbox" id="lab-mine" ${S.mine ? 'checked' : ''}> Only mine</label>
-        ${W() ? '<button class="btn small primary" data-lnewtask>＋ Task</button>' : ''}</div>
-      <div class="lab-board">${STATUS.map(([st, label]) => { const col = T.filter(t => t.status === st); return `<div class="lab-col" data-col="${st}">
-          <div class="lab-col-h"><b>${label}</b><span class="lab-n">${col.length}</span>${W() && st !== 'done' ? `<button class="lab-col-add" data-lnewtask="${st}" title="Add a task here">＋</button>` : ''}</div>
-          <div class="lab-col-list">${col.map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? (W() ? 'Add a task with ＋' : 'Nothing to do') : st === 'doing' ? 'Drag a task here when you start it' : 'Finished tasks land here'}</div>`}</div></div>`; }).join('')}</div>
-      ${!d.tasks.length ? `<p class="muted small lab-board-hint">Plans are milestones (e.g. <i>Pilot study – by 20 Dec</i>); tasks are the steps (<i>Order the virus</i>, <i>Write the ethics form</i>, <i>Present Smith 2024 at journal club</i>), each with who does it and by when. Drag the cards between the columns.</p>` : ''}
-    </div>`;
+      <div class="lab-pmain">${head}
+        <div class="lab-boardbar"><label class="lab-mine"><input type="checkbox" id="lab-mine" ${S.mine ? 'checked' : ''}> Only my tasks</label><span class="grow"></span>
+          ${w ? `<button class="btn small primary" data-lnewtask>＋ New task${pl ? ` in “${esc(truncate(pl.name, 24))}”` : ''}</button>` : ''}</div>
+        <div class="lab-board">${STATUS.map(([st, label]) => { const col = T.filter(t => t.status === st); return `<div class="lab-col" data-col="${st}">
+            <div class="lab-col-h"><b>${label}</b><span class="lab-n">${col.length}</span></div>
+            <div class="lab-col-list">${col.map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? 'Nothing to do' : st === 'doing' ? 'Drag a task here when you start it' : 'Finished tasks land here'}</div>`}</div>
+            ${w && st === 'todo' ? '<button class="lab-col-add" data-lnewtask="todo">＋ Add a task</button>' : ''}</div>`; }).join('')}</div>
+      </div></div>`;
   }
   function taskCard(t) {
-    const pl = S.data.plans.find(x => x.id === t.plan);
+    const pl = S.data.plans.find(x => x.id === t.plan), ck = t.checklist || [], done = ck.filter(c => c.done).length, open = S.openTasks.has(t.id);
     return `<div class="lab-task prio-${t.prio} ${t.mine ? 'mine' : ''}" data-task="${esc(t.id)}" ${W() ? 'draggable="true"' : ''}>
       <div class="lab-task-t">${t.prio === 'high' ? '<span class="lab-prio" title="High priority">❗</span>' : ''}${esc(t.title)}</div>
       ${t.notes ? `<div class="lab-task-n muted small">${esc(truncate(t.notes, 110))}</div>` : ''}
+      ${ck.length ? `<button class="lab-ck-toggle ${done === ck.length ? 'all' : ''}" data-lcktoggle title="${open ? 'Hide' : 'Show'} the checklist"><span class="lab-ck-bar"><span style="width:${Math.round(100 * done / ck.length)}%"></span></span>☑ ${done}/${ck.length} ${open ? '▴' : '▾'}</button>
+        ${open ? `<div class="lab-ck-list">${ck.map(c => `<label class="lab-ck ${c.done ? 'done' : ''}"><input type="checkbox" data-lchk="${esc(c.id)}" ${c.done ? 'checked' : ''} ${W() ? '' : 'disabled'}><span>${esc(c.text)}</span></label>`).join('')}</div>` : ''}` : ''}
       <div class="lab-task-m">${t.people.length ? `<span class="lab-task-ppl">${t.people.map(x => av(x.id, x.name, 20)).join('')}</span><span class="small lab-task-who">${esc(t.people.map(x => x.me ? 'You' : x.name.split(' ')[0]).join(', '))}</span>` : '<span class="muted small">Unassigned</span>'}
         <span class="grow"></span>${t.due ? `<span class="lab-due ${dueCls(t.due, t.status)}">📅 ${esc(dueTxt(t.due))}</span>` : ''}</div>
-      ${pl || t.paper || t.post ? `<div class="lab-task-l">${pl && S.plan === 'all' ? `<span class="lab-chip">${esc(truncate(pl.name, 28))}</span>` : ''}${t.paper ? '<span class="lab-chip" title="' + esc(t.paper.title) + '">📄</span>' : ''}${t.post ? `<span class="lab-chip" title="${esc(t.post_title)}">💬</span>` : ''}</div>` : ''}</div>`;
+      ${(pl && S.plan === 'all') || t.paper || t.post ? `<div class="lab-task-l">${pl && S.plan === 'all' ? `<span class="lab-chip">${esc(truncate(pl.name, 28))}</span>` : ''}${t.paper ? '<span class="lab-chip" title="' + esc(t.paper.title) + '">📄</span>' : ''}${t.post ? `<span class="lab-chip" title="${esc(t.post_title)}">💬</span>` : ''}</div>` : ''}</div>`;
   }
   function taskDialog(t = null, preset = {}) {
     const d = S.data, w = W(), x = t || {title: '', notes: '', status: 'todo', prio: 'normal', assignee: '', due: '', plan: S.plan !== 'all' && S.plan !== 'none' ? S.plan : '', ...preset};
@@ -295,10 +313,49 @@ const Lab = (() => {
         <div class="fld"><label>Plan</label><select class="input" id="tk-plan" ${ro}><option value="">No plan</option>${d.plans.map(pl => `<option value="${esc(pl.id)}" ${x.plan === pl.id ? 'selected' : ''}>${esc(pl.name)}</option>`).join('')}</select></div>
         <div class="fld"><label>Paper <span class="muted small">(optional)</span></label><select class="input" id="tk-paper" ${ro}><option value="">None</option>${papers.map(p => `<option value="${p.id}" ${x.paper?.paper_id === p.id || preset.paper_id === p.id ? 'selected' : ''}>${esc(truncate(p.title || 'Untitled', 70))}</option>`).join('')}</select></div>
       </div>
+      <div class="fld"><label>Checklist <span class="muted small">– small items to tick (optional)</span></label><div class="tk-checks" id="tk-checks"></div>
+        ${w ? '<div class="tk-check-add"><input class="input" id="tk-check-new" maxlength="300" placeholder="Add an item and press Enter – e.g. Calibrate the laser"><button class="btn small" id="tk-check-btn">Add</button></div>' : ''}</div>
       ${x.post ? `<p class="small">💬 Linked to the post <button class="linklike" id="tk-post">${esc(x.post_title || d.posts.find(p => p.id === x.post)?.title || 'a post')}</button></p>` : ''}
       ${t ? `<p class="muted small">Created by ${esc(t.by_name || t.by || '')}${t.created ? ' · ' + esc(ago(t.created)) : ''}</p>` : ''}
       <div class="modal-actions">${t && w ? '<button class="btn danger-soft" id="tk-del">🗑 Delete</button>' : ''}<span class="grow"></span><button class="btn" data-close>${w ? 'Cancel' : 'Close'}</button>${w ? `<button class="btn primary" id="tk-save">${t ? 'Save' : 'Add task'}</button>` : ''}</div>`, {nofocus: !w});
     if (w) setTimeout(() => $('#tk-title', m.el)?.focus(), 30);
+    // the checklist: saved at once for an existing task, with the task for a new one
+    let local = t ? null : [];
+    const items = () => t ? (S.data.tasks.find(y => y.id === t.id)?.checklist || []) : local;
+    const paintChecks = () => {
+      const L = items();
+      $('#tk-checks', m.el).innerHTML = L.length ? L.map((c, i) => `<div class="tk-check ${c.done ? 'done' : ''}" data-ci="${i}"><input type="checkbox" ${c.done ? 'checked' : ''} ${w ? '' : 'disabled'} data-ckdone>
+          <input class="tk-check-text" value="${esc(c.text)}" ${w ? '' : 'disabled'} data-cktext><button type="button" class="tk-check-del" data-ckdel ${w ? '' : 'hidden'} title="Remove">✕</button></div>`).join('')
+        : '<p class="muted small">No items.</p>';
+    };
+    paintChecks();
+    const addItem = async () => {
+      const inp = $('#tk-check-new', m.el), text = inp.value.trim(); if (!text) return;
+      inp.value = '';
+      if (!t) { local.push({text, done: false}); paintChecks(); inp.focus(); return; }
+      const L = items();
+      if (await call('/checks', {method: 'POST', body: {task: t.id, text, pos: L.length ? L.length + 1 : 1}})) { paintChecks(); $('#tk-check-new', m.el).focus(); }
+    };
+    $('#tk-check-btn', m.el)?.addEventListener('click', addItem);
+    $('#tk-check-new', m.el)?.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); addItem(); } });
+    $('#tk-checks', m.el).addEventListener('change', async e => {
+      const row = e.target.closest('[data-ci]'); if (!row) return;
+      const c = items()[+row.dataset.ci]; if (!c) return;
+      if (e.target.matches('[data-ckdone]')) {
+        if (!t) { c.done = e.target.checked; paintChecks(); return; }
+        if (await call(`/checks/${encodeURIComponent(c.id)}`, {method: 'PUT', body: {done: e.target.checked}})) paintChecks();
+      } else if (e.target.matches('[data-cktext]')) {
+        const text = e.target.value.trim(); if (!text || text === c.text) { e.target.value = c.text; return; }
+        if (!t) { c.text = text; return; }
+        if (await call(`/checks/${encodeURIComponent(c.id)}`, {method: 'PUT', body: {text}})) paintChecks();
+      }
+    });
+    $('#tk-checks', m.el).addEventListener('click', async e => {
+      if (!e.target.matches('[data-ckdel]')) return;
+      const row = e.target.closest('[data-ci]'), c = items()[+row.dataset.ci]; if (!c) return;
+      if (!t) { local.splice(+row.dataset.ci, 1); paintChecks(); return; }
+      if (await call(`/checks/${encodeURIComponent(c.id)}`, {method: 'DELETE'})) paintChecks();
+    });
     $('#tk-post', m.el)?.addEventListener('click', () => { m.close(); S.sub = 'ideas'; S.open.add(x.post); render(); const el = $(`[data-post="${CSS.escape(x.post)}"]`, main()); if (el) { el.scrollIntoView({block: 'center'}); flash(el); } });
     $('#tk-del', m.el)?.addEventListener('click', async () => {
       if (!(await confirmBox('Delete this task?', 'It is deleted for everybody in the group.', {ok: 'Delete', danger: true}))) return;
@@ -310,7 +367,14 @@ const Lab = (() => {
       const body = {title: v('#tk-title').trim(), notes: v('#tk-notes'), assignees: who, due: v('#tk-due'), status: v('#tk-status'), prio: v('#tk-prio'), plan: v('#tk-plan'), paper_id: v('#tk-paper') ? +v('#tk-paper') : ''};
       if (!body.title) { toast('Write what has to be done.'); $('#tk-title', m.el).focus(); return; }
       if (!t && x.post) body.post = x.post;
-      if (await call(t ? `/tasks/${encodeURIComponent(t.id)}` : '/tasks', {method: t ? 'PUT' : 'POST', body})) {
+      const pending = $('#tk-check-new', m.el)?.value.trim(); if (pending && local) local.push({text: pending, done: false});
+      const old = new Set(S.data.tasks.map(y => y.id));
+      const res = await call(t ? `/tasks/${encodeURIComponent(t.id)}` : '/tasks', {method: t ? 'PUT' : 'POST', body});
+      if (res) {
+        if (!t && local.length) {   // the new task's checklist
+          const nt = res.tasks.find(y => !old.has(y.id));
+          if (nt) for (const [i, c] of local.entries()) await call('/checks', {method: 'POST', body: {task: nt.id, text: c.text, done: c.done, pos: i + 1}});
+        }
         m.close();
         const fresh = who.filter(a => !before.includes(a) && a !== S.data.me);
         toast(fresh.length ? `${t ? 'Task saved' : 'Task added'} – ${fresh.map(a => S.data.people.find(p => p.id === a)?.name || a).join(', ')} will get a notification at their next update.` : (t ? 'Task saved.' : 'Task added.'), 'ok', fresh.length ? 6000 : 3000);
@@ -324,15 +388,18 @@ const Lab = (() => {
       <div class="fld"><label>Name</label><input class="input" id="pl-name" maxlength="120" value="${esc(pl?.name || '')}" placeholder="e.g. Pilot study, Paper revision, Grant application"></div>
       <div class="fld"><label>Goal <span class="muted small">(optional)</span></label><textarea class="input" id="pl-goal" rows="3" placeholder="What the plan should achieve">${esc(pl?.goal || '')}</textarea></div>
       <div class="fld"><label>Deadline <span class="muted small">(optional)</span></label><input class="input" type="date" id="pl-due" value="${esc(pl?.due || '')}"></div>
+      <div class="fld"><label>Responsible <span class="muted small">– who leads it (one or more people); they get a notification</span></label>${pplChips(pl?.owners || [], {id: 'pl-owners'})}</div>
+      <p class="muted small">The plan's tasks – the single steps – are added on the board, each with its own people and date.</p>
       <div class="modal-actions">${pl ? '<button class="btn danger-soft" id="pl-del">🗑 Delete</button>' : ''}<span class="grow"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="pl-save">${pl ? 'Save' : 'Create plan'}</button></div>`);
     setTimeout(() => $('#pl-name', m.el)?.focus(), 30);
+    m.el.addEventListener('click', e => { const pp = e.target.closest('[data-pp]'); if (pp && !pp.disabled) pp.classList.toggle('on'); });
     $('#pl-del', m.el)?.addEventListener('click', async () => {
       const n = S.data.tasks.filter(t => t.plan === pl.id).length;
       if (!(await confirmBox(`Delete the plan “${pl.name}”?`, n ? `Its ${plural(n, 'task')} stay, without a plan.` : 'It is deleted for everybody.', {ok: 'Delete', danger: true}))) return;
       if (await call(`/plans/${encodeURIComponent(pl.id)}`, {method: 'DELETE'})) { if (S.plan === pl.id) S.plan = 'all'; m.close(); render(); }
     });
     $('#pl-save', m.el).addEventListener('click', async () => {
-      const body = {name: $('#pl-name', m.el).value.trim(), goal: $('#pl-goal', m.el).value, due: $('#pl-due', m.el).value};
+      const body = {name: $('#pl-name', m.el).value.trim(), goal: $('#pl-goal', m.el).value, due: $('#pl-due', m.el).value, owners: pplRead($('#pl-owners', m.el))};
       if (!body.name) { $('#pl-name', m.el).focus(); return; }
       const d = await call(pl ? `/plans/${encodeURIComponent(pl.id)}` : '/plans', {method: pl ? 'PUT' : 'POST', body});
       if (d) { m.close(); if (!pl) { const np = d.plans.find(x => x.name === body.name && !S.data.tasks.some(t => t.plan === x.id)); if (np) { S.plan = np.id; render(); } } }
@@ -347,6 +414,7 @@ const Lab = (() => {
       const lg = t.closest('[data-lg]'); if (lg) { go(lg.dataset.lg); return; }
       if (t.closest('[data-lnewgroup]')) { Shares.newDialog?.(); return; }
       if (t.closest('[data-ljoin]')) { Shares.joinDialog?.(); return; }
+      const op = t.closest('[data-ovplan]'); if (op) { const [sid, id] = op.dataset.ovplan.split('|'); await openGroup(sid, {sub: 'plans'}); S.plan = id; render(); return; }
       const ov = t.closest('[data-ovtask], [data-ovpost], [data-ovdone]');
       if (ov) {
         const [sid, id] = (ov.dataset.ovtask || ov.dataset.ovpost || ov.dataset.ovdone).split('|');
@@ -409,6 +477,8 @@ const Lab = (() => {
       const pe = t.closest('[data-lplanedit]'); if (pe) { e.stopPropagation(); planDialog(S.data.plans.find(x => x.id === pe.dataset.lplanedit)); return; }
       const pb = t.closest('[data-lplan]'); if (pb) { S.plan = pb.dataset.lplan; render(); return; }
       if (t.closest('[data-lnewplan]')) { planDialog(); return; }
+      if (t.closest('[data-lcktoggle]')) { const id = t.closest('[data-task]').dataset.task; S.openTasks.has(id) ? S.openTasks.delete(id) : S.openTasks.add(id); render(); return; }
+      if (t.closest('.lab-ck')) return;   // ticking an item (see 'change')
       const nt = t.closest('[data-lnewtask]'); if (nt) { taskDialog(null, nt.dataset.lnewtask ? {status: nt.dataset.lnewtask} : {}); return; }
       const tk = t.closest('[data-task]'); if (tk) { const x = S.data.tasks.find(y => y.id === tk.dataset.task); if (x) taskDialog(x); }
     });
@@ -419,6 +489,7 @@ const Lab = (() => {
     el.addEventListener('change', e => {
       if (e.target.id === 'lab-sort') { S.f.sort = e.target.value; render(); }
       if (e.target.id === 'lab-mine') { S.mine = e.target.checked; render(); }
+      if (e.target.matches('[data-lchk]')) call(`/checks/${encodeURIComponent(e.target.dataset.lchk)}`, {method: 'PUT', body: {done: e.target.checked}});
     });
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {

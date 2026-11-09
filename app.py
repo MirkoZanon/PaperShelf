@@ -3436,8 +3436,10 @@ def _lab_payload(db, sid, st=None):
               "assignee_name": ", ".join(who(a) for a in sharing.task_people(t)),
               "mine": bool(me & set(sharing.task_people(t))), "paper": paper(t["paper"]) if t.get("paper") else None,
               "post_title": titles.get(t.get("post") or "", ""), "by_name": who(t.get("by"))} for t in v["tasks"]]
+    plans = [{**pl, "owners": pl.get("owners") or [], "people": people_of(pl.get("owners")), "mine": bool(me & set(pl.get("owners") or []))}
+             for pl in v["plans"]]
     return jsonify(group={"id": sid, "name": (st.get("name") or {}).get("v") or "Group"}, can_write=bool(author), me=author or ident["user"],
-                   display_name=_display_name(db, ident), people=people, posts=posts, plans=v["plans"], tasks=tasks,
+                   display_name=_display_name(db, ident), people=people, posts=posts, plans=plans, tasks=tasks,
                    kinds=LAB_KIND_LABEL)
 
 
@@ -3544,8 +3546,11 @@ def lab_pin(sid, oid):
     return _lab_call(sid, lambda db, st, author, b: sharing.set_pin(st, author, oid, bool(b.get("v"))))
 
 
+LAB_COLLS = ("plans", "tasks", "checks")
+
+
 def _lab_fields(db, sid, coll, b) -> dict:
-    spec = sharing.PLAN_FIELDS if coll == "plans" else sharing.TASK_FIELDS
+    spec = {"plans": sharing.PLAN_FIELDS, "checks": sharing.CHECK_FIELDS}.get(coll, sharing.TASK_FIELDS)
     f = {k: b[k] for k in spec if k in b and k != "paper"}
     if coll == "tasks" and "assignees" in f:      # several people; the old single field follows the first one
         f["assignees"] = sharing.clean_people(f["assignees"])
@@ -3558,12 +3563,14 @@ def _lab_fields(db, sid, coll, b) -> dict:
 
 @app.post("/api/shares/<sid>/lab/<coll>")
 def lab_obj_add(sid, coll):
-    if coll not in ("plans", "tasks"):
+    if coll not in LAB_COLLS:
         return error("Not found", 404)
     def fn(db, st, author, b):
         f = _lab_fields(db, sid, coll, b)
-        if not str(f.get("name" if coll == "plans" else "title") or "").strip():
-            return error("Give it a name first." if coll == "plans" else "Write what has to be done.")
+        if not str(f.get({"plans": "name", "checks": "text"}.get(coll, "title")) or "").strip():
+            return error({"plans": "Give it a name first.", "checks": "Write the item first."}.get(coll, "Write what has to be done."))
+        if coll == "checks" and f.get("task") not in (st.get("lab") or {}).get("tasks", {}):
+            return error("That task doesn't exist any more.")
         if coll == "tasks":
             f.setdefault("status", "todo")
         sharing.set_fields(st, author, coll, None, **f)
@@ -3572,14 +3579,14 @@ def lab_obj_add(sid, coll):
 
 @app.put("/api/shares/<sid>/lab/<coll>/<oid>")
 def lab_obj_edit(sid, coll, oid):
-    if coll not in ("plans", "tasks"):
+    if coll not in LAB_COLLS:
         return error("Not found", 404)
     return _lab_call(sid, lambda db, st, author, b: sharing.set_fields(st, author, coll, oid, **_lab_fields(db, sid, coll, b)))
 
 
 @app.delete("/api/shares/<sid>/lab/<coll>/<oid>")
 def lab_obj_delete(sid, coll, oid):
-    if coll not in ("plans", "tasks"):
+    if coll not in LAB_COLLS:
         return error("Not found", 404)
     return _lab_call(sid, lambda db, st, author, b: sharing.set_fields(st, author, coll, oid, **{"del": True}))
 
@@ -3590,7 +3597,7 @@ def lab_overview():
     db = get_db()
     ident = share_identity(db)
     me = {ident["user"], ident["local"]} - {""}
-    out, my_tasks, all_for_me = [], [], []
+    out, my_tasks, all_for_me, my_plans = [], [], [], []
     for r in db.execute("SELECT id FROM shares ORDER BY rowid").fetchall():
         row, st = _load_share(db, r["id"])
         if not st:
@@ -3610,10 +3617,16 @@ def lab_overview():
         for x in for_me:
             x.update(group=r["id"], group_name=(st.get("name") or {}).get("v") or "Group")
         all_for_me.extend(for_me)
+        for pl in v["plans"]:
+            if me & set(pl.get("owners") or []):
+                ts = [t for t in v["tasks"] if t.get("plan") == pl["id"]]
+                my_plans.append({"group": r["id"], "group_name": name, "id": pl["id"], "name": pl.get("name") or "", "due": pl.get("due") or "",
+                                 "n": len(ts), "done": sum(1 for t in ts if t.get("status") == "done")})
         for t in open_t:
             if me & set(sharing.task_people(t)):
                 my_tasks.append({"group": r["id"], "group_name": name, "id": t["id"], "title": t.get("title") or "",
-                                 "due": t.get("due") or "", "status": t.get("status") or "todo", "prio": t.get("prio") or "normal"})
+                                 "due": t.get("due") or "", "status": t.get("status") or "todo", "prio": t.get("prio") or "normal",
+                                 "checks": [sum(1 for c in t.get("checklist") or [] if c["done"]), len(t.get("checklist") or [])]})
         week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         out.append({"id": r["id"], "name": name, "can_write": bool(_my_author(st, ident)),
                     "papers": len(sharing.items(st)), "members": len(sharing.people(st)),
@@ -3626,7 +3639,7 @@ def lab_overview():
                                 "created": p["created"], "comments": len(p["comments"])} for p in v["posts"][:3]]})
     my_tasks.sort(key=lambda t: (t["due"] or "9999", {"high": 0, "normal": 1, "low": 2}.get(t["prio"], 1)))
     all_for_me.sort(key=lambda x: x["created"] or "", reverse=True)
-    return jsonify(groups=out, my_tasks=my_tasks, for_me=all_for_me[:12], today=date.today().isoformat())
+    return jsonify(groups=out, my_tasks=my_tasks, my_plans=my_plans, for_me=all_for_me[:12], today=date.today().isoformat())
 
 
 @app.get("/api/shares/<sid>/lab/export")
@@ -3647,7 +3660,8 @@ def lab_export(sid):
             ts = [t for t in d["tasks"] if (t.get("plan") or "") == pl["id"]]
             if not ts and not pl["id"]:
                 continue
-            L += [f"### {pl['name']}" + (f" – due {pl['due']}" if pl.get("due") else ""), ""]
+            L += [f"### {pl['name']}" + (f" – due {pl['due']}" if pl.get("due") else "") +
+                  (" – responsible: " + ", ".join(x["name"] for x in pl.get("people") or []) if pl.get("people") else ""), ""]
             if pl.get("goal"):
                 L += [pl["goal"], ""]
             for t in ts:
@@ -3655,6 +3669,8 @@ def lab_export(sid):
                 extra = ", ".join(x for x in ((t["assignee_name"] and "👤 " + t["assignee_name"]), (t.get("due") and "📅 " + t["due"]),
                                               ("doing" if t["status"] == "doing" else ""), (t["prio"] == "high" and "❗ high")) if x)
                 L.append(f"- [{box}] {t['title']}" + (f" ({extra})" if extra else ""))
+                for c in t.get("checklist") or []:
+                    L.append(f"    - [{'x' if c['done'] else ' '}] {c['text']}")
             L.append("")
     posts = [p for p in d["posts"] if p["kind"] != "decision"]
     if posts:
@@ -3715,6 +3731,13 @@ def record_activity(db, sid, before, after, me: set) -> int:
             by = stp[1]
             rows.append((f"{sid}:task:{oid}:{stp[0]}", "task", by, names.get(by) or by, oid,
                          (fa_.get("title") or {}).get("v") or "a task", "", (fa_.get("notes") or {}).get("v") or ""))
+    for oid, o in (lab_a.get("plans") or {}).items():     # you were made responsible for a plan
+        fa_, fb_ = o.get("f") or {}, (((lab_b.get("plans") or {}).get(oid) or {}).get("f") or {})
+        now_, was = set((fa_.get("owners") or {}).get("v") or []), set((fb_.get("owners") or {}).get("v") or [])
+        stp = (fa_.get("owners") or {}).get("s")
+        if (now_ & me) and not (was & me) and stp and stp[1] not in me and not (fa_.get("del") or {}).get("v"):
+            rows.append((f"{sid}:plan:{oid}:{stp[0]}", "plan", stp[1], names.get(stp[1]) or stp[1], oid,
+                         (fa_.get("name") or {}).get("v") or "a plan", "", (fa_.get("goal") or {}).get("v") or ""))
     for coll in ("posts", "comments"):     # addressed to you: a post or a comment "for" you
         for oid, n in (lab_a.get(coll) or {}).items():
             old = (lab_b.get(coll) or {}).get(oid) or {}

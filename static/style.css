@@ -1688,3 +1688,44 @@ body.tab-lab .tab-library-only, body.tab-lab .tab-people-only, body.tab-lab #det
 #tab-lab-n:not(:empty) { background: #e5484d; color: #fff; }
 .tk-grid .tk-who-fld { grid-column: 1 / -1; }
 body { accent-color: var(--accent); }
+/* ---- 2.14.1 plans & tasks: a list of plans, plan header, checklists ---- */
+.lab-plans2 { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+.lab-plist { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 12px; }
+.lab-plist-h { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 4px; }
+.lab-plist-hint { margin: 4px 2px; line-height: 1.45; }
+.lab-pi { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 9px 11px; border-radius: 11px; border: 1px solid var(--border-soft); background: var(--panel); cursor: pointer; font: inherit; color: var(--text); }
+.lab-pi:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.lab-pi.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent); }
+.lab-pi-h { display: flex; align-items: center; gap: 6px; } .lab-pi-h b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lab-phead { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--border-soft); background: var(--panel); margin-bottom: 10px; }
+.lab-phead-main { flex: 1; min-width: 0; }
+.lab-phead-k { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent); }
+.lab-phead h3 { margin: 2px 0 4px; font-size: 17px; }
+.lab-phead .lab-goal { max-width: none; margin-bottom: 6px; }
+.lab-explain { line-height: 1.5; max-width: 760px; }
+.lab-pmeta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12.5px; }
+.lab-pp-s { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; }
+.lab-pbar { display: inline-flex; align-items: center; gap: 8px; } .lab-pbar .lab-prog { width: 120px; }
+.lab-prog-in { display: inline-block; width: 70px; vertical-align: middle; margin-left: 6px; }
+.lab-col { display: flex; flex-direction: column; }
+.lab-col .lab-col-add { margin: 8px 0 0; width: 100%; height: auto; padding: 8px; border: 1px dashed var(--border); border-radius: 10px; font-size: 12.5px; font-weight: 600; color: var(--accent); background: none; text-align: left; }
+.lab-col .lab-col-add:hover { background: var(--panel); border-color: var(--accent); }
+.lab-ck-toggle { display: inline-flex; align-items: center; gap: 6px; margin-top: 7px; border: 0; background: var(--hover); border-radius: 7px; padding: 3px 8px; font: inherit; font-size: 11.5px; color: var(--muted); cursor: pointer; }
+.lab-ck-toggle:hover { color: var(--text); }
+.lab-ck-toggle.all { color: var(--accent); font-weight: 650; }
+.lab-ck-bar { width: 38px; height: 4px; border-radius: 3px; background: var(--border-soft); overflow: hidden; display: inline-block; }
+.lab-ck-bar span { display: block; height: 100%; background: var(--accent); }
+.lab-ck-list { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.lab-ck { display: flex; align-items: flex-start; gap: 7px; font-size: 12.5px; cursor: pointer; line-height: 1.35; }
+.lab-ck input { width: auto; margin-top: 2px; flex: none; }
+.lab-ck.done span { text-decoration: line-through; color: var(--muted); }
+.tk-checks { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 6px; }
+.tk-check { display: flex; align-items: center; gap: 8px; }
+.fld .tk-check input[type=checkbox] { width: auto; flex: none; }
+.fld .tk-check .tk-check-text { flex: 1; border: 1px solid transparent; background: transparent; padding: 4px 6px; border-radius: 6px; font: inherit; color: var(--text); width: auto; }
+.fld .tk-check .tk-check-text:hover:not(:disabled), .fld .tk-check .tk-check-text:focus { border-color: var(--border); background: var(--panel); outline: none; }
+.tk-check.done .tk-check-text { text-decoration: line-through; color: var(--muted); }
+.tk-check-del { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.tk-check-del:hover { color: #d64545; background: var(--hover); }
+.tk-check-add { display: flex; gap: 6px; } .tk-check-add input { flex: 1; }
+@media (max-width: 980px) { .lab-plans2 { grid-template-columns: 1fr; } .lab-plist { position: static; flex-direction: row; flex-wrap: wrap; } .lab-plist-h { width: 100%; } .lab-pi { width: 200px; } }

@@ -384,14 +384,14 @@ LAB_KINDS = ("idea", "experiment", "question", "result", "decision", "protocol",
 TASK_STATUS = ("todo", "doing", "done")
 TASK_PRIO = ("high", "normal", "low")
 MAX_POST, MAX_COMMENT = 20000, 5000
-LAB_LIMITS = {"posts": 2000, "comments": 10000, "plans": 300, "tasks": 3000}
+LAB_LIMITS = {"posts": 2000, "comments": 10000, "plans": 300, "tasks": 3000, "checks": 20000}
 OID_RE = re.compile(r"^[a-f0-9]{8,32}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _lab(st) -> dict:
     lab = st.setdefault("lab", {})
-    for k in ("posts", "comments", "votes", "pins", "plans", "tasks"):
+    for k in ("posts", "comments", "votes", "pins", "plans", "tasks", "checks"):
         lab.setdefault(k, {})
     return lab
 
@@ -497,14 +497,17 @@ def set_pin(st, author, post, v: bool):
     _lab(st)["pins"][post] = {"v": bool(v), "s": tick(st, author)}
 
 
-PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "pos": None, "del": None, "done": None}
+PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "owners": None, "pos": None, "del": None, "done": None}
+# the checklist of a task: each item on its own, so two people ticking different items never clash
+CHECK_FIELDS = {"task": 32, "text": 300, "done": None, "pos": None, "del": None}
+SPECS = {"plans": PLAN_FIELDS, "tasks": None, "checks": CHECK_FIELDS}
 TASK_FIELDS = {"title": 300, "notes": 5000, "status": None, "assignee": 60, "assignees": None, "due": 10, "plan": 32, "paper": 80,
                "post": 32, "prio": None, "pos": None, "del": None}
 
 
 def _field_ok(coll, k, v):
     """The cleaned value of a field of a plan or task, or raise ValueError."""
-    spec = (PLAN_FIELDS if coll == "plans" else TASK_FIELDS)
+    spec = {"plans": PLAN_FIELDS, "checks": CHECK_FIELDS}.get(coll, TASK_FIELDS)
     if k not in spec:
         raise ValueError(k)
     if k in ("del", "done"):
@@ -517,14 +520,14 @@ def _field_ok(coll, k, v):
         return v
     if k == "prio":
         return v if v in TASK_PRIO else "normal"
-    if k == "assignees":
+    if k in ("assignees", "owners"):
         return clean_people(v)
     v = str(v or "")
     if k == "due" and v and not DATE_RE.match(v):
         raise ValueError(k)
-    if k in ("plan", "post") and v and not OID_RE.match(v):
+    if k in ("plan", "post", "task") and v and not OID_RE.match(v):
         raise ValueError(k)
-    return (" ".join(v.split()) if k in ("title", "name", "assignee") else v)[:spec[k]]
+    return (" ".join(v.split()) if k in ("title", "name", "assignee", "text") else v)[:spec[k]]
 
 
 def set_fields(st, author, coll, oid=None, **fields) -> str:
@@ -565,9 +568,15 @@ def lab_view(st) -> dict:
         p["pinned"] = bool(((lab.get("pins") or {}).get(pid) or {}).get("v"))
     objs = lambda d: [dict(obj_fields(o), id=k, by=o.get("by"), created=o.get("created")) for k, o in (d or {}).items()
                       if not obj_fields(o).get("del")]
+    tasks = sorted(objs(lab.get("tasks")), key=lambda t: (t.get("pos") or 0, t.get("created") or ""))
+    checks = {}
+    for c in sorted(objs(lab.get("checks")), key=lambda c: (c.get("pos") or 0, c.get("created") or "")):
+        checks.setdefault(c.get("task") or "", []).append({"id": c["id"], "text": c.get("text") or "", "done": bool(c.get("done"))})
+    for t in tasks:
+        t["checklist"] = checks.get(t["id"], [])
     return {"posts": sorted(posts.values(), key=lambda p: (p.get("created") or ""), reverse=True),
             "plans": sorted(objs(lab.get("plans")), key=lambda p: (p.get("pos") or 0, p.get("created") or "")),
-            "tasks": sorted(objs(lab.get("tasks")), key=lambda t: (t.get("pos") or 0, t.get("created") or ""))}
+            "tasks": tasks}
 
 
 def _merge_fields(x: dict, y: dict) -> dict:
@@ -591,7 +600,8 @@ def _merge_lab(a: dict, b: dict) -> dict:
     out = {"posts": _merge_notes(a.get("posts") or {}, b.get("posts") or {}),
            "comments": _merge_notes(a.get("comments") or {}, b.get("comments") or {}),
            "plans": _merge_fields(a.get("plans") or {}, b.get("plans") or {}),
-           "tasks": _merge_fields(a.get("tasks") or {}, b.get("tasks") or {}), "votes": {}, "pins": {}}
+           "tasks": _merge_fields(a.get("tasks") or {}, b.get("tasks") or {}),
+           "checks": _merge_fields(a.get("checks") or {}, b.get("checks") or {}), "votes": {}, "pins": {}}
     for pid in set(a.get("votes") or {}) | set(b.get("votes") or {}):
         va, vb = (a.get("votes") or {}).get(pid) or {}, (b.get("votes") or {}).get(pid) or {}
         d = {}
@@ -612,7 +622,7 @@ def _lab_stamps(lab) -> int:
     for k in ("posts", "comments"):
         for n in (lab.get(k) or {}).values():
             c = max(c, (n.get("s") or [0])[0])
-    for k in ("plans", "tasks"):
+    for k in ("plans", "tasks", "checks"):
         for o in (lab.get(k) or {}).values():
             for f in (o.get("f") or {}).values():
                 c = max(c, (f.get("s") or [0])[0])
@@ -625,7 +635,7 @@ def _lab_stamps(lab) -> int:
 
 
 def _validate_lab(raw) -> dict:
-    lab = {"posts": {}, "comments": {}, "votes": {}, "pins": {}, "plans": {}, "tasks": {}}
+    lab = {"posts": {}, "comments": {}, "votes": {}, "pins": {}, "plans": {}, "tasks": {}, "checks": {}}
     if not isinstance(raw, dict):
         return lab
     ok_name = lambda a: bool(NAME_RE.match(a) or a.startswith("local-"))
@@ -651,7 +661,7 @@ def _validate_lab(raw) -> dict:
                     continue
                 o["post"] = str(n["post"])
             lab[coll][str(oid)] = o
-    for coll in ("plans", "tasks"):
+    for coll in ("plans", "tasks", "checks"):
         src = raw.get(coll) if isinstance(raw.get(coll), dict) else {}
         for oid, o in list(src.items())[:LAB_LIMITS[coll]]:
             if not (isinstance(o, dict) and OID_RE.match(str(oid)) and isinstance(o.get("f"), dict)):

@@ -2,6 +2,17 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.14.1 – 2026-11-09
+
+- **Plans & tasks, clearer** – plans are listed on the left (click one to see only its tasks); the chosen
+  plan shows its goal, deadline, who is responsible and its progress on top, and *＋ New task* adds to
+  it. A short explanation says what a plan and a task are.
+- **Plans have someone responsible** – one or more people, who get a notification and see the plan in
+  the Overview under *Plans you lead*.
+- **Checklists in tasks** – small items to tick: add them in the task and tick them right on the card
+  (☑ 2/3). Each item is saved on its own, so two people can tick different items at the same time.
+  The report lists them too.
+
 ## 2.14 – 2026-11-09
 
 - **A calmer, cleaner look** – the glass look is now neutral and translucent: frosted, almost colourless
