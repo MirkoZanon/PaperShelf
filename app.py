@@ -144,6 +144,11 @@ CREATE TABLE IF NOT EXISTS people (
     data TEXT NOT NULL DEFAULT '{}', overrides TEXT NOT NULL DEFAULT '{}', excluded TEXT NOT NULL DEFAULT '[]',
     is_me INTEGER NOT NULL DEFAULT 0, fetched_at TEXT NOT NULL DEFAULT '', added_at TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ref TEXT UNIQUE, share_id TEXT NOT NULL, kind TEXT NOT NULL,
+    who TEXT NOT NULL DEFAULT '', name TEXT NOT NULL DEFAULT '', item_key TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+    col TEXT NOT NULL DEFAULT '', excerpt TEXT NOT NULL DEFAULT '', at TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0
+);
 """
 # Columns added after the first release (added to old databases automatically)
 NEW_PAPER_COLUMNS = {
@@ -3292,6 +3297,7 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     if not st:
         raise sharing.ShareError("Group not found.")
     me = _my_author(st, ident)
+    before = json.loads(json.dumps(st))
     errors, authority = [], [(me, json.loads(json.dumps(st)))] if me else []  # your own copy decides about your notes
     sources = {(n, rp) for n, rp in sharing.members(st).items() if rp}
     o_owner, o_src = _origin(row)
@@ -3313,6 +3319,8 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     for owner, data in authority:  # each member's own copy decides about that member's notes
         sharing.trust_author_copy(st, owner, data)
     _apply_join_comments(st, sid, ident, joins)
+    if row["last_pull"]:   # not on the first update of a group you just joined: everything would be "new"
+        record_activity(db, sid, before, st, {ident["user"], ident["local"]} - {""})
     mem = sharing.members(st)
     announce = False
     if ident["can_publish"]:
@@ -3354,6 +3362,66 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     _save_share(db, sid, st, **fields)
     db.commit()
     return {**stats, "published": published, "errors": errors}
+
+# --------------------------------------------------------------------------- group activity (the 🔔)
+# What the other members did since the last update: a note, an entry in the group table, a paper added.
+# Kept only on this computer.
+def record_activity(db, sid, before, after, me: set) -> int:
+    names = sharing.profiles(after)
+    cols = {c["id"]: c["name"] for c in sharing.table_cols(after)}
+    rows = []
+    for key, e in (after.get("items") or {}).items():
+        b = (before.get("items") or {}).get(key) or {}
+        title = ((e.get("meta") or {}).get("title") or "Untitled")[:300]
+        if sharing.present(e) and not sharing.present(b) and (e.get("add") or ["", ""])[1] not in me:
+            who = e["add"][1]
+            rows.append((f"{sid}:paper:{key}:{e['add'][0]}", "paper", who, names.get(who) or who, key, title, "", ""))
+        for nid, n in (e.get("notes") or {}).items():
+            if nid not in (b.get("notes") or {}) and not n.get("del") and n.get("by") not in me:
+                rows.append((f"{sid}:note:{nid}", "note", n["by"], n.get("name") or names.get(n["by"]) or n["by"], key, title, "", n.get("body") or ""))
+        for cid, cell in (e.get("cells") or {}).items():
+            old = ((b.get("cells") or {}).get(cid)) or {}
+            for eid, n in cell.items():
+                if eid not in old and not n.get("del") and n.get("by") not in me and cid in cols:
+                    rows.append((f"{sid}:entry:{eid}", "entry", n["by"], n.get("name") or names.get(n["by"]) or n["by"], key, title, cols[cid], n.get("body") or ""))
+    n = 0
+    for ref, kind, who, name, key, title, col, body in rows:
+        excerpt = " ".join(re.sub(r"[*_`#>\[\]]+", "", body).split())[:160]
+        n += db.execute("INSERT OR IGNORE INTO activity (ref, share_id, kind, who, name, item_key, title, col, excerpt, at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                        (ref, sid, kind, who, str(name)[:60], key, title, col[:60], excerpt, now())).rowcount
+    if n:
+        db.execute("DELETE FROM activity WHERE id NOT IN (SELECT id FROM activity ORDER BY id DESC LIMIT 300)")
+    return n
+
+
+@app.get("/api/activity")
+def activity_list():
+    db = get_db()
+    names = {}
+    for r in db.execute("SELECT id, state FROM shares"):
+        names[r["id"]] = ((insights.json_or(r["state"], {}).get("name") or {}).get("v") or "a group")
+    pids = {(r["share_id"], r["item_key"]): r["paper_id"] for r in db.execute("SELECT share_id, item_key, paper_id FROM paper_shares")}
+    items = [{**dict(r), "share_name": names.get(r["share_id"], ""), "paper_id": pids.get((r["share_id"], r["item_key"])),
+              "seen": bool(r["seen"])}
+             for r in db.execute("SELECT * FROM activity ORDER BY id DESC LIMIT 100") if r["share_id"] in names]
+    return jsonify(items=items, unseen=sum(1 for x in items if not x["seen"]))
+
+
+@app.post("/api/activity/seen")
+def activity_seen():
+    db = get_db()
+    db.execute("UPDATE activity SET seen=1 WHERE seen=0")
+    db.commit()
+    return jsonify(ok=True)
+
+
+@app.delete("/api/activity")
+def activity_clear():
+    db = get_db()
+    db.execute("DELETE FROM activity")
+    db.commit()
+    return jsonify(ok=True)
+
 
 def restore_my_shares(db, ident, gh) -> int:
     """On another of your computers: rejoin the shared labels kept in your own gist."""
@@ -3766,6 +3834,7 @@ def leave_share(sid):
         except sharing.ShareError as exc:
             app.logger.warning("could not publish leaving: %s", exc)
     db.execute("DELETE FROM shares WHERE id=?", (sid,))
+    db.execute("DELETE FROM activity WHERE share_id=?", (sid,))
     db.execute("DELETE FROM share_dismissed WHERE share_id=?", (sid,))
     db.execute("DELETE FROM note_hidden WHERE share_id=?", (sid,))
     db.commit()

@@ -19,7 +19,7 @@ const Help = (() => {
       ${step(3, `Open a paper and click <b>⬇ Find &amp; download PDF</b>. If it isn't free, use <b>🔐 Open article &amp; log in with my university</b>. <a href="#" data-help="university">More</a>`)}
       ${step(4, `Click <b>📖 Read &amp; highlight</b> to read the PDF and highlight passages.`)}
       ${step(5, `Click <b>⤓ Export references</b> to get your reference list in APA, Nature, Cell… or to move papers to Zotero.`)}
-      ${tip('At the top right: 🔔 What\'s new, <b>⟳</b> update everything (sync, groups, new versions), <b>?</b> this guide, ⚙︎ settings. The <b>PaperShelf logo</b> at the top left has the rest: groups, export, reading stats, quit.')}
+      ${tip('At the top right: 🔔 notifications (your groups and What\'s new), <b>⟳</b> update everything (sync, groups, new versions), <b>?</b> this guide, ⚙︎ settings. The <b>PaperShelf logo</b> at the top left has the rest: groups, export, reading stats, quit.')}
       <p class="muted">The look (green glass or flat) is in ⚙︎ Settings → General → <i>Look</i>.</p>
       <h4>Starting and stopping</h4>
       <p><b>The first time</b>, start PaperShelf with <code>start.command</code> (Mac) or <code>start.bat</code> (Windows) in the app folder: it sets itself up (about a minute).</p>
@@ -118,7 +118,7 @@ const Help = (() => {
 
     {id: 'smart', icon: '✨', title: "What's new, library check & reading tools", html: () => `
       <h4>✨ What's new</h4>
-      <p>The bell at the top shows <b>recent papers by the researchers you follow</b> (everyone you added in the <b>Researchers</b> tab, except yourself) and on <b>topics you watch</b> (add them in the What's new window, e.g. “sleep spindles”). New papers are looked up in OpenAlex when you press ⟳ or “Check now”. <b>＋ Reading list</b> adds one; <b>✕</b> removes it from the list for good.</p>
+      <p>The bell at the top opens your <b>notifications</b>: what the others did in your groups (see <a href="#" data-help="sharing">Groups</a>) and <b>What's new</b>. What's new shows <b>recent papers by the researchers you follow</b> (everyone you added in the <b>Researchers</b> tab, except yourself) and on <b>topics you watch</b> (add them in the What's new window, e.g. “sleep spindles”). New papers are looked up in OpenAlex when you press ⟳ or “Check now”. <b>＋ Reading list</b> adds one; <b>✕</b> removes it from the list for good.</p>
       <h4>🩺 Library check</h4>
       <ul><li><b>Retractions and corrections</b>: when you press ⟳, papers are checked about once a week against Crossref (notices published by the journals and the <b>Retraction Watch</b> database) and OpenAlex. A retracted paper gets a red <span class="al-badge lvl-retracted">⚠ Retracted</span> badge, a corrected one a <span class="al-badge lvl-corrected">✎ Corrected</span> badge; the details panel links to the notice.</li>
         <li><b>Published preprints</b>: for arXiv, bioRxiv, medRxiv… papers, PaperShelf looks for the journal version (the DOI the authors added on arXiv, the preprint server's link, or an exact title + first-author match). <span class="pub-badge">📰 Published</span> → open the paper → <b>Use the published version</b>: title, journal, DOI and pages become those of the article; labels, notes, highlights and the PDF stay.</li>
@@ -287,6 +287,8 @@ const Help = (() => {
 
       <h4>Who takes part</h4>
       <p>Above the papers of a group you see its <b>editors</b>, with the name each chose (⚙︎ Settings → 👥 Groups → <i>Your name in groups</i>); <i>invited</i> means they haven't joined yet. Readers aren't listed: they don't publish anything. The code lets anyone who has it read the group, so send it only to the people you invite.</p>
+      <h4>🔔 Notifications</h4>
+      <p>When another member adds a <b>public note</b>, an <b>entry in the group table</b> or a <b>paper</b>, the bell at the top shows a number and a short message appears: <i>“Anna added a note on …”</i>. Click the bell to see the list – click an item to open that note, that cell of the table or that paper. You get them when the groups update (every 15 minutes, or with ⟳). Notifications are kept only on this computer; your own changes don't notify you, and nothing is sent to anybody.</p>
       <h4>The group table</h4>
       <p>Open the group and choose <b>▦ Table</b>: one row per paper, the same columns for everybody. <b>Click a cell</b> to open its window: all its entries, like a chat, and a box at the bottom to write a new one. Before saving choose <b>🌐 Public</b> (the group sees it, signed with your name) or <b>🔒 Private</b> (only you, it stays on this computer), then <b>Add entry</b> (or ⌘/Ctrl+Enter). Click one of <b>your</b> entries to change it (✎ Edit, 🗑 Delete, and for a private one <i>🌐 Make public</i>); entries of the others can only be read – answer them with a new entry. Nobody overwrites anybody else. <b>Close</b>, ✕ or Esc close the window (it asks first if you have unsaved text).</p>
       <p>Any editor can add, rename, move or delete columns, for everybody. Readers see the table and can add private entries only. The table updates with the group (⟳ in the table gets the latest entries at once) and exports to CSV or Markdown with the names.</p>

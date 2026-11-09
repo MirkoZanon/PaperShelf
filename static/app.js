@@ -129,6 +129,7 @@ async function loadLibrary() {
   if (state.view.type === 'share' && !state.shares.some(x => x.id === state.view.id)) state.view = homeView();
   if (state.openId && !ids.has(state.openId)) state.openId = null;
   renderAll();
+  if (typeof Bell !== 'undefined' && state.shares.length) Bell.load();   // the groups may have news
 }
 function upsertPaper(p) {
   const i = state.papers.findIndex(x => x.id === p.id);

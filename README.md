@@ -151,7 +151,11 @@ its reference, as Markdown, text or web page.
 notes, or save them into the PDF file (visible in Preview, Acrobat, Zotero). It remembers where you
 stopped and opens there next time; the list shows a progress bar (*p. 7/20*).
 
-**What's new** – the bell at the top lists recent papers by the researchers you follow (the ones in the
+**Notifications** – the bell at the top shows what the other members of your groups did since the last
+update: *"Anna added a note on …"*, *"… added an entry in Method on …"*, *"… added a paper to the group"*.
+Click one to open that note, table cell or paper. Kept only on your computer.
+
+**What's new** – also under the bell: recent papers by the researchers you follow (the ones in the
 Researchers tab) and on topics you choose to watch, found in OpenAlex when you press ⟳. One click adds
 a paper to the reading list.
 

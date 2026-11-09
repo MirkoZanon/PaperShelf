@@ -161,11 +161,7 @@ const Feed = (() => {
   let data = null, dialog = null, filter = 'all';
   const added = new Map();
 
-  function badge() {
-    const n = data?.count || 0;
-    const b = $('#feed-n'); if (b) b.textContent = n ? (n > 99 ? '99+' : n) : '';
-    const btn = $('#feed-btn'); if (btn) btn.title = n ? `What's new: ${plural(n, 'new paper')} from the researchers you follow and your topics` : "What's new – recent papers by the researchers you follow and on the topics you watch";
-  }
+  function badge() { if (typeof Bell !== 'undefined') Bell.badge(); }
   async function load() { try { data = await api('/api/feed'); badge(); } catch (e) { /* ignore */ } return data; }
   const following = () => data.followed.filter(f => !f.muted);
   async function check({quiet = false} = {}) {
@@ -605,11 +601,104 @@ const Review = (() => {
       const op = t.closest('[data-open]'); if (op) openDetail(+op.dataset.open);
     });
   }
-  return {render, bind, reset() { key = null; }};
+  // open a cell of a group's table (from a notification)
+  async function openCellByName(pid, colName) {
+    for (let i = 0; i < 40 && !(data?.shared && state.view.type === 'share'); i++) await new Promise(r => setTimeout(r, 100));
+    if (!data?.shared) return;
+    const c = data.cols.find(x => x.name === colName) || data.cols[0];
+    if (c) openCell(pid, c.id);
+  }
+  return {render, bind, openCellByName, reset() { key = null; }};
+})();
+
+/* ------------------------------------------------------------------ the 🔔: notifications
+   What the other members of your groups did (a note, an entry in the group table, a paper added),
+   found when the groups are updated – plus the new papers of What's new. Kept on this computer. */
+const Bell = (() => {
+  let act = {items: [], unseen: 0}, pop = null, timer = null;
+  const KEY = 'papershelf-bell-last';
+  const lsGet = () => { try { return +localStorage.getItem(KEY) || 0; } catch { return 0; } };
+  const lsSet = v => { try { localStorage.setItem(KEY, String(v)); } catch { /* private window */ } };
+  const initials = n => (String(n || '?').match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
+  const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
+  function ago(s) {
+    const t = Date.parse(s); if (!t) return '';
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return 'just now'; if (m < 60) return `${m} min ago`;
+    const h = Math.round(m / 60); if (h < 24) return `${h} h ago`;
+    const d = Math.round(h / 24); return d < 7 ? `${d} day${d > 1 ? 's' : ''} ago` : new Date(t).toLocaleDateString();
+  }
+  const feedN = () => Feed.data?.count || 0;
+  function badge() {
+    const n = act.unseen + feedN();
+    const b = $('#feed-n'); if (b) b.textContent = n ? (n > 99 ? '99+' : n) : '';
+    const btn = $('#feed-btn');
+    if (btn) btn.title = [act.unseen ? `${plural(act.unseen, 'new thing')} in your groups` : '', feedN() ? `${plural(feedN(), 'new paper')} in What's new` : ''].filter(Boolean).join(' · ') || 'Notifications – your groups and What\'s new';
+  }
+  const what = i => i.kind === 'note' ? `added a note on <i>${esc(truncate(i.title, 90))}</i>`
+    : i.kind === 'entry' ? `added an entry in <b>${esc(i.col)}</b> on <i>${esc(truncate(i.title, 90))}</i>`
+    : `added <i>${esc(truncate(i.title, 90))}</i> to the group`;
+  const plainWhat = i => i.kind === 'note' ? `added a note on “${truncate(i.title, 60)}”` : i.kind === 'entry' ? `added an entry in ${i.col} on “${truncate(i.title, 60)}”` : `added “${truncate(i.title, 60)}” to ${i.share_name}`;
+  async function load({toastNew = true} = {}) {
+    try { act = await api('/api/activity'); } catch { return; }
+    badge(); if (pop) paint();
+    const last = lsGet(), top = act.items[0]?.id || 0;
+    if (!last) { lsSet(top || 1); return; }                       // first time: no flood of toasts
+    const fresh = act.items.filter(i => i.id > last && !i.seen);
+    if (top > last) lsSet(top);
+    if (!toastNew || !fresh.length) return;
+    if (fresh.length <= 2) fresh.slice().reverse().forEach(i => toast(`🔔 ${i.name} ${plainWhat(i)}`, 'info', 7000));
+    else toast(`🔔 ${plural(fresh.length, 'new thing')} in your groups – click the bell to see them.`, 'info', 7000);
+  }
+  function paint() {
+    if (!pop) return;
+    const fn = feedN();
+    pop.innerHTML = `<div class="bl-head"><b>Notifications</b><span class="grow"></span>${act.items.length ? '<button class="linklike small" data-blclear title="Remove all the notifications">Clear all</button>' : ''}</div>
+      <button class="bl-feed" data-blfeed><span class="bl-fico">📰</span><span><b>What's new</b><br><span class="muted small">${fn ? `${plural(fn, 'new paper')} by the researchers and topics you follow` : 'New papers by the researchers and topics you follow'}</span></span>${fn ? `<span class="bl-n">${fn > 99 ? '99+' : fn}</span>` : ''}</button>
+      <div class="bl-sec muted small">Your groups</div>
+      <div class="bl-list">${act.items.length ? act.items.map(i => `<button class="bl-item ${i.seen ? '' : 'new'}" data-blid="${i.id}">
+          <span class="bl-av" style="background:hsl(${hue(i.who)} 50% 42%)">${esc(initials(i.name))}</span>
+          <span class="bl-txt"><span><b>${esc(i.name)}</b> ${what(i)}</span>${i.excerpt ? `<span class="bl-ex">“${esc(truncate(i.excerpt, 120))}”</span>` : ''}
+            <span class="bl-meta">${i.kind === 'note' ? '📝' : i.kind === 'entry' ? '▦' : '📄'} ${esc(i.share_name)} · ${esc(ago(i.at))}</span></span></button>`).join('')
+        : '<div class="bl-empty muted small">Nothing yet. When someone adds a note, an entry in the group table or a paper in one of your groups, it appears here (groups update every 15 minutes, or with ⟳).</div>'}</div>`;
+  }
+  function close() { pop?.remove(); pop = null; document.removeEventListener('mousedown', outside, true); }
+  function outside(e) { if (pop && !pop.contains(e.target) && !e.target.closest('#feed-btn')) close(); }
+  async function open() {
+    if (pop) return close();
+    pop = document.createElement('div'); pop.className = 'bell-pop'; document.body.appendChild(pop);
+    const r = $('#feed-btn').getBoundingClientRect();
+    pop.style.top = `${r.bottom + 8}px`; pop.style.right = `${Math.max(8, innerWidth - r.right - 6)}px`;
+    paint();
+    document.addEventListener('mousedown', outside, true);
+    pop.addEventListener('click', async e => {
+      const t = e.target;
+      if (t.closest('[data-blfeed]')) { close(); Feed.open(); return; }
+      if (t.closest('[data-blclear]')) { await api('/api/activity', {method: 'DELETE'}); act = {items: [], unseen: 0}; badge(); paint(); return; }
+      const b = t.closest('[data-blid]'); if (!b) return;
+      const i = act.items.find(x => x.id === +b.dataset.blid); close(); if (!i) return;
+      const goGroup = () => { if (state.tab !== 'library' || state.area !== 'library') setTab('library'); setView({type: 'share', id: i.share_id}); };
+      if (!i.paper_id) { goGroup(); return; }
+      if (i.kind === 'note') Notes.open(i.paper_id);
+      else if (i.kind === 'entry') { goGroup(); setMode('table'); Review.openCellByName(i.paper_id, i.col); }
+      else { goGroup(); openDetail(i.paper_id); }
+    });
+    if (act.unseen) {   // seen once the panel is open (they stay highlighted until it closes)
+      try { await api('/api/activity/seen', {method: 'POST'}); } catch { /* ignore */ }
+      act.unseen = 0; badge();
+      act.items.forEach(i => { i.seen = true; });
+    }
+  }
+  function start() {
+    load({toastNew: false});
+    clearInterval(timer); timer = setInterval(() => load(), 90000);
+  }
+  return {load, badge, open, close, start};
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
-  $('#feed-btn')?.addEventListener('click', () => Feed.open());
+  $('#feed-btn')?.addEventListener('click', () => Bell.open());
+  setTimeout(() => Bell.start(), 900);
   Review.bind();
   setTimeout(() => Feed.load(), 1200);
 });

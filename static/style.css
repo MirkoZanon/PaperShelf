@@ -1477,3 +1477,25 @@ body.look-metal .modal-wrap { background: rgba(20,50,35,.22); -webkit-backdrop-f
 .row:hover .pdf-del, .pdf-del:focus-visible { opacity: 1; transform: none; }
 .pdf-del:hover { background: #d64545; border-color: #d64545; color: #fff; }
 .btn.danger-soft:hover, .r-delpdf:hover { color: #d64545; border-color: color-mix(in srgb, #d64545 55%, transparent); }
+
+/* ---- 2.12 the bell: notifications of the groups ---- */
+.bell-pop { position: fixed; z-index: 70; width: min(400px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 80px)); display: flex; flex-direction: column;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 14px 40px rgba(0,0,0,.18); overflow: hidden; }
+body.look-metal .bell-pop { background: color-mix(in srgb, var(--panel) 96%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); }
+.bl-head { display: flex; align-items: center; padding: 12px 14px 8px; font-size: 14px; }
+.bl-feed { display: flex; align-items: center; gap: 10px; margin: 0 8px; padding: 9px 10px; border: 1px solid var(--border-soft); border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-soft) 60%, transparent); cursor: pointer; text-align: left; font: inherit; font-size: 13px; color: var(--text); }
+.bl-feed:hover { border-color: var(--accent); }
+.bl-fico { font-size: 18px; }
+.bl-n { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--accent); color: var(--accent-ink, #fff); font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.bl-sec { padding: 12px 14px 4px; text-transform: uppercase; letter-spacing: .05em; font-size: 10.5px; font-weight: 700; }
+.bl-list { overflow-y: auto; padding: 0 6px 8px; }
+.bl-item { display: flex; gap: 10px; width: 100%; padding: 8px; border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left; font: inherit; font-size: 13px; color: var(--text); position: relative; }
+.bl-item:hover { background: var(--hover); }
+.bl-item.new { background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+.bl-item.new::after { content: ""; position: absolute; top: 12px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.bl-av { flex: none; width: 28px; height: 28px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; margin-top: 1px; }
+.bl-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-right: 12px; line-height: 1.35; }
+.bl-ex { color: var(--muted); font-size: 12.5px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.bl-meta { color: var(--muted); font-size: 11.5px; }
+.bl-empty { padding: 10px 10px 14px; line-height: 1.45; }

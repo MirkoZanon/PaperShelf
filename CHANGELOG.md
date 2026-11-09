@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.12 – 2026-11-09
+
+- **🔔 Notifications from your groups** – when another member adds a public note, an entry in the group
+  table or a paper, the bell at the top shows a number and a short message pops up: *"Anna added a note
+  on …"*. Click the bell for the list (with the first words of the note or entry) and click an item to
+  open that note, that cell of the table or that paper. They arrive when the groups update (every 15
+  minutes, or with ⟳); your own changes don't notify you. *What's new* is now the first row of the same
+  panel. Notifications are kept only on this computer.
+
 ## 2.11.5 – 2026-11-07
 
 - **Delete a PDF quickly** – hover a paper and click the small ✕ on its *📄 PDF* button; or *🗑 Delete
