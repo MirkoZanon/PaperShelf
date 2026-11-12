@@ -10,6 +10,11 @@ const Lab = (() => {
   const S = {sid: null, sub: 'ideas', data: null, ov: null, loading: false, open: new Set(), openTasks: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, focus: null};
   try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = p.sub === 'plans' ? 'plans' : 'ideas'; } catch { /* storage unavailable */ }
+  let ORDER = 'auto'; try { ORDER = localStorage.getItem('papershelf-lab-order') === 'manual' ? 'manual' : 'auto'; } catch { /* ignore */ }
+  const PR = {high: 0, normal: 1, low: 2};
+  // the board's order: by deadline (the closest first, overdue on top, no date last), then priority
+  const byDeadline = (a, b) => (a.due ? 0 : 1) - (b.due ? 0 : 1) || (a.due || '').localeCompare(b.due || '')
+    || (PR[a.prio] ?? 1) - (PR[b.prio] ?? 1) || (a.created || '').localeCompare(b.created || '');
   const save = () => { try { localStorage.setItem('papershelf-lab', JSON.stringify({sid: S.sid, sub: S.sub})); } catch { /* ignore */ } };
 
   const KINDS = [['idea', '💡', 'Idea'], ['experiment', '🧪', 'Experiment'], ['question', '❓', 'Question'], ['result', '📊', 'Result'],
@@ -279,9 +284,10 @@ const Lab = (() => {
         ${!d.plans.length ? `<p class="muted small lab-plist-hint">${w ? 'No plans yet. Create one for a project or a milestone, then add its tasks.' : 'No plans yet.'}</p>` : ''}
       </div>
       <div class="lab-pmain">${head}
-        <div class="lab-boardbar"><label class="lab-mine"><input type="checkbox" id="lab-mine" ${S.mine ? 'checked' : ''}> Only my tasks</label><span class="grow"></span>
+        <div class="lab-boardbar"><label class="lab-mine"><input type="checkbox" id="lab-mine" ${S.mine ? 'checked' : ''}> Only my tasks</label>
+          <select class="input lab-order" id="lab-order" title="How the tasks are ordered in each column"><option value="auto" ${ORDER === 'auto' ? 'selected' : ''}>↓ By deadline, then priority</option><option value="manual" ${ORDER === 'manual' ? 'selected' : ''}>↓ As I drag them</option></select><span class="grow"></span>
           ${w ? `<button class="btn small primary" data-lnewtask>＋ New task${pl ? ` in “${esc(truncate(pl.name, 24))}”` : ''}</button>` : ''}</div>
-        <div class="lab-board">${STATUS.map(([st, label]) => { const col = T.filter(t => t.status === st); return `<div class="lab-col" data-col="${st}">
+        <div class="lab-board">${STATUS.map(([st, label]) => { const col = T.filter(t => t.status === st); if (ORDER === 'auto') col.sort(byDeadline); return `<div class="lab-col" data-col="${st}">
             <div class="lab-col-h"><b>${label}</b><span class="lab-n">${col.length}</span></div>
             <div class="lab-col-list">${col.map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? 'Nothing to do' : st === 'doing' ? 'Drag a task here when you start it' : 'Finished tasks land here'}</div>`}</div>
             ${w && st === 'todo' ? '<button class="lab-col-add" data-lnewtask="todo">＋ Add a task</button>' : ''}</div>`; }).join('')}</div>
@@ -489,6 +495,7 @@ const Lab = (() => {
     el.addEventListener('change', e => {
       if (e.target.id === 'lab-sort') { S.f.sort = e.target.value; render(); }
       if (e.target.id === 'lab-mine') { S.mine = e.target.checked; render(); }
+      if (e.target.id === 'lab-order') { ORDER = e.target.value; try { localStorage.setItem('papershelf-lab-order', ORDER); } catch { /* ignore */ } render(); }
       if (e.target.matches('[data-lchk]')) call(`/checks/${encodeURIComponent(e.target.dataset.lchk)}`, {method: 'PUT', body: {done: e.target.checked}});
     });
     el.addEventListener('keydown', e => {

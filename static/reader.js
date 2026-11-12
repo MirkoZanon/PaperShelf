@@ -37,6 +37,7 @@ const Reader = (() => {
           <button class="btn small" id="r-zoom-out" title="Zoom out">−</button><span id="r-zoom" class="small r-zoom"></span><button class="btn small" id="r-zoom-in" title="Zoom in">+</button>
           <button class="btn small" id="r-fit">Fit width</button>
           <span class="r-colors" title="Highlight color">${Object.entries(COLORS).map(([k, v]) => `<button class="r-color ${k === color ? 'on' : ''}" data-color="${k}" style="background:${v}" title="${k}"></button>`).join('')}</span>
+          <button class="btn small r-notesbtn" id="r-notesbtn" title="Write notes and comments on this paper while you read (private, or public in its groups)">📝 Notes <span class="r-nc" id="r-ncount"></span></button>
           <button class="btn small" id="r-embed" title="Write the highlights into the PDF file, so they also show in Preview, Acrobat or Zotero">💾 Save into PDF</button>
           <a class="btn small" href="/pdf/${paper.id}" target="_blank" rel="noopener" title="Open in the browser's own PDF viewer">↗</a>
           <button class="btn small r-delpdf" id="r-delpdf" title="Delete this PDF (moved to the Trash) – the paper, its notes and highlights stay">🗑 Delete PDF</button><button class="help-q" data-help="reader" title="Explain this">?</button>
@@ -45,14 +46,20 @@ const Reader = (() => {
       <div class="r-body">
         <div class="r-pages" id="r-pages"><div class="r-loading muted">Loading PDF…</div></div>
         <aside class="r-side">
-          <div class="r-side-head">Highlights <span class="muted" id="r-count"></span></div>
-          <div class="muted small r-hint">Select text in the PDF, then click a color to highlight it. Click a highlight to add a note.</div>
-          <div id="r-list"></div>
-          <div class="r-side-foot"><button class="btn small" id="r-copy">Copy all</button><button class="btn small" id="r-tonotes" title="Copy all highlights (with their notes) into a note of this paper – private, or public if the paper is in a group">Add to paper notes</button></div>
+          <div class="r-side-tabs"><button data-rtab="hl">🖍 Highlights <span class="muted" id="r-count"></span></button><button data-rtab="notes">📝 Notes <span class="r-nc" id="r-ncount2"></span></button></div>
+          <div class="r-pane" data-pane="hl">
+            <div class="muted small r-hint">Select text in the PDF, then click a color to highlight it. Click a highlight to add a note.</div>
+            <div id="r-list"></div>
+            <div class="r-side-foot"><button class="btn small" id="r-copy">Copy all</button><button class="btn small" id="r-tonotes" title="Copy all highlights (with their notes) into a note of this paper – private, or public if the paper is in a group">Add to paper notes</button></div>
+          </div>
+          <div class="r-pane r-notes-pane" data-pane="notes" hidden></div>
         </aside>
       </div>
       <div class="r-pop" id="r-pop"></div>`;
     r.classList.add('open'); document.body.classList.add('reader-open');
+    noteCount();
+    let tab = 'hl'; try { tab = localStorage.getItem('papershelf-reader-tab') === 'notes' ? 'notes' : 'hl'; } catch (e) { /* ignore */ }
+    sideTab(tab, {focus: false});
     noteTargets = [{v: '', label: '🔒 Private – only me'}];
     Notes.targets(paper.id).then(T => { noteTargets = T; }).catch(() => {});
     bind();
@@ -100,8 +107,29 @@ const Reader = (() => {
   }
   function flush() { savePos(); countTime(); sendTime(); }
 
-  function close() {
+  // the side: highlights, or the paper's notes (written here without leaving the PDF)
+  function sideTab(tab, {focus = true} = {}) {
+    $$('.r-side-tabs [data-rtab]').forEach(b => b.classList.toggle('on', b.dataset.rtab === tab));
+    $$('.r-pane').forEach(p => { p.hidden = p.dataset.pane !== tab; });
+    root().classList.toggle('r-wide-side', tab === 'notes');
+    try { localStorage.setItem('papershelf-reader-tab', tab); } catch (e) { /* ignore */ }
+    if (tab === 'notes') {
+      const pane = $('.r-notes-pane');
+      if (!pane.dataset.paper || +pane.dataset.paper !== paper.id || !Notes.docked()) { pane.dataset.paper = paper.id; Notes.open(paper.id, {dock: pane}); }
+      if (focus) setTimeout(() => $('.r-notes-pane .nc:not(.nc-edit) .nc-text')?.focus(), 120);
+    }
+  }
+  function noteCount() {
+    const p = paperById(paper?.id); const c = p?.note_counts || {private: (p?.note_list || []).length, public: 0};
+    const n = (c.private || 0) + (c.public || 0);
+    ['#r-ncount', '#r-ncount2'].forEach(s => { const el = $(s); if (el) el.textContent = n || ''; });
+  }
+  document.addEventListener('papershelf-notes', e => { if (isOpen && e.detail?.id === paper?.id) noteCount(); });
+
+  async function close() {
     if (!isOpen) return;
+    if (Notes.draft() && !(await confirmBox('Close without saving your note?', 'What you wrote in the notes beside the PDF has not been saved.', {ok: 'Close anyway', danger: true}))) return;
+    Notes.undock();
     flush(); clearInterval(tick);
     isOpen = false; token++;
     observer?.disconnect(); observer = null;
@@ -341,6 +369,8 @@ const Reader = (() => {
 
   function bind() {
     $('#r-close').onclick = close;
+    $('#r-notesbtn').onclick = () => sideTab($('.r-notes-pane').hidden ? 'notes' : 'hl');
+    $('.r-side-tabs').onclick = e => { const b = e.target.closest('[data-rtab]'); if (b) sideTab(b.dataset.rtab); };
     $('#r-zoom-in').onclick = () => zoom(1.15);
     $('#r-zoom-out').onclick = () => zoom(1 / 1.15);
     $('#r-fit').onclick = () => fitWidth(true);

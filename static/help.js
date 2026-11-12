@@ -111,6 +111,7 @@ const Help = (() => {
       <ul><li><b>📖 Read &amp; highlight</b> opens the PDF inside PaperShelf (works offline).</li>
         <li>Select text → click a colour to highlight it; <i>🖍 + note</i> adds a comment.</li>
         <li>Click a highlight to change colour, add a note or delete it. The list on the right jumps to each highlight.</li>
+        <li><b>📝 Notes</b> (top bar, or the tab on the right) shows the paper's notes <b>beside the PDF</b>: read them, write new ones – 🔒 private or 🌐 public in one of its groups – edit or comment, without closing the PDF. It stays on the tab you used last; if you close the PDF with an unsaved note, PaperShelf asks first.</li>
         <li><b>Add to paper notes</b> copies all highlights into a note of the paper; <b>Copy all</b> copies them to the clipboard.</li>
         <li>When you write a note on a highlight, <i>Also add it to the paper's notes</i> copies it (with the highlighted sentence and page) into the paper's notes: <b>🔒 private</b>, or <b>🌐 public</b> in a group the paper belongs to, so the group sees it.</li>
         <li><b>💾 Save into PDF</b> writes the highlights into the file itself, so they appear in Preview, Acrobat or Zotero (repeat it after new highlights – nothing is duplicated).</li>
@@ -308,7 +309,7 @@ const Help = (() => {
         <li><b>Address a post or a comment to someone</b>: in a new post choose the people under <i>📨 For</i>; under a comment click <b>＠</b> and pick them. They get a notification, the post is marked <b>📨 For you</b> for them and appears in their Overview; the filter <i>📨 For you</i> shows everything addressed to you.</li></ul>
       <h4>✅ Plans & tasks</h4>
       <ul><li>A <b>plan</b> is a project or a milestone that <b>groups tasks</b> (<i>Pilot study – by 18 Dec</i>): a goal, a deadline, <b>who is responsible</b> (one or more people – they get a notification) and a progress bar. Plans are listed on the left: click one to see only its tasks; <i>＋ New task</i> then adds the task to that plan.</li>
-        <li>A <b>task</b> is a step: what, <b>who</b> (one or more people – click their names), <b>by when</b>, priority, plan, and optionally a paper (<i>present Smith 2024 at journal club</i>). The board has three columns – <b>To do, Doing, Done</b>: drag the cards, or click one to change it. <i>Only mine</i> shows your tasks.</li>
+        <li>A <b>task</b> is a step: what, <b>who</b> (one or more people – click their names), <b>by when</b>, priority, plan, and optionally a paper (<i>present Smith 2024 at journal club</i>). The board has three columns – <b>To do, Doing, Done</b>: drag the cards, or click one to change it. <i>Only my tasks</i> shows yours. In each column the tasks are ordered <b>by deadline, then priority</b> (overdue first, no date last) – or, if you prefer, <i>as you drag them</i>.</li>
         <li>A task can have a <b>checklist</b> – small items to tick (<i>Calibrate the laser</i>, <i>Check the camera</i>…): add them in the task, then tick them right on the card (☑ 2/3 opens the list). Two people can tick different items at the same time.</li>
         <li><b>＋ Task</b> on a post turns an idea into work: the task links back to the post.</li>
         <li>Any editor can change plans and tasks; each field keeps the newest change, so two people moving different things never overwrite each other.</li></ul>

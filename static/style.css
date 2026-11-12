@@ -1729,3 +1729,23 @@ body { accent-color: var(--accent); }
 .tk-check-del:hover { color: #d64545; background: var(--hover); }
 .tk-check-add { display: flex; gap: 6px; } .tk-check-add input { flex: 1; }
 @media (max-width: 980px) { .lab-plans2 { grid-template-columns: 1fr; } .lab-plist { position: static; flex-direction: row; flex-wrap: wrap; } .lab-plist-h { width: 100%; } .lab-pi { width: 200px; } }
+/* ---- 2.15 notes beside the PDF ---- */
+.r-side-tabs { display: flex; gap: 2px; padding: 8px 8px 0; border-bottom: 1px solid var(--border-soft); }
+.r-side-tabs button { flex: 1; border: 0; background: none; padding: 8px 6px; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.r-side-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.r-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.r-pane[hidden] { display: none; }
+.r-pane[data-pane="hl"] .r-hint { padding-top: 10px; }
+#reader.r-wide-side .r-side { width: min(420px, 42vw); }
+.r-nc:not(:empty) { display: inline-block; min-width: 16px; padding: 0 5px; border-radius: 8px; background: var(--accent); color: var(--accent-ink, #fff); font-size: 10.5px; font-weight: 700; text-align: center; }
+.r-notes-pane { padding: 0; }
+.notes-dock { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 8px 12px 10px; }
+.notes-dock-h { display: flex; align-items: center; gap: 6px; padding: 2px 0 6px; }
+.notes-dock .notes-body { flex: 1; min-height: 0; }
+.notes-dock .notes-thread { max-height: none; flex: 1; min-height: 80px; }
+.notes-dock .notes-tabs { flex-wrap: wrap; }
+.notes-dock .nc { margin-top: 6px; }
+.notes-dock .nc-text { min-height: 90px; }
+.notes-dock .nc-tools { flex-wrap: wrap; }
+.notes-dock .nb { max-width: 100%; }
+.lab-order { width: auto; font-size: 12.5px; padding: 4px 8px; margin-left: 10px; }

@@ -163,6 +163,8 @@ const Notes = (() => {
     const th = $('.notes-thread', cur.m.el); th.scrollTop = th.scrollHeight;
     const vis = $('.nc:not(.nc-edit) .nc-vis', cur.m.el);
     if (vis) { vis.value = cur.target ?? ''; if (vis.selectedOptions[0]?.disabled) vis.value = ''; vis.onchange = () => { cur.target = vis.value; }; }
+    if (cur.m.dock && !cur.focus && !cur.editing) return;   // beside the PDF: don't take the focus away from it
+    cur.focus = !cur.m.dock;
     if (!cur.editing) setTimeout(() => $('.nc:not(.nc-edit) .nc-text', cur.m.el)?.focus({preventScroll: true}), 20);
     else setTimeout(() => { const t = $('.nc-edit .nc-text', cur.m.el); if (t && document.activeElement !== t) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }, 20);
   }
@@ -170,6 +172,7 @@ const Notes = (() => {
     const p = paperById(cur.id); if (!p) return;
     p.note_counts = d.counts; p.note_list = d.private; p.notes = d.private.map(n => plain(n.body)).join('\n\n');
     renderList(); if (state.openId === cur.id) renderDetail();
+    document.dispatchEvent(new CustomEvent('papershelf-notes', {detail: {id: cur.id}}));
   }
   async function call(path, opts) {
     try { const d = await api(path, opts); cur.data = d; applyCounts(d); render(); return true; }
@@ -210,7 +213,7 @@ const Notes = (() => {
     const share_id = $('.nc-vis', cur.m.el)?.value || '';
     if (share_id && !(await ensureName())) return;
     cur.target = share_id;
-    const b = $('[data-nsend]', cur.m.el); setBusy(b, true, 'Saving…');
+    const b = $('[data-nsend]', cur.m.el); setBusy(b, true, 'Saving…'); cur.focus = true;
     const ok = await call(`/api/papers/${cur.id}/notes`, {method: 'POST', body: {body, share_id}});
     if (!ok) setBusy($('[data-nsend]', cur.m.el), false);
     else if (share_id) toast('Public note saved – the group will see it at their next update.', 'ok');
@@ -225,14 +228,23 @@ const Notes = (() => {
   }
   const movedToast = to => toast(to ? `Note made public in “${gName(to)}” – the group will see it at their next update.` : 'Note made private – only you can read it now.', 'ok');
 
-  async function open(id, {filter = 'all'} = {}) {
+  // dock: an element to show the notes in (the side of the PDF reader) instead of a window
+  async function open(id, {filter = 'all', dock = null} = {}) {
     let d;
     try { d = await api(`/api/papers/${id}/notes`); } catch (err) { toast(err.message, 'error'); return; }
     if (cur?.m) cur.m.close();
-    const m = modal(`<h3 class="notes-h"><span class="notes-title"></span><span class="grow"></span><button class="btn small" data-nexport title="Download these notes with the reference">⤓ Export</button><button class="btn small" data-help="notes" title="How notes work">📘 Guide</button><button class="btn small" data-close title="Close without saving the text you are writing (Esc)">Close ✕</button></h3>
-      <div class="notes-body"></div>`, {wide: true});
-    m.el.querySelector('.modal').classList.add('notes-modal');
-    cur = {id, m, data: d, filter, showHidden: false, editing: null, target: ''};
+    let m;
+    if (dock) {
+      const el = document.createElement('div'); el.className = 'notes-dock';
+      el.innerHTML = `<div class="notes-dock-h"><span class="notes-title" hidden></span><span class="muted small">Your notes on this paper – while you read</span><span class="grow"></span><button class="btn small" data-nexport title="Download these notes with the reference">⤓</button><button class="help-q" data-help="notes" title="How notes work">?</button></div><div class="notes-body"></div>`;
+      dock.innerHTML = ''; dock.appendChild(el);
+      m = {el, dock: true, onclose: null, close() { el.remove(); this.onclose?.(); }};
+    } else {
+      m = modal(`<h3 class="notes-h"><span class="notes-title"></span><span class="grow"></span><button class="btn small" data-nexport title="Download these notes with the reference">⤓ Export</button><button class="btn small" data-help="notes" title="How notes work">📘 Guide</button><button class="btn small" data-close title="Close without saving the text you are writing (Esc)">Close ✕</button></h3>
+        <div class="notes-body"></div>`, {wide: true});
+      m.el.querySelector('.modal').classList.add('notes-modal');
+    }
+    cur = {id, m, data: d, filter, showHidden: false, editing: null, target: '', focus: !dock};
     const prevClose = m.onclose; m.onclose = () => { if (cur?.m === m) cur = null; prevClose?.(); };
     render();
     m.el.addEventListener('click', async e => {
@@ -343,5 +355,8 @@ const Notes = (() => {
     };
   }
 
-  return {md, badge, detailField, open, add, targets: targetsFor, addPrivate, ensureName, exportDialog, isOpen: () => !!cur};
+  const undock = () => { if (cur?.m?.dock) cur.m.close(); };
+  const draft = () => (cur?.m?.dock && $('.nc:not(.nc-edit) .nc-text', cur.m.el)?.value.trim()) || '';
+  return {md, badge, detailField, open, add, targets: targetsFor, addPrivate, ensureName, exportDialog, undock, draft,
+    isOpen: () => !!cur && !cur.m.dock, docked: () => !!cur?.m?.dock};
 })();

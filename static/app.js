@@ -1951,7 +1951,7 @@ function bind() {
     if (e.key === 'Escape') {
       const m = topModal();
       if (Help.isOpen()) { Help.close(); return; }
-      if (!m && Reader.isOpen()) { Reader.close(); return; }
+      if (!m && Reader.isOpen()) { if (typing && document.activeElement.closest('#reader')) { document.activeElement.blur(); return; } Reader.close(); return; }
       if (m) { m.dispatchEvent(new MouseEvent('mousedown', {bubbles: true})); return; }
       if (typing) { document.activeElement.blur(); return; }
       if (state.openId) closeDetail(); else if (state.selected.size) { state.selected.clear(); renderList(); }

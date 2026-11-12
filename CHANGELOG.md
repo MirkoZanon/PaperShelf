@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.15 – 2026-11-12
+
+- **Notes beside the PDF** – in the PDF reader, *📝 Notes* (top bar, or the tab on the right) opens the
+  paper's notes next to the page: read them, write new ones (🔒 private or 🌐 public in one of its
+  groups), edit them, without closing the PDF. The reader remembers the tab you used last and asks
+  before closing with an unsaved note; Esc while writing just leaves the text box.
+- **Tasks ordered by deadline and priority** – in each column of the Lab board the tasks now follow
+  their deadline (overdue first, no date last), then priority. *↓ As I drag them* keeps your own order.
+
 ## 2.14.2 – 2026-11-09
 
 - **Fix: you appeared twice in a group, once as "local-…"** – a group created before GitHub was set up
