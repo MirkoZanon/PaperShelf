@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.16.1 – 2026-11-12
+
+- **Fix: dark mode** – the boxes of the list grouped by label or group were light grey with white text
+  (the glass look painted them as in light mode). They are dark and tinted with the label's colour
+  again, and a few other light patches in dark mode are gone.
+
 ## 2.16 – 2026-11-12
 
 - **Map: links from your notes** – a new *Notes* link type connects papers by what you wrote about them:

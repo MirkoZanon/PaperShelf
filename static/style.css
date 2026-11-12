@@ -1358,6 +1358,7 @@ body.look-glass .vo { border-right-color: var(--glass-line); }
 body.look-glass .vo:hover { background: var(--hover); }
 body.look-glass .vo-toggle:has(input:checked) { background: var(--sel); color: var(--accent); }
 body.look-glass #incl-sub-wrap { background: rgba(255,255,255,.5); border-color: var(--border-soft); }
+@media (prefers-color-scheme: dark) { body.look-glass #incl-sub-wrap { background: rgba(255,255,255,.04); } }
 body.look-glass #incl-sub-wrap:has(input:checked) { background: var(--sel); }
 body.look-glass header .btn.round { border-radius: 50%; background: rgba(255,255,255,.6) !important; border-color: var(--border-soft) !important; }
 @media (prefers-color-scheme: dark) { body.look-glass header .btn.round { background: rgba(255,255,255,.06) !important; } }
@@ -1371,9 +1372,9 @@ body.look-glass .input:focus, body.look-glass .search-box:focus-within, body.loo
 body.look-glass .nav-item.active { background: var(--sel); color: var(--accent); box-shadow: none; }
 body.look-glass .nav-item:hover { background: var(--hover); }
 /* cards */
-body.look-glass .opt, body.look-glass .s-card, body.look-glass .p-card, body.look-glass .st-tile, body.look-glass .set-status, body.look-glass .grp, body.look-glass .dash,
+body.look-glass .opt, body.look-glass .s-card, body.look-glass .p-card, body.look-glass .st-tile, body.look-glass .set-status, body.look-glass .dash,
 body.look-glass .lab-card, body.look-glass .lp, body.look-glass .lab-task, body.look-glass .lab-plan, body.look-glass .lab-new { background-color: rgba(255,255,255,.62); border-color: var(--border-soft); }
-@media (prefers-color-scheme: dark) { body.look-glass .opt, body.look-glass .s-card, body.look-glass .p-card, body.look-glass .st-tile, body.look-glass .set-status,
+@media (prefers-color-scheme: dark) { body.look-glass .opt, body.look-glass .s-card, body.look-glass .p-card, body.look-glass .st-tile, body.look-glass .set-status, body.look-glass .dash,
   body.look-glass .lab-card, body.look-glass .lp, body.look-glass .lab-task, body.look-glass .lab-plan, body.look-glass .lab-new { background-color: rgba(255,255,255,.04); } }
 body.look-glass .opt:has(input:checked) { background: var(--sel); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 body.look-glass ol.gh-steps > li::before { background: var(--accent); color: var(--accent-ink); }
