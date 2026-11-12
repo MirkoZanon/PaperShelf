@@ -2,6 +2,19 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.16 – 2026-11-12
+
+- **Map: links from your notes** – a new *Notes* link type connects papers by what you wrote about them:
+  notes (private and public), notes on highlights, highlighted sentences and group-table entries. The
+  important words and phrases are found and weighed (TF-IDF, English and Italian common words left
+  out), and papers whose notes talk about the same ideas are linked; hover a line to see the shared
+  ideas. *Shared ideas as nodes* shows the recurring ideas as ◆ – click one to select its papers.
+  Computed on this computer; nothing is sent anywhere.
+- **Map: ✦ Mix** – one link strength from citations (citing each other or the same papers), keywords,
+  labels and notes together. *⚖ Weights* sets how much each counts and the minimum strength; hovering a
+  line explains why two papers are linked and how much each part contributes.
+- Hovering a line in the map now explains the link (also for shared keywords).
+
 ## 2.15 – 2026-11-12
 
 - **Notes beside the PDF** – in the PDF reader, *📝 Notes* (top bar, or the tab on the right) opens the

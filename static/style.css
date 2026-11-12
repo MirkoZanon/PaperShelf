@@ -1749,3 +1749,18 @@ body { accent-color: var(--accent); }
 .notes-dock .nc-tools { flex-wrap: wrap; }
 .notes-dock .nb { max-width: 100%; }
 .lab-order { width: auto; font-size: 12.5px; padding: 4px 8px; margin-left: 10px; }
+/* ---- 2.16 map: links from the notes, and the mix ---- */
+.map-mixwrap { position: relative; }
+.map-mixpop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: 300px; padding: 12px 14px; border-radius: 12px; background: var(--glass-strong, var(--panel)); border: 1px solid var(--border-soft);
+  box-shadow: 0 14px 40px rgba(0,0,0,.16); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.map-mixpop[hidden] { display: none; }
+.mix-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.mix-row { display: grid; grid-template-columns: 92px 1fr 34px; align-items: center; gap: 8px; font-size: 12.5px; margin: 4px 0; cursor: pointer; }
+.mix-row input { width: 100%; accent-color: var(--accent); }
+.mix-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.map-mixpop p { margin: 8px 0 0; line-height: 1.4; }
+.map-parts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.map-parts span { position: relative; font-size: 10.5px; padding: 1px 6px; border-radius: 6px; background: var(--hover); overflow: hidden; }
+.map-parts span i { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 30%, transparent); z-index: 0; }
+.map-legend .dot.linedot { width: 16px; height: 3px; border-radius: 2px; background: var(--accent); vertical-align: middle; }
+.map-tip div + div { margin-top: 2px; }

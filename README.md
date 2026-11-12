@@ -188,7 +188,9 @@ search finds papers about the same idea even when they use other words (or class
 
 **Map** – the papers of a label as a network linked by **citations** (with the important papers you
 don't have yet), by **keywords** (keywords as nodes, or papers linked by shared keywords) or by your
-**labels** (your personal labels as nodes, sub-labels joined to their parents). **Discover** – suggestions: works often cited by your papers, recent papers citing
+**labels** (your personal labels as nodes, sub-labels joined to their parents), by your **notes** (papers whose
+notes, highlights and table entries talk about the same ideas – analysed on your computer) or by a **✦ mix** of
+all four with weights you choose. **Discover** – suggestions: works often cited by your papers, recent papers citing
 yours, related works.
 
 **Researchers** – profile of any scientist in two views. *Overview*: summary (publications, first /

@@ -24,7 +24,7 @@ import threading
 import time
 import uuid
 import webbrowser
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlencode
@@ -34,6 +34,7 @@ from flask import Flask, Response, g, jsonify, redirect, request, send_file
 import citations
 import coauth
 import fulltext
+import concepts
 import insights
 import journals
 import metadata
@@ -3394,6 +3395,58 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     _save_share(db, sid, st, **fields)
     db.commit()
     return {**stats, "published": published, "errors": errors}
+
+# --------------------------------------------------------------------------- the map: links from your notes
+def _texts_of(db, ids) -> dict:
+    """What you (and your groups) wrote about these papers: {paper_id: [(source, text)]}."""
+    ids = [int(i) for i in ids][:3000]
+    docs = {i: [] for i in ids}
+    if not ids:
+        return docs
+    q = ",".join("?" * len(ids))
+    for r in db.execute(f"SELECT id, note_list FROM papers WHERE id IN ({q})", ids):
+        for n in notesmod.load(r["note_list"]):
+            docs[r["id"]].append(("note", n.get("body") or ""))
+    for r in db.execute(f"SELECT paper_id, text, note FROM annotations WHERE paper_id IN ({q})", ids):
+        if r["note"]:
+            docs[r["paper_id"]].append(("hl_note", r["note"]))
+        if r["text"]:
+            docs[r["paper_id"]].append(("hl_text", r["text"]))
+    links = defaultdict(list)
+    for r in db.execute(f"SELECT paper_id, share_id, item_key FROM paper_shares WHERE paper_id IN ({q})", ids):
+        links[r["share_id"]].append((r["paper_id"], r["item_key"]))
+    for sid, lst in links.items():
+        row, st = _load_share(db, sid)
+        if not st:
+            continue
+        for pid, key in lst:
+            e = (st.get("items") or {}).get(key) or {}
+            for n in sharing.notes_of(e):
+                docs[pid].append(("note", n.get("body") or ""))
+            for cell in (e.get("cells") or {}).values():
+                for n in cell.values():
+                    if not n.get("del"):
+                        docs[pid].append(("entry", n.get("body") or ""))
+        d = _priv(row)   # your private entries in the group's table
+        uids = {r2["uid"]: r2["id"] for r2 in db.execute(f"SELECT id, uid FROM papers WHERE id IN ({q})", ids)}
+        for uid, cells in (d.get("entries") or {}).items():
+            if uid in uids:
+                for lst2 in cells.values():
+                    for n in lst2:
+                        docs[uids[uid]].append(("entry", n.get("body") or ""))
+    return {k: v for k, v in docs.items() if any(t.strip() for _, t in v)}
+
+
+@app.post("/api/map/notes")
+def map_notes():
+    """Conceptual links between papers from their notes, highlights and table entries (computed locally)."""
+    ids = [i for i in ((request.get_json(silent=True) or {}).get("ids") or []) if _int(i)]
+    db = get_db()
+    docs = _texts_of(db, ids)
+    res = concepts.analyse(docs)
+    res["requested"] = len(ids)
+    return jsonify(res)
+
 
 # --------------------------------------------------------------------------- the group's lab
 # Ideas, experiments, questions, results and decisions with comments and 👍; plans and tasks.

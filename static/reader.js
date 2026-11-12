@@ -130,6 +130,7 @@ const Reader = (() => {
     if (!isOpen) return;
     if (Notes.draft() && !(await confirmBox('Close without saving your note?', 'What you wrote in the notes beside the PDF has not been saved.', {ok: 'Close anyway', danger: true}))) return;
     Notes.undock();
+    document.dispatchEvent(new CustomEvent('papershelf-notes', {detail: {id: paper?.id, closed: true}}));   // (highlights may have changed)
     flush(); clearInterval(tick);
     isOpen = false; token++;
     observer?.disconnect(); observer = null;

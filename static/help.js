@@ -151,14 +151,16 @@ const Help = (() => {
       ${step(3, 'The papers arrive in a new collection with their PDFs linked and your labels as tags.')}
       ${tip('Numbered styles (Nature, Cell, Science…) are numbered in the exported list; in a manuscript Zotero handles the in-text numbering.')}`},
 
-    {id: 'map', icon: '🕸', title: 'Citation map & Discover', html: () => `
+    {id: 'map', icon: '🕸', title: 'Map & Discover', html: () => `
       <h4>Map</h4>
       <p>Click <b>🕸 Map</b> above the list: the papers of the current view become a network. Arrows go from the citing paper to the cited one; grey dashed dots are papers you don't have that several of yours cite – click them to add them.</p>
       <p>Scroll to zoom, drag to move, click a paper to open it. Colour by label, status or year.</p>
-      <h4>Three kinds of links</h4>
+      <h4>Kinds of links</h4>
       <ul><li><b>Citations</b> – who cites whom (data from OpenAlex).</li>
         <li><b>Keywords</b> – the most common keywords become ◆ nodes and each paper is linked to its keywords, so papers on the same topics cluster together. Or choose <i>Papers linked by shared keywords</i> (thicker line = more keywords in common). Click a keyword ◆ to show only its papers.</li>
-        <li><b>Labels</b> – your personal labels become ◆ nodes (a dashed line joins a sub-label to its parent) and each paper is linked to its labels: papers with several labels sit between them. Click a label ◆ to open it. Groups are not used here.</li></ul>
+        <li><b>Labels</b> – your personal labels become ◆ nodes (a dashed line joins a sub-label to its parent) and each paper is linked to its labels: papers with several labels sit between them. Click a label ◆ to open it. Groups are not used here.</li>
+        <li><b>Notes</b> – papers linked by <b>what you wrote about them</b>: your notes (private and public), the notes on highlights, the highlighted sentences and the entries in group tables. PaperShelf finds the words and two-word phrases that matter (leaving out common words, in English and Italian), weighs how specific they are, and links papers whose notes talk about the same ideas – thicker line = closer. Hover a line to see the <b>shared ideas</b>. Or choose <i>Shared ideas as nodes</i>: each ◆ is an idea that recurs in your notes; click it to select its papers. It is all computed on this computer – nothing is sent anywhere.</li>
+        <li><b>✦ Mix</b> – one strength for each pair of papers, from all four together: citing each other or the same papers, shared keywords, shared labels, similar notes. In <b>⚖ Weights</b> choose how much each counts (0 = ignore) and the minimum strength. Hover a line to see why two papers are linked and how much each part contributes.</li></ul>
       <h4>Search by topic (in Discover)</h4>
       <p>At the top of <b>Discover</b> (its own tab, next to Library), describe what you're looking for – a few words, a question, or even a whole abstract – and click <b>Search</b>. <b>By meaning</b> (OpenAlex semantic search) compares your text with the titles and abstracts of 250+ million works, so it also finds papers that talk about the same idea in other words; <b>By words</b> is the classic search. Filter by year, type or free-to-read, and add any result with one click. From the Add box, the suggestions list offers <i>🔎 Search by topic</i> too. Only your search text is sent to OpenAlex.</p>
       <h4>Discover</h4>
