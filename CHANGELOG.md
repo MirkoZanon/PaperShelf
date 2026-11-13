@@ -2,6 +2,25 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.17 – 2026-11-13
+
+- **Lab: a task opens in its own window** – on the left the work itself: title, description, the
+  **checklist** and the **notes**; on the right its settings: status, people, deadline, priority, plan,
+  paper. Everything is saved as you change it. In the checklist, press Enter to add an item, paste a
+  list to add several at once, click an item to reword it. The first items also show on the card in
+  the board, where they can be ticked directly.
+- **Lab: notes on tasks and plans** – write considerations, updates and questions on a task or on a
+  whole plan (*Notes* next to the plan's name). Notes are signed, can be addressed to someone with ＠,
+  and notify the people of the task or the plan. They are in the report too.
+- **Lab: plan faster** – type a task at the bottom of *To do* and press Enter, one after the other
+  (Shift+Enter also opens it). A new plan can **start with the usual steps** of an experiment or of a
+  paper, each with its checklist, all editable.
+- **Lab: a cleaner look** – one set of line icons instead of emoji, a tidier Overview (your tasks with
+  deadline, checklist and notes; the plans you lead; figures for each group), larger *Papers, Table,
+  Report, Update* buttons with labels, a quieter list of plans and status colours on the board.
+- All members need 2.17 to see the notes on tasks and plans; older versions keep working and simply
+  don't show them.
+
 ## 2.16.1 – 2026-11-12
 
 - **Fix: dark mode** – the boxes of the list grouped by label or group were light grey with white text

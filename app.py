@@ -3486,12 +3486,16 @@ def _lab_payload(db, sid, st=None):
                                     "mine": c["by"] in me, "to": people_of(c.get("to")), "for_me": bool(me & set(c.get("to") or []))}
                                    for c in p["comments"]],
                       "tasks": sum(1 for t in v["tasks"] if t.get("post") == p["id"])})
-    tasks = [{**t, "status": t.get("status") or "todo", "prio": t.get("prio") or "normal",
+    remarks_of = lambda o: [{**{k: r.get(k) for k in ("id", "body", "created", "at", "by")}, "name": who(r["by"], r.get("name")),
+                             "mine": r["by"] in me, "to": people_of(r.get("to")), "for_me": bool(me & set(r.get("to") or []))}
+                            for r in o.get("remarks") or []]
+    tasks = [{**t, "remarks": remarks_of(t), "status": t.get("status") or "todo", "prio": t.get("prio") or "normal",
               "assignees": sharing.task_people(t), "people": people_of(sharing.task_people(t)),
               "assignee_name": ", ".join(who(a) for a in sharing.task_people(t)),
               "mine": bool(me & set(sharing.task_people(t))), "paper": paper(t["paper"]) if t.get("paper") else None,
               "post_title": titles.get(t.get("post") or "", ""), "by_name": who(t.get("by"))} for t in v["tasks"]]
-    plans = [{**pl, "owners": pl.get("owners") or [], "people": people_of(pl.get("owners")), "mine": bool(me & set(pl.get("owners") or []))}
+    plans = [{**pl, "remarks": remarks_of(pl), "owners": pl.get("owners") or [], "people": people_of(pl.get("owners")),
+              "mine": bool(me & set(pl.get("owners") or [])), "by_name": who(pl.get("by"))}
              for pl in v["plans"]]
     return jsonify(group={"id": sid, "name": (st.get("name") or {}).get("v") or "Group"}, can_write=bool(author), me=author or ident["user"],
                    display_name=_display_name(db, ident), people=people, posts=posts, plans=plans, tasks=tasks,
@@ -3591,6 +3595,29 @@ def lab_comment_delete(sid, cid):
     return _lab_call(sid, lambda db, st, author, b: sharing.edit_comment(st, author, cid, delete=True))
 
 
+# notes on a task or a plan (a small discussion under it)
+@app.post("/api/shares/<sid>/lab/remarks")
+def lab_remark_add(sid):
+    def fn(db, st, author, b):
+        if not str(b.get("body") or "").strip():
+            return error("Write something first.")
+        sharing.add_remark(st, author, _display_name(db), b.get("on"), str(b.get("ref") or ""), str(b["body"]).strip(), b.get("to") or [])
+    return _lab_call(sid, fn)
+
+
+@app.put("/api/shares/<sid>/lab/remarks/<rid>")
+def lab_remark_edit(sid, rid):
+    def fn(db, st, author, b):
+        body = str(b.get("body") or "").strip()
+        sharing.edit_remark(st, author, rid, body=body or None, delete=not body)
+    return _lab_call(sid, fn)
+
+
+@app.delete("/api/shares/<sid>/lab/remarks/<rid>")
+def lab_remark_delete(sid, rid):
+    return _lab_call(sid, lambda db, st, author, b: sharing.edit_remark(st, author, rid, delete=True))
+
+
 @app.post("/api/shares/<sid>/lab/posts/<oid>/vote")
 def lab_vote(sid, oid):
     return _lab_call(sid, lambda db, st, author, b: sharing.set_vote(st, author, oid, bool(b.get("v"))))
@@ -3628,7 +3655,15 @@ def lab_obj_add(sid, coll):
             return error("That task doesn't exist any more.")
         if coll == "tasks":
             f.setdefault("status", "todo")
-        sharing.set_fields(st, author, coll, None, **f)
+        oid = sharing.set_fields(st, author, coll, None, **f)
+        if coll == "tasks":            # the checklist typed with a new task
+            for i, c in enumerate([c for c in (b.get("checklist") or []) if isinstance(c, dict) and str(c.get("text") or "").strip()][:40], 1):
+                sharing.set_fields(st, author, "checks", None, task=oid, text=c["text"], done=bool(c.get("done")), pos=i)
+        if coll == "plans":            # a plan started from a template: its first tasks, each with a checklist
+            for i, t in enumerate([t for t in (b.get("tasks") or []) if isinstance(t, dict) and str(t.get("title") or "").strip()][:30], 1):
+                tid = sharing.set_fields(st, author, "tasks", None, title=t["title"], status="todo", plan=oid, pos=i)
+                for j, c in enumerate([str(c) for c in (t.get("checklist") or []) if str(c).strip()][:20], 1):
+                    sharing.set_fields(st, author, "checks", None, task=tid, text=c, pos=j)
     return _lab_call(sid, fn)
 
 
@@ -3681,7 +3716,8 @@ def lab_overview():
             if me & set(sharing.task_people(t)):
                 my_tasks.append({"group": r["id"], "group_name": name, "id": t["id"], "title": t.get("title") or "",
                                  "due": t.get("due") or "", "status": t.get("status") or "todo", "prio": t.get("prio") or "normal",
-                                 "checks": [sum(1 for c in t.get("checklist") or [] if c["done"]), len(t.get("checklist") or [])]})
+                                 "checks": [sum(1 for c in t.get("checklist") or [] if c["done"]), len(t.get("checklist") or [])],
+                                 "notes": len(t.get("remarks") or [])})
         week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         out.append({"id": r["id"], "name": name, "can_write": bool(_my_author(st, ident)),
                     "papers": len(sharing.items(st)), "members": len(sharing.people(st)),
@@ -3719,6 +3755,8 @@ def lab_export(sid):
                   (" – responsible: " + ", ".join(x["name"] for x in pl.get("people") or []) if pl.get("people") else ""), ""]
             if pl.get("goal"):
                 L += [pl["goal"], ""]
+            for r in pl.get("remarks") or []:
+                L += [f"> **{r['name']}** ({r['created'][:10]}): " + r["body"].replace("\n", "\n> "), ""]
             for t in ts:
                 box = "x" if t["status"] == "done" else " "
                 extra = ", ".join(x for x in ((t["assignee_name"] and "👤 " + t["assignee_name"]), (t.get("due") and "📅 " + t["due"]),
@@ -3726,6 +3764,8 @@ def lab_export(sid):
                 L.append(f"- [{box}] {t['title']}" + (f" ({extra})" if extra else ""))
                 for c in t.get("checklist") or []:
                     L.append(f"    - [{'x' if c['done'] else ' '}] {c['text']}")
+                for r in t.get("remarks") or []:
+                    L.append(f"    - 💬 **{r['name']}** ({r['created'][:10]}): " + " ".join(r["body"].split()))
             L.append("")
     posts = [p for p in d["posts"] if p["kind"] != "decision"]
     if posts:
@@ -3786,6 +3826,16 @@ def record_activity(db, sid, before, after, me: set) -> int:
             by = stp[1]
             rows.append((f"{sid}:task:{oid}:{stp[0]}", "task", by, names.get(by) or by, oid,
                          (fa_.get("title") or {}).get("v") or "a task", "", (fa_.get("notes") or {}).get("v") or ""))
+    for oid, n in (lab_a.get("remarks") or {}).items():   # a note on a task or a plan
+        if oid in (lab_b.get("remarks") or {}) or n.get("del") or n.get("by") in me:
+            continue
+        coll = "tasks" if n.get("on") == "task" else "plans"
+        f = sharing.obj_fields((lab_a.get(coll) or {}).get(n.get("ref")) or {})
+        if not f or f.get("del"):
+            continue
+        mine = bool(me & (set(sharing.task_people(f)) if coll == "tasks" else set(f.get("owners") or []))) or bool(me & set(n.get("to") or []))
+        rows.append((f"{sid}:remark:{oid}", "tnote_me" if mine else "tnote", n["by"], n.get("name") or names.get(n["by"]) or n["by"], n.get("ref") or "",
+                     (f.get("title") if coll == "tasks" else f.get("name")) or ("a task" if coll == "tasks" else "a plan"), n.get("on"), n.get("body") or ""))
     for oid, o in (lab_a.get("plans") or {}).items():     # you were made responsible for a plan
         fa_, fb_ = o.get("f") or {}, (((lab_b.get("plans") or {}).get(oid) or {}).get("f") or {})
         now_, was = set((fa_.get("owners") or {}).get("v") or []), set((fb_.get("owners") or {}).get("v") or [])

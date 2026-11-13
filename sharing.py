@@ -416,14 +416,14 @@ LAB_KINDS = ("idea", "experiment", "question", "result", "decision", "protocol",
 TASK_STATUS = ("todo", "doing", "done")
 TASK_PRIO = ("high", "normal", "low")
 MAX_POST, MAX_COMMENT = 20000, 5000
-LAB_LIMITS = {"posts": 2000, "comments": 10000, "plans": 300, "tasks": 3000, "checks": 20000}
+LAB_LIMITS = {"posts": 2000, "comments": 10000, "plans": 300, "tasks": 3000, "checks": 20000, "remarks": 20000}
 OID_RE = re.compile(r"^[a-f0-9]{8,32}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _lab(st) -> dict:
     lab = st.setdefault("lab", {})
-    for k in ("posts", "comments", "votes", "pins", "plans", "tasks", "checks"):
+    for k in ("posts", "comments", "votes", "pins", "plans", "tasks", "checks", "remarks"):
         lab.setdefault(k, {})
     return lab
 
@@ -523,6 +523,36 @@ def edit_comment(st, author, cid, body=None, delete=False, to=None):
     n.update(at=_now(), s=tick(st, author))
 
 
+# Notes on a task or on a plan: a small discussion, each note signed by its author (like comments).
+def add_remark(st, author, name, on, ref, body, to=()) -> str:
+    lab = _lab(st)
+    coll = {"task": "tasks", "plan": "plans"}.get(on)
+    if not coll or ref not in lab[coll] or obj_fields(lab[coll][ref]).get("del"):
+        raise ShareError("That " + (on if coll else "item") + " doesn't exist any more.")
+    if len(lab["remarks"]) >= LAB_LIMITS["remarks"]:
+        raise ShareError("This group has too many notes.")
+    rid = uuid.uuid4().hex[:16]
+    s = tick(st, author)
+    lab["remarks"][rid] = {"on": on, "ref": ref, "by": author, "name": (name or "")[:60], "body": str(body or "")[:MAX_COMMENT],
+                           "to": clean_people(list(to or [])),
+                           "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0]}
+    return rid
+
+
+def edit_remark(st, author, rid, body=None, delete=False):
+    n = _lab(st)["remarks"].get(rid)
+    if not n or n.get("del"):
+        raise ShareError("Note not found.")
+    if n.get("by") != author and canon(st, n.get("by")) != author:
+        raise ShareError("Only the author can change this note.")
+    n["by"] = author
+    if delete:
+        n.update(body="", **{"del": True})
+    elif body is not None:
+        n["body"] = str(body)[:MAX_COMMENT]
+    n.update(at=_now(), s=tick(st, author))
+
+
 def set_vote(st, author, post, v: bool):
     _lab(st)["votes"].setdefault(post, {})[author] = {"v": bool(v), "s": tick(st, author)}
 
@@ -606,11 +636,17 @@ def lab_view(st) -> dict:
     checks = {}
     for c in sorted(objs(lab.get("checks")), key=lambda c: (c.get("pos") or 0, c.get("created") or "")):
         checks.setdefault(c.get("task") or "", []).append({"id": c["id"], "text": c.get("text") or "", "done": bool(c.get("done"))})
+    remarks = {}
+    for r in sorted(alive(lab.get("remarks")).values(), key=lambda r: (r.get("created") or "", r.get("c") or 0)):
+        remarks.setdefault((r.get("on"), r.get("ref")), []).append(r)
     for t in tasks:
         t["checklist"] = checks.get(t["id"], [])
+        t["remarks"] = remarks.get(("task", t["id"]), [])
+    plans = sorted(objs(lab.get("plans")), key=lambda p: (p.get("pos") or 0, p.get("created") or ""))
+    for pl in plans:
+        pl["remarks"] = remarks.get(("plan", pl["id"]), [])
     return {"posts": sorted(posts.values(), key=lambda p: (p.get("created") or ""), reverse=True),
-            "plans": sorted(objs(lab.get("plans")), key=lambda p: (p.get("pos") or 0, p.get("created") or "")),
-            "tasks": tasks}
+            "plans": plans, "tasks": tasks}
 
 
 def _merge_fields(x: dict, y: dict) -> dict:
@@ -633,6 +669,7 @@ def _merge_lab(a: dict, b: dict) -> dict:
     a, b = a or {}, b or {}
     out = {"posts": _merge_notes(a.get("posts") or {}, b.get("posts") or {}),
            "comments": _merge_notes(a.get("comments") or {}, b.get("comments") or {}),
+           "remarks": _merge_notes(a.get("remarks") or {}, b.get("remarks") or {}),
            "plans": _merge_fields(a.get("plans") or {}, b.get("plans") or {}),
            "tasks": _merge_fields(a.get("tasks") or {}, b.get("tasks") or {}),
            "checks": _merge_fields(a.get("checks") or {}, b.get("checks") or {}), "votes": {}, "pins": {}}
@@ -653,7 +690,7 @@ def _merge_lab(a: dict, b: dict) -> dict:
 
 def _lab_stamps(lab) -> int:
     c = 0
-    for k in ("posts", "comments"):
+    for k in ("posts", "comments", "remarks"):
         for n in (lab.get(k) or {}).values():
             c = max(c, (n.get("s") or [0])[0])
     for k in ("plans", "tasks", "checks"):
@@ -669,11 +706,11 @@ def _lab_stamps(lab) -> int:
 
 
 def _validate_lab(raw) -> dict:
-    lab = {"posts": {}, "comments": {}, "votes": {}, "pins": {}, "plans": {}, "tasks": {}, "checks": {}}
+    lab = {"posts": {}, "comments": {}, "votes": {}, "pins": {}, "plans": {}, "tasks": {}, "checks": {}, "remarks": {}}
     if not isinstance(raw, dict):
         return lab
     ok_name = lambda a: bool(NAME_RE.match(a) or a.startswith("local-"))
-    for coll, lim in (("posts", MAX_POST), ("comments", MAX_COMMENT)):
+    for coll, lim in (("posts", MAX_POST), ("comments", MAX_COMMENT), ("remarks", MAX_COMMENT)):
         src = raw.get(coll) if isinstance(raw.get(coll), dict) else {}
         for oid, n in list(src.items())[:LAB_LIMITS[coll]]:
             if not (isinstance(n, dict) and OID_RE.match(str(oid))):
@@ -690,6 +727,10 @@ def _validate_lab(raw) -> dict:
                 o.update(kind=n.get("kind") if n.get("kind") in LAB_KINDS else "idea", title=" ".join(str(n.get("title") or "").split())[:200],
                          tags=_clean_tags(n.get("tags") if isinstance(n.get("tags"), list) else []),
                          papers=[str(k)[:80] for k in (n.get("papers") if isinstance(n.get("papers"), list) else [])][:20])
+            elif coll == "remarks":
+                if n.get("on") not in ("task", "plan") or not OID_RE.match(str(n.get("ref") or "")):
+                    continue
+                o.update(on=n["on"], ref=str(n["ref"]))
             else:
                 if not OID_RE.match(str(n.get("post") or "")):
                     continue
@@ -740,7 +781,7 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
         st.setdefault("profiles", {})[owner] = dict(theirs_p)
     if st.get("lab"):   # the same for the owner's posts, comments and votes in the lab
         their_lab = copy.get("lab") or {}
-        for coll in ("posts", "comments"):
+        for coll in ("posts", "comments", "remarks"):
             theirs_l = their_lab.get(coll) or {}
             for oid, n in list((st["lab"].get(coll) or {}).items()):
                 if n.get("by") != owner:

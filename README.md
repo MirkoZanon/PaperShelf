@@ -153,8 +153,10 @@ stopped and opens there next time; the list shows a progress bar (*p. 7/20*).
 
 **🧪 Lab** – the research space of a group, in its own tab: post ideas, experiments, questions, results,
 decisions and protocols (with tags, links to the group's papers, comments, 👍 support and pins); plan the
-work with milestones and a task board (to do / doing / done, who, by when, priority); and see your tasks
-in every group in the Overview. *⤓ Report* exports everything as Markdown for a lab meeting.
+work with plans (which can start from the usual steps of an experiment or of a paper) and a task board
+(to do / doing / done). Each task opens in its own window, with its checklist and the group's notes on
+one side and its settings (who, by when, priority, plan) on the other; plans have notes too. The Overview
+shows your tasks in every group. *Report* exports everything as Markdown for a lab meeting.
 
 **Notifications** – the bell at the top shows what the other members of your groups did since the last
 update: *"Anna added a note on …"*, *"… added an entry in Method on …"*, *"… added a paper to the group"*.
