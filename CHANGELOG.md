@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.22 – 2026-11-19
+
+- **Small windows** – in a group's view the people of the group, “updated…”, *People & options* and
+  *Invite someone* are now one row under the title that wraps, instead of a narrow column stretched
+  vertically. The top bar wraps on a small window (tabs and tools on the first row, the Add box on its
+  own row) instead of overlapping, and the side panels follow its real height.
+
 ## 2.21 – 2026-11-19
 
 - **One Add button** – the top bar has a single place to add: type or paste a DOI, link or title and press

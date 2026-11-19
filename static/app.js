@@ -1673,6 +1673,9 @@ function setMode(mode) { state.mode = mode; savePrefs(); renderMode(true); }
 
 /* ------------------------------------------------------------------ events */
 function bind() {
+  // the header can be one or two rows: the panels that start below it follow its real height
+  const hdr = document.querySelector('header');
+  if (hdr && window.ResizeObserver) new ResizeObserver(() => document.documentElement.style.setProperty('--hdr', hdr.offsetHeight + 'px')).observe(hdr);
   // Add bar
   $('#add-form').addEventListener('submit', async e => {
     e.preventDefault();
