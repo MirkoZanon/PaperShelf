@@ -3984,12 +3984,12 @@ def _doc_cm_call(sid, did, fn):
 @app.post("/api/shares/<sid>/docs/<did>/comments")
 def doc_comment_add(sid, did):
     return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.add_doc_comment(
-        st, au, _display_name(db), did, b.get("body"), b.get("anchor"), b.get("quote"), b.get("rep"), b.get("parent"), bool(b.get("ins"))))
+        st, au, _display_name(db), did, b.get("body"), b.get("anchor"), b.get("quote"), b.get("rep"), b.get("parent"), bool(b.get("ins")), b.get("id")))
 
 
 @app.put("/api/shares/<sid>/docs/<did>/comments/<cid>")
 def doc_comment_edit(sid, did, cid):
-    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.edit_doc_comment(st, au, did, cid, body=b.get("body")))
+    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.edit_doc_comment(st, au, did, cid, body=b.get("body"), **{k: b[k] for k in ("rep", "anchor", "quote", "ins") if k in b}))
 
 
 @app.delete("/api/shares/<sid>/docs/<did>/comments/<cid>")

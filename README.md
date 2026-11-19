@@ -166,7 +166,7 @@ and the text is rebuilt from all logs in one fixed order (`sharing.py`; the brow
 `static/docs.js`, tested to give identical results). Markdown editor with a toolbar, *Preview*, *Review* (who wrote
 what, comments), comments with replies, suggestions to accept or reject, citations of the group's papers
 (`[@Smith2020]`, with an automatic list of references), named versions and a full editing history with restore,
-export to Word / Markdown / text / PDF. Suggestions work like Google Docs: in *Review*, select text to comment, suggest
+export to Word / Markdown / text / PDF. Suggestions work like Google Docs: switch to *Suggest* and type in the text (deletions stay struck out, new text in green), or in *Review*, select text to comment, suggest
 an edit, a deletion or an insertion; they show inline and as cards to accept or reject. Who is writing, and where, is
 shown live; the document can be opened in its own window or side by side with the library (an embedded second view of
 the app). The creator can delete a document: only a marker is published, the others keep a read-only copy until they

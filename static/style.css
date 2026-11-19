@@ -2138,3 +2138,10 @@ body.doc-window .app { display: none; } body.doc-window { background: var(--bg);
 body.dx-split-on .lab { grid-template-columns: 1fr; } body.dx-split-on .lab-rail { display: none; } body.dx-split-on .lab-body { padding: 14px 16px 40px; }
 body.dx-split-on .lab-head, body.dx-split-on .lab-tabs { display: none; }
 @media (max-width: 1100px) { .dx-ibtn span { display: none; } .docs-host.split { grid-template-columns: 1fr; } #dx-lib { position: static; height: 70vh; } }
+
+/* ---------- 2.24.1 suggest mode ---------- */
+.dx-sugbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 9px 12px; margin: -6px -10px 14px; border-radius: 10px; background: color-mix(in srgb, #e0a82e 16%, var(--panel)); border: 1px solid color-mix(in srgb, #e0a82e 40%, var(--border)); font-size: 13px; }
+.dx-sugbar .i { width: 16px; height: 16px; flex: none; color: #b7791f; }
+.dx-suggest { outline: none; min-height: 420px; caret-color: #b7791f; }
+.dx-suggest .dx-ins.mine { background: rgba(43,133,81,.2); }
+.dx-empty { display: inline-block; min-width: 1px; }

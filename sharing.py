@@ -1022,17 +1022,19 @@ def _anchor_ok(v):
     return v is None or (isinstance(v, (list, tuple)) and len(v) == 2 and _id_ok(v[0]) and _id_ok(v[1]))
 
 
-def _dcm(st, author, name, did, kind, **f) -> str:
+def _dcm(st, author, name, did, kind, cid=None, **f) -> str:
     d = doc_of(st, did)
     if len(d.setdefault("cm", {})) >= DOC_LIMITS["comments"]:
         raise ShareError("This document has too many comments.")
-    cid = uuid.uuid4().hex[:16]
+    if cid and (not OID_RE.match(str(cid)) or cid in d["cm"]):
+        raise ShareError("That comment already exists.")
+    cid = cid or uuid.uuid4().hex[:16]
     s = tick(st, author)
     d["cm"][cid] = {"k": kind, "by": author, "name": (name or "")[:60], "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0], **f}
     return cid
 
 
-def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None, parent=None, ins=False) -> str:
+def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None, parent=None, ins=False, cid=None) -> str:
     body = str(body or "").strip()[:DOC_LIMITS["body"]]
     if rep is None and not body:
         raise ShareError("Write a comment first.")
@@ -1045,16 +1047,27 @@ def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None
         raise ShareError("Write the text to insert.")
     if parent and (d.get("cm") or {}).get(parent, {}).get("k") != "c":
         raise ShareError("That comment doesn't exist any more.")
-    return _dcm(st, author, name, did, "c", body=body, anchor=[list(anchor[0]), list(anchor[1])] if anchor else None,
+    return _dcm(st, author, name, did, "c", cid=cid, body=body, anchor=[list(anchor[0]), list(anchor[1])] if anchor else None,
                 quote=str(quote or "")[:300], rep=None if rep is None else clean_text(rep)[:DOC_LIMITS["body"]], parent=parent or None, ins=bool(ins))
 
 
-def edit_doc_comment(st, author, did, cid, body=None, delete=False):
+def edit_doc_comment(st, author, did, cid, body=None, delete=False, **f):
+    """Change one of your own comments or suggestions (a suggestion being typed grows: rep, anchor, quote, ins)."""
     e = (doc_of(st, did).get("cm") or {}).get(cid)
     if not e or e.get("k") != "c" or e["by"] != author:
         raise ShareError("You can only change your own comments.")
     if body is not None:
         e["body"] = str(body).strip()[:DOC_LIMITS["body"]]
+    if "rep" in f:
+        e["rep"] = None if f["rep"] is None else clean_text(f["rep"])[:DOC_LIMITS["body"]]
+    if "anchor" in f:
+        if not _anchor_ok(f["anchor"]):
+            raise ShareError("That selection is not valid.")
+        e["anchor"] = [list(f["anchor"][0]), list(f["anchor"][1])] if f["anchor"] else None
+    if "quote" in f:
+        e["quote"] = str(f["quote"] or "")[:300]
+    if "ins" in f:
+        e["ins"] = bool(f["ins"])
     if delete:
         e["del"] = True
     e["at"] = _now()

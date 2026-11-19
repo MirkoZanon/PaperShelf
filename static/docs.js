@@ -4,7 +4,7 @@
    anybody. This file: the replay, the editor, comments and suggestions, versions, citations, export. */
 const Docs = (() => {
   const D = {sid: null, can: false, list: null, id: null, host: null, R: null, mode: 'write', side: 'comments', sel: null, view: null,
-             pending: null, poll: null, flushT: null, flushing: false, status: 'saved', showArch: false, composing: false, selCm: null, filter: 'open', auth: false, split: false, standalone: false, ext: new Set(), rsel: null};
+             pending: null, poll: null, flushT: null, flushing: false, status: 'saved', showArch: false, composing: false, selCm: null, filter: 'open', auth: false, sq: new Map(), items: [], caret: null, split: false, standalone: false, ext: new Set(), rsel: null};
   const root = () => $('#dx-root', D.host) || D.host;
   const MOD = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
   const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
@@ -129,7 +129,13 @@ const Docs = (() => {
       if (a === R.me) { if (o.n > (R.ops[a] || []).length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.sent = R.ops[a].length; changed = true; } R.have[a] = Math.max(R.have[a] || 0, o.n); continue; }
       if (o.ops.length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.have[a] = o.n; changed = true; }
     }
-    R.title = r.title; R.arch = r.arch; R.gone = r.gone; R.canDelete = r.can_delete; R.comments = r.comments; R.snaps = r.snaps; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
+    R.title = r.title; R.arch = r.arch; R.gone = r.gone; R.canDelete = r.can_delete;
+    { const keep = new Map(), dels = new Set();      // the suggestions I am typing right now are newer than what the server sent
+      for (const [id, qq] of D.sq) { if (qq.del) dels.add(id); else if (qq.dirty || !qq.created) { const c = (R.comments || []).find(x => x.id === id); if (c) keep.set(id, c); } }
+      const out = r.comments.filter(c => !dels.has(c.id)).map(c => keep.get(c.id) || c);
+      keep.forEach((c, id) => { if (!r.comments.some(x => x.id === id)) out.push(c); });
+      R.comments = out; }
+    R.snaps = r.snaps; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
     return changed;
   }
   async function pull() {
@@ -216,7 +222,7 @@ const Docs = (() => {
     stopPoll(); clearTimeout(D.flushT);
     try {
       const r = await api(`${base()}/${q(id)}`);
-      D.id = id; D.can = r.can_write; D.mode = keep ? D.mode : 'write'; D.view = null; D.selCm = null;
+      D.id = id; D.can = r.can_write; D.sq = new Map(); D.mode = keep ? D.mode : 'write'; D.view = null; D.selCm = null;
       D.R = {me: r.me, ops: {}, have: {}, sent: 0, max: 0, B: null, title: r.title, arch: r.arch, gone: r.gone, canDelete: r.can_delete, byName: r.by_name, comments: [], snaps: [], papers: [], people: [], text0: ''};
       for (const [a, o] of Object.entries(r.ops)) { D.R.ops[a] = o.ops; D.R.have[a] = o.n; }
       D.R.sent = (D.R.ops[D.R.me] || []).length; absorb({...r, ops: {}}); rebuild();
@@ -225,7 +231,7 @@ const Docs = (() => {
     } catch (err) { toast(err.message, 'error'); D.id = null; await loadList(); paintList(); }
   }
   function closeDoc() {
-    flushNow().finally(() => { stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble(); loadList().then(paintList); });
+    flushAll().finally(() => { stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble(); loadList().then(paintList); });
   }
   async function flushNow() { clearTimeout(D.flushT); for (let i = 0; i < 3 && D.R && ((D.R.ops[D.R.me] || []).length > D.R.sent || D.flushing); i++) { if (!D.flushing) await flush(); else await new Promise(r => setTimeout(r, 300)); } }
 
@@ -250,15 +256,16 @@ const Docs = (() => {
   function paint() {
     if (!D.host) return;
     const R = D.R, W = D.can;
-    root().innerHTML = `<div class="dx ${D.mode}">
+    root().innerHTML = `<div class="dx m-${D.mode}">
       <div class="dx-bar">
         ${D.standalone ? '' : `<button class="btn small" data-dx="back" title="All documents">${ic('caret')}<span>Documents</span></button>`}
         <input class="dx-title" id="dx-title" value="${esc(R.title)}" maxlength="150" ${W ? '' : 'readonly'} aria-label="Title">
         <span class="dx-status ${D.status}" id="dx-status">${W ? 'Saved' : 'Read only'}</span>
         <span class="dx-now" id="dx-now"></span>
         <span class="grow"></span>
-        <div class="seg dx-modes"><button data-dx-mode="write" class="${D.mode === 'write' ? 'on' : ''}" title="Type here">${W ? 'Write' : 'Read'}</button>
-          <button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="Comment and suggest changes on the text, like in Google Docs">Review</button>
+        <div class="seg dx-modes"><button data-dx-mode="write" class="${D.mode === 'write' ? 'on' : ''}" title="${W ? 'Write directly in the document' : 'Read the document'}">${W ? 'Edit' : 'Read'}</button>
+          ${W ? `<button data-dx-mode="suggest" class="${D.mode === 'suggest' ? 'on' : ''}" title="Keep writing in the document: every change you make is recorded as a suggestion that the others can accept or reject">Suggest</button>` : ''}
+          <button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="Read with comments and suggestions in the text">Review</button>
           <button data-dx-mode="preview" class="${D.mode === 'preview' ? 'on' : ''}" title="The formatted document with citations and references">Preview</button></div>
         ${D.standalone ? '' : `<button class="btn small dx-ibtn ${D.split ? 'on' : ''}" data-dx="split" title="Show your library next to the document">${ic('books')}<span>Library</span></button><button class="btn small dx-ibtn" data-dx="window" title="Open this document in its own window, to keep the library in the main one">${ic('export')}<span>New window</span></button>`}
         <span class="dx-menu"><button class="btn small" data-dx="export-menu">${ic('download')}Export</button></span>
@@ -318,22 +325,25 @@ const Docs = (() => {
     for (const a of activeAuthors(300000)) { const sp = lastSpot(a); if (sp != null) (flags.get(Math.min(sp, n)) || flags.set(Math.min(sp, n), []).get(Math.min(sp, n))).push(a); }
     return {hi, sug, ins, flags};
   }
-  function marksHtml(B) {
-    const {hi, sug, ins, flags} = reviewItems(B), n = B.vis.length, cuts = new Set([0, n]);
+  function marksHtml(B, edit = false) {
+    const {hi, sug, ins, flags} = reviewItems(B), n = B.vis.length, cuts = new Set([0, n]), items = [];
     [...hi, ...sug].forEach(x => { cuts.add(x.a); cuts.add(Math.min(x.b, n)); });
     ins.forEach((_v, k) => cuts.add(Math.min(k, n))); flags.forEach((_v, k) => cuts.add(k));
     if (D.auth) for (let i = 1; i < n; i++) if (B.vis[i].a !== B.vis[i - 1].a) cuts.add(i);
     const pts = [...cuts].sort((x, y) => x - y); let h = '';
-    const extra = k => (ins.get(k) || []).map(x => `<ins class="dx-ins ${x.id === D.selCm ? 'sel' : ''}" data-cmref="${esc(x.id)}">${esc(x.rep)}</ins>`).join('')
-      + (flags.get(k) || []).map(a => `<span class="dx-flag ${Date.now() - Date.parse(D.R.ops[a][D.R.ops[a].length - 1].at) < 20000 ? '' : 'old'}" style="--c:${auHue(a)}" data-n="${esc(peopleName(a).split(' ')[0])}"></span>`).join('');
+    const mineOf = id => !!D.R.comments.find(c => c.id === id)?.mine;
+    const extra = k => (ins.get(k) || []).map(x => { items.push({kind: 'ins', id: x.id, text: x.rep, mine: mineOf(x.id)}); return `<ins class="dx-ins ${x.id === D.selCm ? 'sel' : ''} ${mineOf(x.id) ? 'mine' : ''}" data-i="${items.length - 1}" data-id="${esc(x.id)}" data-cmref="${esc(x.id)}">${esc(x.rep)}</ins>`; }).join('')
+      + (flags.get(k) || []).map(a => `<span class="dx-flag ${Date.now() - Date.parse(D.R.ops[a][D.R.ops[a].length - 1].at) < 20000 ? '' : 'old'}" contenteditable="false" style="--c:${auHue(a)}" data-n="${esc(peopleName(a).split(' ')[0])}"></span>`).join('');
     for (let k = 0; k < pts.length; k++) {
       h += extra(pts[k]);
       const a = pts[k], b = pts[k + 1]; if (b == null || b <= a) continue;
       const cm = hi.filter(x => x.a <= a && x.b >= b).map(x => x.id), sg = sug.filter(x => x.a <= a && x.b >= b).map(x => x.id), all = [...sg, ...cm];
       const cls = ['dx-t', cm.length ? 'dx-cm' : '', sg.length ? 'dx-del' : '', all.includes(D.selCm) ? 'sel' : '', D.auth ? 'dx-au' : ''].filter(Boolean).join(' ');
-      h += `<span class="${cls}" data-a="${a}" ${all.length ? `data-cmref="${all.map(esc).join(' ')}"` : ''} ${D.auth ? `style="--c:${auHue(B.vis[a].a)}" title="${esc(peopleName(B.vis[a].a))}"` : ''}>${esc(B.text.slice(B.off[a], B.off[b]))}</span>`;
+      items.push({kind: 'base', a, b, struck: sg.length > 0});
+      h += `<span class="${cls}" data-i="${items.length - 1}" data-a="${a}" data-b="${b}" ${all.length ? `data-cmref="${all.map(esc).join(' ')}"` : ''} ${D.auth ? `style="--c:${auHue(B.vis[a].a)}" title="${esc(peopleName(B.vis[a].a))}"` : ''}>${esc(B.text.slice(B.off[a], B.off[b]))}</span>`;
     }
-    return h || '<span class="muted">Empty document.</span>';
+    D.items = items;
+    return h || (edit ? '<span class="dx-empty">&#8203;</span>' : '<span class="muted">Empty document.</span>');
   }
   function legendHtml() {
     const R = D.R, counts = {}; R.B.vis.forEach(n => { counts[n.a] = (counts[n.a] || 0) + 1; });
@@ -353,6 +363,9 @@ const Docs = (() => {
     if (D.mode === 'write') {
       pg.innerHTML = `<textarea id="dx-text" class="dx-text" spellcheck="true" ${W ? '' : 'readonly'} placeholder="${W ? 'Start writing…  Use # for headings, **bold**, - for lists, [@Smith2020] to cite a paper.' : ''}" aria-label="Document text"></textarea>`;
       const ta = $('#dx-text', pg); ta.value = R.B.text; autosize(ta);
+    } else if (D.mode === 'suggest' && W) {
+      pg.innerHTML = `<div class="dx-sugbar">${ic('pen')}<span><b>Suggesting.</b> Write and delete as usual: your changes show in the text as suggestions (deleted text struck out, new text in green) and the others can accept or reject them.</span><span class="grow"></span><button class="btn small" data-dx-mode="write">Back to editing</button></div><div class="dx-src dx-suggest" id="dx-src" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Document text (suggesting)">${marksHtml(R.B, true)}</div>`;
+      if (D.focusSrc) { D.focusSrc = false; placeCaret(D.caret || {base: R.B.vis.length}); }
     } else if (D.mode === 'marks') {
       pg.innerHTML = `<div class="dx-revbar">${W ? '<span class="muted small">Select some text to comment on it or suggest a change.</span>' : ''}<span class="grow"></span><label class="dx-chk"><input type="checkbox" data-dx-auth ${D.auth ? 'checked' : ''}> Colour by writer</label></div>${D.auth ? legendHtml() : ''}<div class="dx-src" id="dx-src">${marksHtml(R.B)}</div>`;
     } else {
@@ -370,7 +383,7 @@ const Docs = (() => {
       const s = offToIdx(old, ta.selectionStart), e = offToIdx(old, ta.selectionEnd);
       selA = s ? [old.vis[s - 1].c, old.vis[s - 1].a] : null; selB = e ? [old.vis[e - 1].c, old.vis[e - 1].a] : null;
     }
-    const prevText = old.text; rebuild();
+    const caret = D.mode === 'suggest' ? captureCaret() : null, prevText = old.text; rebuild();
     if (D.view) { paintSide(); paintNow(); return; }
     if (ta && D.mode === 'write') {
       if (D.composing) { D.late = true; paintSide(); return; }
@@ -380,7 +393,7 @@ const Docs = (() => {
         if (focus) { const a = R.B.off[pos(selA)], b = R.B.off[pos(selB)]; ta.setSelectionRange(a, Math.max(a, b)); }
         ta.scrollTop = top; if (window.scrollY !== sc) window.scrollTo(0, sc);
       }
-    } else if (prevText !== R.B.text || D.mode !== 'write') paintPage();
+    } else if (prevText !== R.B.text || D.mode !== 'write') { if (D.mode === 'suggest' && $('#dx-src', D.host)) repaintSuggest(caret); else paintPage(); }
     paintSide(); paintNow();
   }
 
@@ -553,6 +566,130 @@ const Docs = (() => {
     applyNewText(text); toast('Version restored.');
   }
 
+  /* ------------------------------------------------------------- Suggest mode: keep writing, every change becomes a suggestion */
+  const hex16 = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), b => b.toString(16).padStart(2, '0')).join('');
+  const itemLen = it => it.kind === 'base' ? D.R.B.off[it.b] - D.R.B.off[it.a] : it.text.length;
+  const cmpPos = (x, y) => (x.i - y.i) || (x.off - y.off);
+  const sugOf = id => D.R.comments.find(c => c.id === id);
+  const mineSug = () => D.R.comments.filter(c => c.mine && !c.parent && c.rep != null && c.state === 'open');
+  const rangeOf = c => (c.anchor && !c.ins) ? [visBefore(D.R.B, c.anchor[0]), visAfter(D.R.B, c.anchor[1])] : [null, null];
+  const insAt = c => c.anchor ? visAfter(D.R.B, c.anchor[1]) : 0;
+  function posOf(node, off) {      // a point in the page -> {item, offset in the item's text}
+    const src = $('#dx-src', D.host); if (!src || !node || !src.contains(node)) return null;
+    const el = node.nodeType === 3 ? node.parentElement : node, it = el.closest?.('[data-i]');
+    if (it && src.contains(it)) { const len = it.textContent.length; return {i: +it.dataset.i, off: node.nodeType === 3 ? Math.min(off, len) : (off > 0 ? len : 0)}; }
+    const kids = [...src.childNodes]; let idx = node === src ? off : kids.findIndex(k => k === el || k.contains(el)); if (idx < 0) idx = 0;
+    for (let k = idx; k < kids.length; k++) if (kids[k].dataset && kids[k].dataset.i != null) return {i: +kids[k].dataset.i, off: 0};
+    for (let k = Math.min(idx, kids.length) - 1; k >= 0; k--) if (kids[k].dataset && kids[k].dataset.i != null) return {i: +kids[k].dataset.i, off: kids[k].textContent.length};
+    return null;
+  }
+  function captureCaret() {
+    const sel = getSelection(); if (!sel || !sel.rangeCount) return null; const p = posOf(sel.anchorNode, sel.anchorOffset), it = p && D.items[p.i]; if (!it) return null;
+    return it.kind === 'ins' ? {ins: it.id, off: p.off} : {base: offToIdx(D.R.B, D.R.B.off[it.a] + p.off)};
+  }
+  function placeCaret(t) {
+    const src = $('#dx-src', D.host); if (!src || !t) return; const B = D.R.B; let node = src, off = src.childNodes.length;
+    if (t.ins) { const el = src.querySelector(`ins[data-id="${CSS.escape(t.ins)}"]`); if (el) { node = el.firstChild || el; off = Math.min(t.off, el.textContent.length); } }
+    else { for (const el of src.querySelectorAll('.dx-t')) { const a = +el.dataset.a, b = +el.dataset.b; if (a <= t.base && t.base <= b) { node = el.firstChild; off = B.off[Math.min(t.base, B.vis.length)] - B.off[a]; break; } } }
+    try { const r = document.createRange(); r.setStart(node, off); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } catch (err) { /* ignore */ }
+  }
+  function newSug({a, b, rep, ins}) {
+    const R = D.R, B = R.B, id = hex16();
+    const c = {id, body: '', by: R.me, name: peopleName(R.me), mine: true, created: nowIso(), at: nowIso(), parent: null, state: 'open', rep, ins: !!ins,
+               anchor: ins ? (a > 0 ? [[B.vis[a - 1].c, B.vis[a - 1].a], [B.vis[a - 1].c, B.vis[a - 1].a]] : null) : anchorFor(B, a, b),
+               quote: ins ? (a > 0 ? B.vis[a - 1].ch : '') : selText({a, b}).slice(0, 300)};
+    R.comments.push(c); D.sq.set(id, {created: false, dirty: true, del: false}); schedSug(); return c;
+  }
+  function touchSug(c) { const q = D.sq.get(c.id) || {created: true, dirty: false, del: false}; q.dirty = true; D.sq.set(c.id, q); schedSug(); }
+  function dropSug(id) {
+    D.R.comments = D.R.comments.filter(c => c.id !== id); const q = D.sq.get(id);
+    if (q && !q.created) D.sq.delete(id); else { D.sq.set(id, {created: true, dirty: true, del: true}); schedSug(); }
+  }
+  function strike(x, y) {          // mark base text [x, y) as deleted by one of my suggestions (joining a neighbouring one)
+    const B = D.R.B;
+    for (const c of mineSug()) {
+      const [a, b] = rangeOf(c); if (a == null || b == null || a > y || b < x) continue;
+      const a2 = Math.min(a, x), b2 = Math.max(b, y); c.anchor = anchorFor(B, a2, b2); c.quote = selText({a: a2, b: b2}).slice(0, 300); touchSug(c); return c;
+    }
+    return newSug({a: x, b: y, rep: '', ins: false});
+  }
+  // one edit of the person: replace what is between s and e by text (a deletion when text is empty)
+  function applyEdit(s, e, text, {after = false} = {}) {
+    const R = D.R, B = R.B, items = D.items; if (cmpPos(s, e) > 0) [s, e] = [e, s];
+    const range = cmpPos(s, e) !== 0; let target = null, last = null;
+    if (range) {
+      const spans = [];
+      for (let i = s.i; i <= e.i; i++) {
+        const it = items[i]; if (!it) continue; const len = itemLen(it), o0 = i === s.i ? s.off : 0, o1 = i === e.i ? e.off : len; if (o1 <= o0) continue;
+        if (it.kind === 'base') {
+          if (it.struck) continue;
+          const x = offToIdx(B, B.off[it.a] + o0), y = offToIdx(B, B.off[it.a] + o1); if (y <= x) continue;
+          const l = spans[spans.length - 1]; if (l && l[1] === x) l[1] = y; else spans.push([x, y]);
+        } else if (it.mine) {
+          const c = sugOf(it.id); c.rep = c.rep.slice(0, o0) + c.rep.slice(o1);
+          if (!c.rep && c.ins) { dropSug(c.id); last = null; target = null; } else { touchSug(c); last = c; target = {ins: c.id, off: o0}; }
+        } else toast('That text is somebody else\'s suggestion: accept or reject it first.');
+      }
+      for (const [x, y] of spans) { last = strike(x, y); target = {base: after ? y : x}; }
+    }
+    if (text) {
+      if (range) { if (last) { last.rep = (last.rep || '') + text; touchSug(last); target = {ins: last.id, off: last.rep.length}; } }
+      else {
+        const it = items[s.i];
+        if (it && it.kind === 'ins') {
+          if (!it.mine) { toast('That text is somebody else\'s suggestion: accept or reject it first.'); return; }
+          const c = sugOf(it.id); c.rep = c.rep.slice(0, s.off) + text + c.rep.slice(s.off); touchSug(c); target = {ins: c.id, off: s.off + text.length};
+        } else {
+          const p = it ? offToIdx(B, B.off[it.a] + s.off) : 0;
+          const j = mineSug().find(c => c.ins ? insAt(c) === p : rangeOf(c)[1] === p);          // typing right after my own suggestion continues it
+          if (j) { j.rep = (j.rep || '') + text; touchSug(j); target = {ins: j.id, off: j.rep.length}; }
+          else { const c = newSug({a: p, b: p, rep: text, ins: true}); target = {ins: c.id, off: text.length}; }
+        }
+      }
+    }
+    D.caret = target; repaintSuggest(target);
+  }
+  function repaintSuggest(target) {
+    const src = $('#dx-src', D.host); if (!src) return; const sc = window.scrollY;
+    src.innerHTML = marksHtml(D.R.B, true); placeCaret(target); window.scrollTo(0, sc); paintSideSoon(); setStatus('saving');
+  }
+  let sugT = null; const schedSug = () => { setStatus('saving'); clearTimeout(sugT); sugT = setTimeout(flushSug, 900); };
+  async function flushSug() {
+    clearTimeout(sugT); if (!D.R || D.sugBusy) return; D.sugBusy = true;
+    try {
+      for (const [id, qq] of [...D.sq]) {
+        if (!qq.dirty) continue; qq.dirty = false;
+        const c = sugOf(id), url = `${base()}/${q(D.id)}/comments`;
+        try {
+          let r;
+          if (qq.del) { r = await api(`${url}/${q(id)}`, {method: 'DELETE'}); D.sq.delete(id); }
+          else if (!c) { D.sq.delete(id); continue; }
+          else if (!qq.created) { r = await api(url, {method: 'POST', body: {id, body: c.body, anchor: c.anchor, quote: c.quote, rep: c.rep, ins: c.ins}}); qq.created = true; }
+          else r = await api(`${url}/${q(id)}`, {method: 'PUT', body: {body: c.body, anchor: c.anchor, quote: c.quote, rep: c.rep, ins: c.ins}});
+          if (r) { const keepSnaps = D.R.snaps; absorb({...r, ops: {}}); D.R.snaps = keepSnaps; }
+        } catch (err) {
+          if (/already exists/.test(err.message)) { qq.created = true; qq.dirty = true; } else { qq.dirty = true; setStatus('offline'); sugT = setTimeout(flushSug, 5000); break; }
+        }
+      }
+    } finally { D.sugBusy = false; }
+    if ([...D.sq.values()].some(x => x.dirty)) sugT = setTimeout(flushSug, 600); else { setStatus('saved'); paintSide(); }
+  }
+  async function flushAll() { await flushSug(); for (let i = 0; i < 20 && (D.sugBusy || [...D.sq.values()].some(x => x.dirty)); i++) { await new Promise(r => setTimeout(r, 150)); if (!D.sugBusy) await flushSug(); } await flushNow(); }
+  function onBeforeInput(e) {
+    if (D.mode !== 'suggest' || !e.target.closest?.('#dx-src')) return;
+    const t = e.inputType; if (t === 'insertCompositionText' || t === 'deleteCompositionText') return;    // finished in compositionend
+    e.preventDefault(); if (!D.can || D.view) return;
+    const tr = e.getTargetRanges && e.getTargetRanges()[0], sel = getSelection();
+    const r0 = tr || (sel.rangeCount ? sel.getRangeAt(0) : null); if (!r0) return;
+    let s = posOf(r0.startContainer, r0.startOffset), en = posOf(r0.endContainer, r0.endOffset);
+    if (!D.items.length) s = en = {i: 0, off: 0};
+    if (!s || !en) return;
+    if (t.startsWith('delete')) applyEdit(s, en, '', {after: t.includes('Forward')});
+    else if (t === 'insertText' || t === 'insertReplacementText') applyEdit(s, en, clean(e.data || (e.dataTransfer && e.dataTransfer.getData('text/plain')) || ''));
+    else if (t === 'insertParagraph' || t === 'insertLineBreak') applyEdit(s, en, '\n');
+    else if (t.startsWith('insertFromPaste') || t === 'insertFromYank') applyEdit(s, en, clean((e.dataTransfer && e.dataTransfer.getData('text/plain')) || ''));
+  }
+
   /* ------------------------------------------------------------- selecting text in Review: comment / suggest, like Google Docs */
   function domPoint(node, off) {
     const el = (node.nodeType === 3 ? node.parentElement : node)?.closest?.('.dx-t'); if (!el || node.nodeType !== 3) return null;
@@ -571,10 +708,11 @@ const Docs = (() => {
     el.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px'; el.style.top = Math.max(8, y) + 'px';
   }
   function showBubble() {
-    hideBubble(); if (!D.can || D.mode !== 'marks' || D.view) return;
+    hideBubble(); if (!D.can || (D.mode !== 'marks' && D.mode !== 'suggest') || D.view) return;
     const S = readSelection(); D.rsel = S; if (!S) return;
     const el = document.createElement('div'); el.className = 'dx-bubble'; el.setAttribute('role', 'toolbar');
-    el.innerHTML = S.b > S.a ? `<button data-bub="comment">${ic('chat')}Comment</button><button data-bub="replace">${ic('pen')}Suggest edit</button><button data-bub="delete">${ic('trash')}Suggest deleting</button>`
+    if (D.mode === 'suggest' && S.b <= S.a) return;
+    el.innerHTML = D.mode === 'suggest' ? `<button data-bub="comment">${ic('chat')}Comment</button>` : S.b > S.a ? `<button data-bub="comment">${ic('chat')}Comment</button><button data-bub="replace">${ic('pen')}Suggest edit</button><button data-bub="delete">${ic('trash')}Suggest deleting</button>`
       : `<button data-bub="insert">${ic('plus')}Suggest inserting text here</button>`;
     el.addEventListener('mousedown', e => e.preventDefault());       // keep the selection while clicking
     el.addEventListener('click', e => { const k = e.target.closest('[data-bub]')?.dataset.bub; if (k) composer(k, S); });
@@ -611,7 +749,7 @@ const Docs = (() => {
   }
   async function deleteDoc() {
     if (!await confirmBox('Delete this document for the group?', 'It stops being shared and disappears from your list. The other members keep their copy on their own computer until they remove it themselves, so nobody loses work suddenly. This cannot be undone.', {ok: 'Delete', danger: true})) return;
-    try { await flushNow(); const r = await api(`${base()}/${q(D.id)}`, {method: 'DELETE'}); D.list = r.docs; stopPoll(); D.id = null; D.R = null; paintList(); toast('Document deleted.'); } catch (err) { toast(err.message, 'error'); }
+    try { await flushAll(); const r = await api(`${base()}/${q(D.id)}`, {method: 'DELETE'}); D.list = r.docs; stopPoll(); D.id = null; D.R = null; paintList(); toast('Document deleted.'); } catch (err) { toast(err.message, 'error'); }
   }
   async function purgeDoc(id) {
     if (!await confirmBox('Remove from this computer?', 'The text of this deleted document is erased from this computer. Export it first if you still need it.', {ok: 'Remove', danger: true})) return;
@@ -623,7 +761,7 @@ const Docs = (() => {
 
   /* ------------------------------------------------------------- own window and side by side with the library */
   async function openWindow() {
-    await flushNow();
+    await flushAll();
     const url = `/?doc=${q(D.sid)}/${q(D.id)}`, w = window.open(url, 'ps-doc-' + D.id, 'popup=yes,width=1040,height=920');
     if (!w) { toast('Your browser blocked the new window. Allow pop-ups for PaperShelf and try again.', 'error'); return; }
     D.ext.add(D.sid + '/' + D.id); stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble();
@@ -648,7 +786,7 @@ const Docs = (() => {
     setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
   }
   async function doExport(kind) {
-    await flushNow();
+    await flushAll();
     if (kind === 'pdf') {
       const w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups for PaperShelf to print.', 'error'); return; }
       const html = previewHtml(D.R.B, D.R.title);
@@ -669,10 +807,13 @@ const Docs = (() => {
         const v = e.target.value.toLowerCase(); $$('#dx-plist .dx-paper', host).forEach(b => { b.hidden = !!v && !b.dataset.s.includes(v); });
       }
     });
+    host.addEventListener('beforeinput', onBeforeInput);
+    host.addEventListener('compositionstart', e => { if (e.target.id === 'dx-src' || e.target.closest?.('#dx-src')) { const sel = getSelection(), r = sel.rangeCount ? sel.getRangeAt(0) : null; D.comp = r ? {s: posOf(r.startContainer, r.startOffset), e: posOf(r.endContainer, r.endOffset)} : null; } });
+    host.addEventListener('compositionend', e => { if (D.mode === 'suggest' && D.comp && e.target.closest?.('#dx-src')) { const c = D.comp; D.comp = null; const data = clean(e.data || ''); repaintSuggest(null); if (c.s && c.e) applyEdit(c.s, c.e, data); } });
     host.addEventListener('compositionstart', e => { if (e.target.id === 'dx-text') D.composing = true; });
     host.addEventListener('compositionend', e => { if (e.target.id === 'dx-text') { D.composing = false; editTo(e.target.value); autosize(e.target); if (D.late) { D.late = false; applyRemote(); } } });
-    host.addEventListener('mouseup', e => { if (D.mode === 'marks' && e.target.closest('#dx-src') && !e.target.closest('[data-cmref]')) setTimeout(showBubble, 10); });
-    host.addEventListener('keyup', e => { if (D.mode === 'marks' && e.shiftKey && e.target.closest?.('#dx-src, body')) setTimeout(showBubble, 10); });
+    host.addEventListener('mouseup', e => { if ((D.mode === 'marks' || D.mode === 'suggest') && e.target.closest('#dx-src') && !e.target.closest('[data-cmref]')) setTimeout(showBubble, 10); });
+    host.addEventListener('keyup', e => { if ((D.mode === 'marks' || D.mode === 'suggest') && e.shiftKey && e.target.closest?.('#dx-src, body')) setTimeout(showBubble, 10); });
     document.addEventListener('mousedown', e => { if (!e.target.closest('.dx-bubble, .dx-comp') && !e.target.closest('#dx-src')) hideBubble(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') hideBubble(); });
     host.addEventListener('change', e => { if (e.target.matches('[data-dx-auth]')) { D.auth = e.target.checked; paintPage(); } });
@@ -720,7 +861,8 @@ const Docs = (() => {
       if (dx === 'snap') { const l = $('#dx-vl', host).value; try { const r = await api(`${base()}/${q(D.id)}/snaps`, {method: 'POST', body: {label: l}}); absorb(r); paintSide(); toast('Version saved.'); } catch (err) { toast(err.message, 'error'); } return; }
       if (dx === 'restore') return restore();
       if (dx === 'leave-view') { D.view = null; paintPage(); return; }
-      const mode = t.closest('[data-dx-mode]')?.dataset.dxMode; if (mode) { D.sel = selection(); D.mode = mode; D.view = null; paint(); return; }
+      const mode = t.closest('[data-dx-mode]')?.dataset.dxMode;
+      if (mode) { D.sel = selection(); if (D.mode === 'suggest') await flushAll(); D.mode = mode; D.view = null; D.focusSrc = mode === 'suggest'; paint(); if (mode === 'write') $('#dx-text', host)?.focus(); return; }
       const side = t.closest('[data-dx-side]')?.dataset.dxSide; if (side) { D.side = side; return paintSide(); }
       const fmt = t.closest('[data-fmt]')?.dataset.fmt;
       if (fmt) { if (fmt === 'comment' || fmt === 'suggest') { D.sel = selection(); D.side = 'comments'; paintSide(); if (fmt === 'suggest') return addComment(true); $('#dx-cnew', host)?.focus(); return; } if (fmt === 'cite') { D.side = 'cite'; return paintSide(); } return wrap(fmt); }
@@ -757,7 +899,7 @@ const Docs = (() => {
   }
   // true while someone is writing: the lab must not redraw the page under their fingers
   const busy = sid => !!(D.R && D.id && D.sid === sid && D.host && document.body.contains(D.host));
-  function leave() { stopPoll(); flushNow(); D.id = null; D.R = null; D.view = null; D.host = null; hideBubble(); document.body.classList.remove('dx-split-on'); }
+  function leave() { stopPoll(); flushAll(); D.id = null; D.R = null; D.view = null; D.host = null; hideBubble(); document.body.classList.remove('dx-split-on'); }
 
   // a document in a window of its own: ?doc=<group>/<document>
   const chan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('papershelf-docs') : null;

@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.25 – 2026-11-19
+
+- **Suggest mode, like in Google Docs** – the document bar now has *Edit | Suggest | Review | Preview*. In *Suggest*
+  you keep typing in the document itself: deleted text stays in place struck out in red, new text appears in green, and
+  every change becomes a suggestion card the others can accept or reject. Everyone in the group needs this version.
+
 ## 2.24 – 2026-11-19
 
 - **Suggestions like in Google Docs** – in a document's *Review* view, select text and choose *Comment*, *Suggest
