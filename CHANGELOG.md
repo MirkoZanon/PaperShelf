@@ -2,6 +2,17 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.20 – 2026-11-19
+
+- **A cleaner Library header** – the **All papers | Reading list** switch is now the title, on the left;
+  the view tools **List · Map · Table** sit in the middle (the reading list is just the list); **＋ Add** and
+  the search box on the right never move. A label, group or list name appears next to the switch only when
+  you select one, with a **×** to go back.
+- **One icon style** – thin line icons everywhere instead of coloured emoji: the switch, the sidebar,
+  List/Map/Table, the PDF and notes buttons on each paper.
+- **Plainer buttons** – flat, same corners, one accent colour for the main action.
+- **A new app icon** in the same style: white line books on a green tile (Dock, taskbar, browser tab).
+
 ## 2.19 – 2026-11-19
 
 - **One Library, two views** – the separate *Reading list* tab is gone: the **Library** has a switch

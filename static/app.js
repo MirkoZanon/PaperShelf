@@ -305,21 +305,23 @@ async function setGroupColor(gid, color) {
   catch (err) { toast(err.message, 'error'); }
 }
 
+const ICONS = {"books": "<path d=\"M4.5 4.5h3.2v15H4.5zM9.6 4.5h3.2v15H9.6zM14.6 5.6l3.1-.8 3.8 14.5-3.1.8z\"/><path d=\"M4.5 8h3.2M9.6 8h3.2M4.5 16h3.2M9.6 16h3.2\"/>", "book": "<path d=\"M12 6.5C10.2 5 7.6 4.5 4 4.8v13.4c3.6-.3 6.2.2 8 1.7 1.8-1.5 4.4-2 8-1.7V4.8c-3.6-.3-6.2.2-8 1.7zM12 6.5v13.4\"/>", "list": "<path d=\"M5 7h14M5 12h14M5 17h14\"/>", "map": "<circle cx=\"6.5\" cy=\"7\" r=\"2.3\"/><circle cx=\"17.5\" cy=\"6.5\" r=\"2.3\"/><circle cx=\"12\" cy=\"17.5\" r=\"2.3\"/><path d=\"M8.5 8.4l2.4 7M15.8 8.5l-2.6 7M8.9 7h6.3\"/>", "table": "<rect x=\"4\" y=\"5\" width=\"16\" height=\"14\" rx=\"2.2\"/><path d=\"M4 10h16M10 10v9\"/>", "plus": "<path d=\"M12 5.5v13M5.5 12h13\"/>", "download": "<path d=\"M12 4.5v10.5M7.8 11l4.2 4.2 4.2-4.2M5.5 19.5h13\"/>", "file": "<path d=\"M7 3.8h6.8L18 8v11.4a.8.8 0 0 1-.8.8H7a.8.8 0 0 1-.8-.8V4.6A.8.8 0 0 1 7 3.8z\"/><path d=\"M13.6 3.9v4.4H18\"/>", "note": "<path d=\"M5.5 5h13v14h-13z\"/><path d=\"M8.8 9.2h6.4M8.8 12.5h6.4M8.8 15.8h3.6\"/>", "star": "<path d=\"M12 4.3l2.3 4.9 5.3.7-3.9 3.7 1 5.3-4.7-2.6-4.7 2.6 1-5.3-3.9-3.7 5.3-.7z\"/>", "check": "<circle cx=\"12\" cy=\"12\" r=\"8.2\"/><path d=\"M8.3 12.3l2.6 2.6 4.9-5.2\"/>", "circle": "<circle cx=\"12\" cy=\"12\" r=\"8.2\"/>", "half": "<circle cx=\"12\" cy=\"12\" r=\"8.2\"/><path d=\"M12 3.8a8.2 8.2 0 0 1 0 16.4z\" fill=\"currentColor\" stroke=\"none\"/>", "alert": "<path d=\"M12 4.5l8.3 14.5H3.7z\"/><path d=\"M12 10.2v4M12 16.6v.1\"/>", "tag": "<path d=\"M4.5 4.5h7.6l7.4 7.4-7.6 7.6-7.4-7.4z\"/><circle cx=\"8.6\" cy=\"8.6\" r=\"1.1\"/>", "nofile": "<path d=\"M7 3.8h6.8L18 8v11.4a.8.8 0 0 1-.8.8H7a.8.8 0 0 1-.8-.8V4.6A.8.8 0 0 1 7 3.8z\"/><path d=\"M5 19l14-14\"/>", "users": "<circle cx=\"9\" cy=\"8.5\" r=\"3.2\"/><path d=\"M3.3 19c.6-3.3 2.9-5 5.7-5s5.1 1.7 5.7 5\"/><path d=\"M15.8 5.8a3 3 0 0 1 0 5.6M17.8 14.4c1.6.6 2.7 2.2 3 4.6\"/>"};
+const ic = (n, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 function renderSidebar() {
   const P = state.papers, R = areaPapers(), reading = state.area === 'reading';
   // the reading list's sidebar has only labels and keywords: what you are reading is already on top of the list
   const main = reading ? [] : [
-    ['all', 'All papers', '📚', P.length],
+    ['all', 'All papers', ic('books'), P.length],
   ];
   const nAtt = reading ? 0 : R.filter(Smart.attention).length;   // retracted / corrected papers, preprints now published
-  if (!reading && (nAtt || state.view.type === 'attention')) main.push(['attention', 'Needs attention', '⚠', nAtt]);
+  if (!reading && (nAtt || state.view.type === 'attention')) main.push(['attention', 'Needs attention', ic('alert'), nAtt]);
   const more = reading ? [] : [
-    ['status:read', 'Read', '●', P.filter(p => p.status === 'read').length],
-    ['starred', 'Starred', '★', P.filter(p => p.starred).length],
-    ['status:to_read', 'To read', '○', P.filter(p => p.status === 'to_read').length],
-    ['status:reading', 'Reading now', '◐', P.filter(p => p.status === 'reading').length],
-    ['unfiled', 'Without labels', '▫︎', P.filter(p => !p.group_ids.length).length],
-    ['nopdf', 'Without PDF', '⌀', P.filter(p => !p.pdf_exists).length],
+    ['status:read', 'Read', ic('check'), P.filter(p => p.status === 'read').length],
+    ['starred', 'Starred', ic('star'), P.filter(p => p.starred).length],
+    ['status:to_read', 'To read', ic('circle'), P.filter(p => p.status === 'to_read').length],
+    ['status:reading', 'Reading now', ic('half'), P.filter(p => p.status === 'reading').length],
+    ['unfiled', 'Without labels', ic('tag'), P.filter(p => !p.group_ids.length).length],
+    ['nopdf', 'Without PDF', ic('nofile'), P.filter(p => !p.pdf_exists).length],
   ];
   $('#nav-head').textContent = 'Library';
   $('#nav').hidden = reading;
@@ -393,9 +395,9 @@ function shortAuthors(p) {
   return `${a[0].family} et al.`;
 }
 function pdfButton(p) {
-  if (p.pdf_exists) return `<span class="pdf-wrap"><button class="pdf-btn has" data-pdfq title="Open the PDF">📄 PDF</button><button class="pdf-del" data-pdfdel title="Delete this PDF (moved to the Trash) – the paper, its notes and highlights stay">✕</button></span>`;
+  if (p.pdf_exists) return `<span class="pdf-wrap"><button class="pdf-btn has" data-pdfq title="Open the PDF">${ic('file')}PDF</button><button class="pdf-del" data-pdfdel title="Delete this PDF (moved to the Trash) – the paper, its notes and highlights stay">✕</button></span>`;
   if (!(p.doi || p.url || p.arxiv_id)) return '';
-  return `<button class="pdf-btn get" data-pdfq title="Get the PDF: looks for a free copy and opens it; if there is none, opens the article page (log in with your university there – the downloaded PDF is attached automatically)">⬇ PDF</button>`;
+  return `<button class="pdf-btn get" data-pdfq title="Get the PDF: looks for a free copy and opens it; if there is none, opens the article page (log in with your university there – the downloaded PDF is attached automatically)">${ic('download')}PDF</button>`;
 }
 async function quickPdf(id, btn) {
   const p = paperById(id); if (!p) return;
@@ -446,13 +448,14 @@ function emptyHtml() {
 function renderList() {
   const list = filteredPapers();
   state.visible = list.map(p => p.id);
-  $('#view-title').innerHTML = esc(viewTitle()) + (['group', 'share', 'attention'].includes(state.view.type) || state.view.type !== homeView().type && state.area === 'reading'
-    ? ` <button class="view-clear" data-view-clear title="Show the whole ${state.area === 'reading' ? 'reading list' : 'library'}">×</button>` : '');
+  // the switch All papers | Reading list is the title; a name only appears when a label, group or list is selected
+  $('#view-title').innerHTML = state.view.type === homeView().type ? ''
+    : esc(viewTitle()) + ` <button class="view-clear" data-view-clear title="Back to ${state.area === 'reading' ? 'the reading list' : 'all papers'}">×</button>`;
   const total = filteredPapers({ignoreKeyword: true}).length;
   $('#view-sub').textContent = state.view.type === 'group' && state.includeSub && childrenOf(state.view.id).length
     ? 'Showing papers with this label and its sub-labels' : '';
   if (state.view.type === 'share' && typeof Shares !== 'undefined') $('#view-sub').innerHTML = Shares.viewSub(state.view.id);
-  else if (state.area === 'reading') $('#view-sub').innerHTML = `${['group', 'share'].includes(state.view.type) ? 'In your reading list · ' : ''}Papers to read and being read – <button class="linklike" data-goto-library>the whole library</button>`;
+  else if (state.area === 'reading' && state.view.type !== homeView().type) $('#view-sub').innerHTML = `In your reading list · <button class="linklike" data-goto-library>all papers</button>`;
   const chips = [];
   if (state.keyword) {
     const label = list[0]?.keywords.find(k => k.toLowerCase() === state.keyword) || state.keyword;
@@ -1646,7 +1649,7 @@ function chooseNoteTarget(T, title) {
 
 /* ------------------------------------------------------------------ modes */
 function renderMode(scopeChanged = false) {
-  $('#mode-seg').style.display = state.area === 'reading' || state.mode === 'discover' ? 'none' : '';   // the reading list is just the list; Discover is a page of its own
+  $('#mode-seg').style.visibility = state.area === 'reading' || state.mode === 'discover' ? 'hidden' : '';   // the reading list is just the list; Discover is a page of its own
   if (state.area === 'reading') state.mode = 'list';
   $$('#mode-seg [data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === state.mode));
   $('#list').style.display = state.mode === 'list' ? '' : 'none';

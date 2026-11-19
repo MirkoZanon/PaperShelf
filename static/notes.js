@@ -68,7 +68,7 @@ const Notes = (() => {
     const c = counts(p), n = c.private + c.public;
     const cls = c.private && c.public ? 'both' : c.public ? 'pub' : c.private ? 'priv' : 'none';
     const tip = n ? [c.private ? `${c.private} private` : '', c.public ? `${c.public} public` : ''].filter(Boolean).join(' + ') + ` note${n > 1 ? 's' : ''} – click to read` : 'Write a note';
-    return `<button class="note-btn ${cls}" data-notes title="${tip}">📝${n ? `<b>${n}</b>` : ''}</button>`;
+    return `<button class="note-btn ${cls}" data-notes title="${tip}">${ic('note')}${n ? `<b>${n}</b>` : ''}</button>`;
   }
   function detailField(p) {
     const c = counts(p), lst = p.note_list || [];

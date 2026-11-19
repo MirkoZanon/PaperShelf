@@ -1932,3 +1932,37 @@ button:focus-visible, .nt:focus-visible, .nav-item:focus-visible, input:focus-vi
 .menu { border-radius: 12px; padding: 6px; }
 .menu button { border-radius: 8px; padding: 9px 11px; }
 @media (prefers-reduced-motion: reduce) { #list .row { transition: none; } #list .row:hover { transform: none; } }
+
+/* ================================================================ 2.19.1: one line icons, three-zone header, flat buttons */
+.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+.nav-item .ico { display: inline-flex; align-items: center; justify-content: center; }
+.nav-item .ico .i { width: 16px; height: 16px; stroke-width: 1.6; }
+.pdf-btn .i, .note-btn .i { width: 13px; height: 13px; margin-right: 3px; vertical-align: -2px; }
+.note-btn .i { margin-right: 2px; }
+.add-plus .i { width: 15px; height: 15px; stroke-width: 2; }
+/* header: [labels · switch · name]   [view tools]   [add · search] */
+.view-head { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; column-gap: 16px; }
+.view-head .vh-left { align-items: center; justify-content: flex-start; }
+.vh-center { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.view-head .head-right { justify-content: flex-end; flex-wrap: nowrap; }
+.vh-title { min-width: 0; }
+.vh-title h1 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vh-title h1:empty, .vh-title .sub:empty { display: none; }
+.vh-title .sub { font-size: 12.5px; margin-top: 1px; }
+.scope-seg, .mode-seg { display: inline-flex; align-items: center; gap: 2px; padding: 3px; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 12px; overflow: visible; }
+.scope-seg button, .mode-seg button { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 12px; border: 0 !important; border-radius: 9px; background: none; color: var(--muted); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.scope-seg button:hover, .mode-seg button:hover { color: var(--text); background: var(--hover); }
+.scope-seg button.on, .mode-seg button.on { background: var(--panel); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 0 0 1px var(--border-soft); }
+main.narrow .scope-seg button span:not(.tab-n) { display: none; }
+@media (max-width: 1100px) { .view-head { grid-template-columns: 1fr auto; } .vh-center { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; } }
+/* buttons: plain, quiet, one radius */
+.btn { border-radius: 10px; box-shadow: none; font-weight: 500; transition: background .12s, border-color .12s, color .12s; }
+.btn:hover { background: var(--hover); border-color: color-mix(in srgb, var(--border) 60%, var(--muted)); }
+.btn.primary, body.look-glass .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; box-shadow: none; background-image: none; }
+.btn.primary:hover { filter: none; background: color-mix(in srgb, var(--accent) 88%, #000); border-color: transparent; }
+.vh-add-wrap > .btn { box-shadow: none; gap: 7px; }
+.vh-add-wrap > .btn .i { stroke-width: 2; }
+.btn.small { border-radius: 8px; }
+.pdf-btn { border-radius: 8px; display: inline-flex; align-items: center; }
+body.look-glass .btn:not(.primary):not(.danger):not(.linklike) { box-shadow: none; }
+body.look-glass .btn.primary:hover { filter: none; }

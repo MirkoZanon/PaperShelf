@@ -25,7 +25,7 @@
     <div id="tabs" class="navtabs">
     <div class="nt-read-group">
     <form id="add-form" class="tab-library-only" autocomplete="off">
-      <span class="add-plus" aria-hidden="true">＋</span>
+      <span class="add-plus" aria-hidden="true"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg></span>
       <input id="add-input" class="input" placeholder="Add a paper: DOI, link or title…  ( n )">
       <button class="btn primary" id="add-btn" type="submit">Add</button>
       <div class="menu-wrap">
@@ -73,20 +73,21 @@
 
   <main class="tab-library-only">
     <div class="view-head">
-      <div class="vh-left"><button class="btn icon side-toggle" id="side-toggle" type="button" title="Show labels and lists (or move the mouse to the left edge)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="st-label">Labels</span></button><div>
-        <h1 id="view-title">All papers</h1>
-        <div class="sub" id="view-sub"></div></div>
+      <div class="vh-left"><button class="btn icon side-toggle" id="side-toggle" type="button" title="Show labels and lists (or move the mouse to the left edge)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="st-label">Labels</span></button>
+        <div class="seg scope-seg" id="scope-seg" role="tablist"><button data-scope="library" title="Every paper, the ones you have read included – with the map and the review table"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4.5h3.2v15H4.5zM9.6 4.5h3.2v15H9.6zM14.6 5.6l3.1-.8 3.8 14.5-3.1.8z"/><path d="M4.5 8h3.2M9.6 8h3.2M4.5 16h3.2M9.6 16h3.2"/></svg><span>All papers</span></button><button data-scope="reading" class="on" title="Only what you still have to read, or are reading"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10.2 5 7.6 4.5 4 4.8v13.4c3.6-.3 6.2.2 8 1.7 1.8-1.5 4.4-2 8-1.7V4.8c-3.6-.3-6.2.2-8 1.7zM12 6.5v13.4"/></svg><span>Reading list</span><span class="tab-n" id="scope-n"></span></button></div>
+        <div class="vh-title"><h1 id="view-title"></h1><div class="sub" id="view-sub"></div></div>
+      </div>
+      <div class="vh-center">
+        <div class="seg mode-seg" id="mode-seg" role="tablist">
+          <button data-mode="list" class="on" title="List of papers"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14"/></svg><span class="ml">List</span></button>
+          <button data-mode="map" title="Citation map of these papers"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="7" r="2.3"/><circle cx="17.5" cy="6.5" r="2.3"/><circle cx="12" cy="17.5" r="2.3"/><path d="M8.5 8.4l2.4 7M15.8 8.5l-2.6 7M8.9 7h6.3"/></svg><span class="ml">Map</span></button>
+          <button data-mode="table" title="Review table of a label or a group: one row per paper, with columns such as aim, method, result… (in a group it is shared with the members)"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2.2"/><path d="M4 10h16M10 10v9"/></svg><span class="ml">Table</span></button>
+        </div>
+        <div class="filters" id="filters"></div>
       </div>
       <div class="head-right">
-        <div class="seg scope-seg" id="scope-seg" role="tablist"><button data-scope="reading" class="on" title="Only what you still have to read, or are reading"><span class="sc-ico">📖</span> Reading list <span class="tab-n" id="scope-n"></span></button><button data-scope="library" title="Every paper, the ones you have read included">📚 All papers</button></div>
-        <div class="menu-wrap vh-add-wrap"><button class="btn primary" id="vh-add" type="button" title="Add a paper, import PDFs, create a label or a group ( n )">＋ Add</button><div class="menu" id="vh-add-menu"></div></div>
-        <div class="filters" id="filters"></div>
+        <div class="menu-wrap vh-add-wrap"><button class="btn primary" id="vh-add" type="button" title="Add a paper, import PDFs, create a label or a group ( n )"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg><span>Add</span></button><div class="menu" id="vh-add-menu"></div></div>
         <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><input id="search" type="search" placeholder="Search titles, notes, PDFs…" title="Searches titles, authors, journals, keywords, abstracts, notes – and the text inside your PDFs"><kbd>/</kbd></label>
-        <div class="seg mode-seg" id="mode-seg" role="tablist">
-          <button data-mode="list" class="on" title="List of papers">☰<span class="ml"> List</span></button>
-          <button data-mode="map" title="Citation map of these papers">🕸<span class="ml"> Map</span></button>
-          <button data-mode="table" title="Review table of a label or a group: one row per paper, with columns such as aim, method, result… (in a group it is shared with the members)">▦<span class="ml"> Table</span></button>
-        </div>
       </div>
     </div>
     <div class="toolbar" id="list-toolbar">
