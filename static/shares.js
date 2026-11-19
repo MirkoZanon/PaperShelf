@@ -75,7 +75,23 @@ const Shares = (() => {
     return `<div class="fld"><span>Groups <button class="help-q" data-help="sharing" title="Explain this">?</button></span><div class="share-chips">
       ${mine.map(x => `<span class="schip ${x.color ? 'colored' : ''}"${chipStyle(x.color)} title="${x.role === 'member' ? 'Remove from this group for everybody (their copies stay, without the group)' : 'Hide this group on this paper, for you only'}">${labelIcon(x.color, 'group')}${esc(x.name)}<button data-share-rm="${esc(x.id)}" title="Remove">×</button></span>`).join('')}
       ${can.length ? `<select class="share-add" data-share-add><option value="">＋ Share in…</option>${can.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select>` : ''}
-      ${!mine.length && !can.length ? '<span class="muted small">Not shared.</span>' : ''}</div></div>`;
+      ${!mine.length && !can.length ? '<span class="muted small">Not shared.</span>' : ''}</div>
+      ${pdfToggles(p, mine)}</div>`;
+  }
+  function pdfToggles(p, mine) {
+    if (!p.pdf_exists) return '';
+    const w = mine.filter(x => x.pdf_folder); if (!w.length) return '';
+    const on = new Set(p.pdf_shared || []);
+    return `<div class="muted small" style="margin-top:6px">PDF file: ${w.map(x => on.has(x.id)
+      ? `<button class="linklike" data-pdf-off="${esc(x.id)}" title="Remove your copy from the group's PDF folder">✓ shared with ${esc(x.name)} – stop</button>`
+      : `<button class="linklike" data-pdf-on="${esc(x.id)}" title="Copy this PDF into the folder you chose for ${esc(x.name)}">Share the PDF with ${esc(x.name)}</button>`).join(' · ')}</div>`;
+  }
+  async function pdfToggle(gid, pid, on) {
+    try {
+      await api(`/api/shares/${gid}/pdfs/${on ? 'share' : 'unshare'}`, {method: 'POST', body: {paper_ids: [pid]}});
+      await refresh(); if (state.openId === pid) openDetail(pid);
+      toast(on ? 'PDF copied into the group folder.' : 'PDF removed from the group folder.', 'ok');
+    } catch (err) { toast(err.message, 'error', 9000); }
   }
 
   /* ------------------------------------------------------------ actions */
@@ -102,11 +118,16 @@ const Shares = (() => {
     const t = quiet ? null : toast('Updating groups…', 'info', 0);
     try {
       const d = await api('/api/shares/sync', {method: 'POST', body: id ? {id} : {}});
-      t?.close(); await refresh();
+      t?.close();
+      let gotPdf = 0;
+      for (const x of (state.shares || []).filter(s => s.pdf_folder && (!id || s.id === id))) {
+        try { const r = await api(`/api/shares/${x.id}/pdfs/sync`, {method: 'POST'}); gotPdf += r.received || 0; } catch (_) { /* a folder that is not reachable is shown in the group's window */ }
+      }
+      await refresh();
       const L = Object.values(d.result.lists);
       const added = L.reduce((n, r) => n + (r.added || 0), 0), un = L.reduce((n, r) => n + (r.untagged || 0), 0);
       const errs = L.filter(r => r.error || (r.errors || []).length).length;
-      if (!quiet) toast(`Groups updated${added ? ` · ${added} new paper${added > 1 ? 's' : ''}` : ''}${un ? ` · ${un} left a group` : ''}${d.result.restored ? ` · ${d.result.restored} group(s) restored from your GitHub` : ''}${errs ? ' · some people could not be read (see the group)' : ''}.`, errs ? 'info' : 'ok', 7000);
+      if (!quiet) toast(`Groups updated${added ? ` · ${added} new paper${added > 1 ? 's' : ''}` : ''}${gotPdf ? ` · ${gotPdf} PDF${gotPdf > 1 ? 's' : ''} received` : ''}${un ? ` · ${un} left a group` : ''}${d.result.restored ? ` · ${d.result.restored} group(s) restored from your GitHub` : ''}${errs ? ' · some people could not be read (see the group)' : ''}.`, errs ? 'info' : 'ok', 7000);
     } catch (err) { t?.close(); if (!quiet) toast(err.message, 'error', 9000); }
   }
 
@@ -307,6 +328,8 @@ const Shares = (() => {
       ${member ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small primary" id="sm-invite">＋ Invite someone…</button>${x.code ? `<button class="btn small" id="sm-code" title="${esc(x.code)}">📋 Copy the code</button>` : ''}</div>` : ''}
       <div class="section-label">In my library</div>
       ${state.groups.length ? `<label class="opt"><input type="checkbox" id="sm-g-on" ${x.group_id ? 'checked' : ''}><span>Also give papers that arrive here my label <select id="sm-g">${groupOptions()}</select></span></label>` : ''}
+      <div class="section-label">PDF files <button class="help-q" data-help="sharing" title="Explain this">?</button></div>
+      <div class="pdf-share-box" id="sm-pdfbox"><span class="muted small">Loading…</span></div>
       <p class="muted small">${x.papers} paper${x.papers === 1 ? '' : 's'} · updated ${ago(x.last_pull)}${x.last_push ? ` · published ${ago(x.last_push)}` : ''}${x.last_error ? `<br><span class="warn-txt">⚠ ${esc(x.last_error)}</span>` : ''}
         · <button class="linklike" id="sm-file">Save as a file</button></p>
       <div class="modal-actions"><button class="btn danger" id="sm-leave">Leave the group</button><span class="grow"></span>
@@ -325,6 +348,7 @@ const Shares = (() => {
       try { await api(`/api/shares/${id}/members`, {method: 'POST', body: {name: rm.dataset.mrm, remove: true}}); m.close(); await refresh(); manageDialog(id); }
       catch (err) { toast(err.message, 'error'); }
     });
+    pdfBox(m.el, id);
     $('#sm-invite', m.el)?.addEventListener('click', () => { m.close(); inviteDialog(id); });
     $('#sm-code', m.el)?.addEventListener('click', () => copy(x.code, 'Code'));
     $('#sm-file', m.el).onclick = () => { location.href = `/api/shares/${id}/export`; };
@@ -335,6 +359,25 @@ const Shares = (() => {
       try { await api(`/api/shares/${id}`, {method: 'DELETE'}); m.close(); if (state.view.type === 'share' && state.view.id === id) state.view = homeView(); await refresh(); toast('Done – the papers are still in your library.', 'ok'); }
       catch (err) { toast(err.message, 'error'); }
     };
+  }
+
+  async function pdfBox(root, id, keep = null) {
+    const box = $('#sm-pdfbox', root); if (!box) return;
+    let st; try { st = await api(`/api/shares/${id}/pdfs`); } catch (err) { box.innerHTML = `<span class="warn-txt">${esc(err.message)}</span>`; return; }
+    const line = keep ? `<span class="warn-txt">⚠ ${esc(keep.error)}</span>` : !st.folder ? 'No folder chosen: PDFs are <b>not</b> shared in this group.'
+      : st.error ? `<span class="warn-txt">⚠ ${esc(st.error)}</span>`
+      : `${st.in_folder} PDF${st.in_folder === 1 ? '' : 's'} of this group in the folder · you share ${st.shared.length} · you miss ${st.available} that you can get now`;
+    box.innerHTML = `<div class="muted small">Optional. PDFs never travel through the group itself and nothing goes online from PaperShelf. Choose a folder that you and the others already share (Dropbox, OneDrive, Google Drive, iCloud, a network drive, a USB stick) – each of you picks its own path on his computer.</div>
+      <div class="row2"><input class="input" id="sp-folder" value="${esc(keep ? keep.folder : st.folder)}" placeholder="Full path of the shared folder, e.g. /Users/you/Dropbox/lab-pdfs"><button class="btn small" id="sp-save">Use this folder</button></div>
+      <label class="opt" style="margin-top:8px"><input type="checkbox" id="sp-auto" ${st.auto ? 'checked' : ''}><span>Share all my PDFs of this group automatically when I update<small>Otherwise you choose paper by paper (in the paper's Groups line) or with the button below.</small></span></label>
+      <div class="row2"><button class="btn small" id="sp-share" ${st.ok ? '' : 'disabled'}>Share my PDFs of this group now</button><button class="btn small" id="sp-get" ${st.ok ? '' : 'disabled'}>Get the PDFs I miss</button></div>
+      <p class="muted small" style="margin-top:8px">${line}</p>
+      <p class="muted small">Share only what you may share: for most papers the publisher's licence does not allow passing the PDF around, even inside a lab. Files are named with a code, never with the title.</p>`;
+    const run = async (btn, fn) => { setBusy(btn, true, '…'); let keep = null; try { await fn(); } catch (err) { keep = {error: err.message, folder: $('#sp-folder', box).value}; } await refresh(); pdfBox(root, id, keep); };
+    $('#sp-save', box).onclick = e => run(e.currentTarget, async () => { await api(`/api/shares/${id}/pdfs`, {method: 'PUT', body: {folder: $('#sp-folder', box).value, auto: $('#sp-auto', box).checked}}); toast('Saved.', 'ok'); });
+    $('#sp-auto', box).onchange = () => $('#sp-save', box).click();
+    $('#sp-share', box).onclick = e => run(e.currentTarget, async () => { const r = await api(`/api/shares/${id}/pdfs/share`, {method: 'POST', body: {all: true}}); toast(`${r.shared} PDF${r.shared === 1 ? '' : 's'} copied into the folder${r.skipped ? ` · ${r.skipped} without a PDF here` : ''}.`, 'ok'); });
+    $('#sp-get', box).onclick = e => run(e.currentTarget, async () => { const r = await api(`/api/shares/${id}/pdfs/fetch`, {method: 'POST'}); toast(r.received ? `${r.received} PDF${r.received === 1 ? '' : 's'} received.` : 'Nothing new in the folder.', r.received ? 'ok' : 'info'); });
   }
 
   /* ------------------------------------------------------------ settings tab */
@@ -405,6 +448,8 @@ const Shares = (() => {
     const body = $('#detail-body');
     body?.addEventListener('click', e => {
       const rm = e.target.closest('[data-share-rm]'); if (rm && state.openId) removePapers(rm.dataset.shareRm, [state.openId]);
+      const on = e.target.closest('[data-pdf-on]'), off = e.target.closest('[data-pdf-off]');
+      if ((on || off) && state.openId) pdfToggle((on || off).dataset.pdfOn || (on || off).dataset.pdfOff, state.openId, !!on);
     });
     body?.addEventListener('change', e => {
       if (e.target.matches('[data-share-add]') && e.target.value && state.openId) { const v = e.target.value; e.target.value = ''; addPapers(v, [state.openId]); }

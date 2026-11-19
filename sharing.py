@@ -561,12 +561,13 @@ def set_pin(st, author, post, v: bool):
     _lab(st)["pins"][post] = {"v": bool(v), "s": tick(st, author)}
 
 
-PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "owners": None, "pos": None, "del": None, "done": None}
+# "arch": archived – kept, but out of the way (an archived plan takes its tasks with it)
+PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "owners": None, "pos": None, "del": None, "done": None, "arch": None}
 # the checklist of a task: each item on its own, so two people ticking different items never clash
 CHECK_FIELDS = {"task": 32, "text": 300, "done": None, "pos": None, "del": None}
 SPECS = {"plans": PLAN_FIELDS, "tasks": None, "checks": CHECK_FIELDS}
 TASK_FIELDS = {"title": 300, "notes": 5000, "status": None, "assignee": 60, "assignees": None, "due": 10, "plan": 32, "paper": 80,
-               "post": 32, "prio": None, "pos": None, "del": None}
+               "post": 32, "prio": None, "pos": None, "del": None, "arch": None}
 
 
 def _field_ok(coll, k, v):
@@ -574,7 +575,7 @@ def _field_ok(coll, k, v):
     spec = {"plans": PLAN_FIELDS, "checks": CHECK_FIELDS}.get(coll, TASK_FIELDS)
     if k not in spec:
         raise ValueError(k)
-    if k in ("del", "done"):
+    if k in ("del", "done", "arch"):
         return bool(v)
     if k == "pos":
         return float(v or 0)

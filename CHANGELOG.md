@@ -2,6 +2,35 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.18 – 2026-11-19
+
+- **Drop a PDF to add it** – drop PDF files anywhere in the window (or use ＋ Add → PDF files). PaperShelf
+  reads the first pages: the DOI or arXiv ID is looked up; without one, the title (found by the type size)
+  is searched in Crossref and accepted only if it matches; as a last resort title, year, abstract and
+  keywords are taken from the text and the paper is marked to check. The message tells how each file
+  was recognised. The PDF is stored with the paper.
+- **PDFs in groups, only if you choose** – in a group's window, *PDF files*: pick a folder that the members
+  already share (Dropbox, OneDrive, a network drive, a USB stick…). You decide what goes in: one paper
+  (*Share the PDF with …* in the paper), all those of the group, or automatically at every update. The
+  PDFs the others put there are copied to your folder for the papers you miss. Nothing goes online from
+  PaperShelf, files are named by a code (not the title), nothing is overwritten, and you can take yours back.
+- **Easier to find things** – a green **＋ Add** button in the header of every view (Reading list and
+  Library): paper by DOI, link or title (with a drop zone for PDFs), PDF files, many at once, manual,
+  **＋ New label**, new group or join. The sidebar button now says **Labels**. The `n` key opens the add
+  window in the Library instead of jumping to the Reading list.
+
+## 2.17.1 – 2026-11-13
+
+- **Lab: archive plans and tasks** – when something is finished or set aside, archive it instead of
+  deleting it: it leaves the board, the counts and the Overview, and is kept with its checklists and
+  notes. *Archive* next to a plan's name archives the plan with its tasks; *Archive* at the top of the
+  *Done* column moves all the finished tasks at once; a single task can be archived from its window.
+- Everything archived is under **Archive**, at the bottom of the list of plans: open a plan or a task
+  from there, or bring it back with *Restore*. A plan's progress keeps counting its archived finished
+  tasks. The archive is shared with the group and listed at the end of the report.
+- All members need 2.17.1 to see the same archive; with an older version archived things still show
+  on the board.
+
 ## 2.17 – 2026-11-13
 
 - **Lab: a task opens in its own window** – on the left the work itself: title, description, the

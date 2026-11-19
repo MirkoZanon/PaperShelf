@@ -52,6 +52,7 @@ const Help = (() => {
     {id: 'organising', icon: '🏷', title: 'Labels, keywords & search', html: () => `
       <h4>Labels</h4>
       <p>Labels work like tags: a paper can have <b>any number of labels</b>, and clicking a label lists every paper that has it (click it again to see all papers). They are <b>your own</b> topics and projects; they can be nested (sub-labels) and are used by the map, Discover and the statistics.</p>
+      <p>Add anything from the green <b>＋ Add</b> button at the top of the list, wherever you are – a paper by DOI, link or title, PDF files, many at once, a label or a group – or just <b>drop PDF files anywhere in the window</b>: PaperShelf reads each PDF (DOI, title, abstract) and fills in the details.</p>
       <p>Below them, <b>Groups</b> 👥 are what you share with other people (a lab, a journal club): their papers reach everybody's library. They are kept apart so that “journal club” doesn't mix with your topics. <a href="#" data-help="sharing">More</a></p>
       <ul><li>Create a personal label with ＋; hover it for 🎨 (colour), ＋ (sub-label), ✎ (rename), 🗑 (delete). Drag a label onto another to nest it.</li>
         <li>Click <b>Labels</b>, <b>Groups</b> or <b>Keywords</b> in the sidebar to fold them away (click again to show them).</li>
@@ -273,6 +274,9 @@ const Help = (() => {
 
     {id: 'sharing', icon: '👥', title: 'Groups: sharing with other people', html: () => `
       <p>A <b>group</b> is a set of papers you share with other people – a lab, a journal club, a co-author. Only the <b>bibliographic details</b> travel (title, authors, year, journal, DOI) the <b>public notes</b> and the <b>group table</b> written in the group; never PDFs, private notes, highlights or the rest of your library. Papers that arrive are added to your library; if someone removes one from the group, your copy only leaves the group.</p>
+      <h4>PDF files in a group (optional)</h4>
+      <p>PDFs never travel through the group itself, and nothing goes online from PaperShelf. If you want to pass PDFs on, open the group (⚙︎) → <b>PDF files</b> and choose a <b>folder</b> that you and the others already share – Dropbox, OneDrive, Google Drive, iCloud, a network drive, a USB stick. Each person chooses the path on their own computer. Then <b>you decide</b> what goes in: one paper at a time (in the paper's <i>Groups</i> line: “Share the PDF with …”), or all your PDFs of the group, or automatically at every update. When you update, the PDFs the others put in the folder are copied to your own PDF folder for the papers you miss. Files are named with a code (never the title), nothing is overwritten, and you can take your copy back out at any time. Mind the publisher's licence: share only what you may share (your own papers, open access, preprints).</p>
+      <p>Between <b>your own</b> computers use <b>💻 My computers</b> instead (Settings), which keeps the whole library and, if you want, the PDFs in sync.</p>
       <h4>Two roles</h4>
       <ul><li><b>Editor</b> – adds and removes papers, writes public notes and entries in the group table, invites people. Needs a free GitHub account connected once.</li>
         <li><b>Reader</b> – sees the papers, the public notes and the table, changes nothing. Needs nothing: just the code.</li></ul>
@@ -322,6 +326,11 @@ const Help = (() => {
       <ul><li>Every task has its <b>Notes</b>, under the checklist: write a consideration, an update (<i>the virus arrives in 4 weeks</i>) or a question. A plan has notes too: click <b>Notes</b> next to its name, for what concerns the whole project (<i>the facility is closed from 22 December</i>).</li>
         <li>Notes are signed and dated; only the author can edit or delete one. Click <b>＠</b> to address a note to someone.</li>
         <li>The people of the task, the people responsible for the plan and whoever the note is addressed to get a <b>notification</b>; the other members see it in the 🔔. The card of a task shows how many notes it has.</li></ul>
+      <h4>🗄 Archive</h4>
+      <ul><li>When something is finished (or set aside) and you no longer want it in front of you, <b>archive</b> it: nothing is deleted, it just leaves the board, the counts and the Overview.</li>
+        <li><b>A plan</b>: click <b>Archive</b> next to its name. Its tasks go with it. <b>Finished tasks</b>: click <b>Archive</b> at the top of the <i>Done</i> column to move them all at once. <b>One task</b>: open it and click <b>Archive</b> at the bottom right.</li>
+        <li>Everything archived is under <b>Archive</b>, at the bottom of the list of plans, with its checklists and notes. Click a plan or a task to open it; <b>Restore</b> brings it back to the board.</li>
+        <li>The progress of a plan keeps counting its finished tasks after you archive them. The archive is shared with the group, and listed at the end of the report.</li></ul>
       <h4>🏠 Overview</h4>
       <p>Your <b>open tasks in every group</b>, with deadline, checklist and notes (overdue ones in red; tick the circle when one is done), the <b>plans you lead</b>, what was written <b>for you</b>, and for each group the open, overdue and done tasks, the posts of the week, the latest posts and the decisions.</p>
       <h4>Notifications and report</h4>

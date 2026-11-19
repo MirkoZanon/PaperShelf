@@ -838,20 +838,70 @@ async function importPdfs(files) {
   files = [...files].filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
   if (!files.length) { toast('Only PDF files can be imported.', 'error'); return; }
   const t = toast(`Importing ${files.length} PDF${files.length > 1 ? 's' : ''}…`, 'info', 0);
-  let ok = 0, unknown = 0, lastId = null;
+  let ok = 0, unknown = 0, lastId = null; const how = {doi: 0, arxiv: 0, title: 0, text: 0, name: 0};
   for (const [i, f] of files.entries()) {
     t.set(`Importing ${i + 1}/${files.length}: ${truncate(f.name, 50)}`);
     const fd = new FormData(); fd.append('file', f);
     if (currentGroupId()) fd.append('group_id', currentGroupId());
-    try { const d = await api('/api/import-pdf', {method: 'POST', form: fd}); upsertPaper(d.paper); ok++; lastId = d.paper.id; if (!d.identified) unknown++; }
+    try { const d = await api('/api/import-pdf', {method: 'POST', form: fd}); upsertPaper(d.paper); ok++; lastId = d.paper.id; if (!d.identified) unknown++; if (d.how in how) how[d.how]++; }
     catch (err) { toast(`${f.name}: ${err.message}`, 'error', 8000); }
   }
   t.close(); await loadLibrary();
-  if (ok) toast(`Imported ${ok} PDF${ok > 1 ? 's' : ''}.` + (unknown ? ` ${unknown} could not be identified – open them and use “Update metadata”.` : ''), unknown ? 'info' : 'ok', 9000);
+  if (ok) {
+    const parts = [];
+    const ident = how.doi + how.arxiv; if (ident) parts.push(`${ident} identified by DOI`); if (how.title) parts.push(`${how.title} found by title`);
+    if (how.text) parts.push(`${how.text} read from the text only – please check ${how.text > 1 ? 'them' : 'it'}`); if (how.name) parts.push(`${how.name} named from the file name`);
+    toast(`Imported ${ok} PDF${ok > 1 ? 's' : ''}${parts.length ? ': ' + parts.join(', ') : ''}.` + (unknown ? ' Open the unsure ones and use “Update metadata” to complete them.' : ''), unknown ? 'info' : 'ok', 11000);
+  }
   if (ok === 1 && lastId) openDetail(lastId);
 }
 
 /* ------------------------------------------------------------------ dialogs */
+function openAddPaper() {
+  const g = currentGroupId();
+  const m = modal(`<h3>＋ Add a paper</h3>
+    <p class="muted small">Paste a DOI, a link, an arXiv ID or the title${g ? ` – it goes into “${esc(groupPath(g))}”` : ''}.</p>
+    <form id="ap-form" autocomplete="off"><div style="display:flex;gap:8px"><input class="input" id="ap-input" style="flex:1" placeholder="10.1038/… · https://arxiv.org/abs/… · a title"><button class="btn primary" id="ap-go" type="submit">Add</button></div></form>
+    <div class="add-drop" id="ap-drop" tabindex="0" role="button"><b>Or drop PDF files here</b>PaperShelf reads each PDF (DOI, title, abstract) and adds it to your library. Click to choose files.</div>
+    <div class="modal-actions"><button class="btn small" id="ap-many">Add many at once…</button><button class="btn small" id="ap-manual">Type the details myself</button><span class="grow"></span><button class="btn" data-close>Close</button></div>`);
+  const inp = $('#ap-input', m.el); setTimeout(() => inp.focus(), 40);
+  $('#ap-form', m.el).addEventListener('submit', async e => {
+    e.preventDefault(); const v = inp.value.trim(); if (!v) return;
+    const lines = v.split(/\r?\n/).filter(Boolean); if (lines.length > 1) { m.close(); openBulkAdd(v); return; }
+    const btn = $('#ap-go', m.el); setBusy(btn, true, 'Looking up…');
+    try {
+      const d = await addOne(v); m.close(); upsertPaper(d.paper); renderAll(); openDetail(d.paper.id);
+      toast(d.duplicate ? 'Already in your library – opened it.' : `Added: ${truncate(d.paper.title, 80)}${g ? ` → ${groupPath(g)}` : ''}`, d.duplicate ? 'info' : 'ok');
+    } catch (err) {
+      setBusy(btn, false);
+      if (err.data?.nomatch && typeof Suggest !== 'undefined') { m.close(); $('#add-input').value = v; Suggest.show(v, {fromError: true}); }
+      else toast(err.message, 'error', 9000);
+    }
+  });
+  const drop = $('#ap-drop', m.el);
+  drop.addEventListener('click', () => { $('#import-input').value = ''; $('#import-input').click(); m.close(); });
+  ['dragenter', 'dragover'].forEach(n => drop.addEventListener(n, e => { e.preventDefault(); drop.classList.add('over'); }));
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); m.close(); $('#drop-overlay').classList.remove('show'); importPdfs(e.dataTransfer.files); });
+  $('#ap-many', m.el).onclick = () => { m.close(); openBulkAdd(); };
+  $('#ap-manual', m.el).onclick = () => { m.close(); addManual(); };
+}
+async function addManual() {
+  try { const d = await api('/api/papers', {method: 'POST', body: {manual: {title: 'Untitled paper'}, group_id: currentGroupId()}});
+    upsertPaper(d.paper); renderAll(); openDetail(d.paper.id); setTimeout(() => { const t = $('#detail-body textarea[data-f=title]'); t?.focus(); t?.select(); }, 60);
+  } catch (err) { toast(err.message, 'error'); }
+}
+function openAddMenu() {
+  const menu = $('#vh-add-menu'); if (menu.classList.contains('open')) { menu.classList.remove('open'); return; }
+  const it = (k, t, s) => `<button type="button" data-va="${k}">${t}<small>${s}</small></button>`;
+  menu.innerHTML = `${it('paper', 'Paper by DOI, link or title…', 'Or drop PDF files in the same window')}
+    ${it('pdf', 'PDF files from this computer…', 'PaperShelf reads them and fills in the details')}
+    ${it('many', 'Add many papers at once…', 'One link, DOI or title per line')}
+    ${it('manual', 'Type the details myself', 'For something without DOI or link')}<hr>
+    ${it('label', '＋ New label', state.view.type === 'group' ? 'Inside the label you are viewing' : 'To sort your papers')}
+    ${it('share', '👥 New group or join one…', 'Share papers and notes with other people')}`;
+  menu.classList.add('open');
+}
 function openBulkAdd(prefill = '') {
   const m = modal(`<h3>Add many papers</h3><p class="muted">One per line: links, DOIs, arXiv IDs or titles.</p>
     <textarea class="input" id="bulk-text" rows="9" placeholder="10.1038/s41586-020-2649-2&#10;https://arxiv.org/abs/1706.03762&#10;Attention is all you need">${esc(prefill)}</textarea>
@@ -1636,6 +1686,18 @@ function bind() {
   });
   $('#brand-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); brandMenu(); });
   document.addEventListener('click', e => { if (!e.target.closest('#brand-menu')) $('#brand-menu').classList.remove('open'); });
+  $('#vh-add').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); openAddMenu(); });
+  document.addEventListener('click', () => $('#vh-add-menu')?.classList.remove('open'));
+  $('#vh-add-menu').addEventListener('click', e => {
+    const b = e.target.closest('[data-va]'); if (!b) return; $('#vh-add-menu').classList.remove('open');
+    const a = b.dataset.va;
+    if (a === 'paper') openAddPaper();
+    if (a === 'pdf') { $('#import-input').value = ''; $('#import-input').click(); }
+    if (a === 'many') openBulkAdd();
+    if (a === 'manual') addManual();
+    if (a === 'label') createGroup(state.view.type === 'group' ? state.view.id : null);
+    if (a === 'share') Shares.startMenu();
+  });
   $('#more-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.toggle('open'); });
   document.addEventListener('click', () => $('#more-menu').classList.remove('open'));
   $('#more-menu').addEventListener('click', async e => {
@@ -1861,7 +1923,7 @@ function bind() {
     state.lastIndex = idx; openDetail(id);
   });
   document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
-  document.addEventListener('click', e => { if (e.target.closest('[data-focus-add]')) { e.preventDefault(); if (state.area !== 'reading' || state.tab !== 'library') setTab('reading'); $('#add-input').focus(); } });
+  document.addEventListener('click', e => { if (e.target.closest('[data-focus-add]')) { e.preventDefault(); if (state.tab === 'library' && state.area === 'reading') $('#add-input').focus(); else openAddPaper(); } });
   $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setTab('discover', {keepView: true}); });
   $('#view-title').addEventListener('click', e => { if (e.target.closest('[data-view-clear]')) setView(homeView()); });
   $('#select-all').addEventListener('change', e => {
@@ -1958,7 +2020,7 @@ function bind() {
     }
     if (typing || topModal() || Reader.isOpen() || Help.isOpen() || state.tab === 'people' || state.tab === 'lab') return;
     if (e.key === '/') { e.preventDefault(); $('#search').focus(); }
-    if (e.key === 'n') { e.preventDefault(); if (state.area !== 'reading') setTab('reading'); $('#add-input').focus(); }
+    if (e.key === 'n') { e.preventDefault(); if (state.tab === 'library' && state.area === 'reading') $('#add-input').focus(); else openAddPaper(); }
     if ((e.key === 'Backspace' || e.key === 'Delete') && state.selected.size) deletePapers([...state.selected]);
   });
 

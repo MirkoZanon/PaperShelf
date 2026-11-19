@@ -114,8 +114,9 @@ Everything is saved immediately: closing the window, the browser or the computer
 
 **Adding papers** – DOIs, doi.org links, journal pages, arXiv, bioRxiv, PubMed, PDF links, titles or
 whole copied references; a few words of a title show a list of likely papers to pick from (OpenAlex /
-Crossref search); many at once (one per line); PDF files dragged onto the window (the DOI inside
-is used); browser buttons that save the page you are reading. Duplicates are recognised.
+Crossref search); many at once (one per line); PDF files dragged onto the window (PaperShelf reads each one: the DOI or arXiv ID inside is looked up;
+without it, the title found in the text is searched in Crossref, and as a last resort title, abstract and
+keywords are taken from the text itself and marked to check); a green **＋ Add** button in every view; browser buttons that save the page you are reading. Duplicates are recognised.
 
 **Reading list & Library** – PaperShelf opens on your **Reading list**: only the papers you are reading
 (highlighted, first) and want to read, each with a PDF button and *✓ Read* to tick it off – just the
@@ -155,7 +156,8 @@ stopped and opens there next time; the list shows a progress bar (*p. 7/20*).
 decisions and protocols (with tags, links to the group's papers, comments, 👍 support and pins); plan the
 work with plans (which can start from the usual steps of an experiment or of a paper) and a task board
 (to do / doing / done). Each task opens in its own window, with its checklist and the group's notes on
-one side and its settings (who, by when, priority, plan) on the other; plans have notes too. The Overview
+one side and its settings (who, by when, priority, plan) on the other; plans have notes too. Finished
+plans and tasks can be archived (kept, out of the way) and restored. The Overview
 shows your tasks in every group. *Report* exports everything as Markdown for a lab meeting.
 
 **Notifications** – the bell at the top shows what the other members of your groups did since the last
@@ -216,7 +218,9 @@ from your Downloads folder. The publication table can be sorted by any column.
 
 **Groups** – share papers with other people (a lab, a journal club, a co-author): only titles,
 authors, year, journal and DOI travel – plus the public notes written in the group – never PDFs,
-private notes or highlights. Groups are kept apart from your labels. Each person is an **editor**
+private notes or highlights. PDFs can be passed on only if each member chooses it, through a **folder
+you all share** (Dropbox, OneDrive, a network drive…) set in the group's window: nothing goes online
+from PaperShelf, you pick which PDFs go in, files are named by a code and never overwritten. Groups are kept apart from your labels. Each person is an **editor**
 (adds papers, writes notes – needs a free GitHub account connected once) or a **reader** (sees
 everything, needs nothing); the person who invites chooses. *＋ Invite someone* prepares a short
 invitation with the code, how to join and where to get PaperShelf, and opens it in your own e-mail app

@@ -43,6 +43,7 @@ import people
 import report
 import sharing
 import notes as notesmod
+import pdfshare
 import sync as syncmod
 import launcher
 import updater
@@ -133,6 +134,9 @@ CREATE TABLE IF NOT EXISTS paper_shares (
     share_id TEXT NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
     item_key TEXT NOT NULL, PRIMARY KEY (paper_id, share_id)
 );
+-- PDFs passed to a group through a folder (this computer only, see pdfshare.py)
+CREATE TABLE IF NOT EXISTS share_pdf (share_id TEXT PRIMARY KEY, folder TEXT NOT NULL DEFAULT '', auto INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS share_pdf_files (share_id TEXT NOT NULL, paper_id INTEGER NOT NULL, file TEXT NOT NULL DEFAULT '', PRIMARY KEY (share_id, paper_id));
 CREATE TABLE IF NOT EXISTS note_hidden (share_id TEXT NOT NULL, note_id TEXT NOT NULL, PRIMARY KEY (share_id, note_id));
 CREATE TABLE IF NOT EXISTS share_dismissed (share_id TEXT NOT NULL, item_key TEXT NOT NULL, lamport INTEGER NOT NULL,
     PRIMARY KEY (share_id, item_key));
@@ -321,7 +325,17 @@ def share_map(db, paper_id=None) -> dict:
     return out
 
 
-def row_to_paper(row, gmap, acounts=None, smap=None) -> dict:
+def pdf_shared_map(db, paper_id=None) -> dict:
+    """paper id -> the groups in whose PDF folder you put its PDF."""
+    sql = "SELECT paper_id, share_id FROM share_pdf_files"
+    rows = db.execute(sql + " WHERE paper_id=?", (paper_id,)) if paper_id else db.execute(sql)
+    out: dict[int, list[str]] = {}
+    for r in rows:
+        out.setdefault(r["paper_id"], []).append(r["share_id"])
+    return out
+
+
+def row_to_paper(row, gmap, acounts=None, smap=None, pdfmap=None) -> dict:
     p = dict(row)
     for f in JSON_FIELDS + ["refs", "related", "note_list"]:
         try:
@@ -333,6 +347,7 @@ def row_to_paper(row, gmap, acounts=None, smap=None) -> dict:
     p["starred"] = bool(p["starred"])
     p["group_ids"] = gmap.get(p["id"], [])
     p["share_ids"] = (smap or {}).get(p["id"], [])
+    p["pdf_shared"] = (pdfmap or {}).get(p["id"], [])
     p["pdf_exists"] = bool(p["pdf_path"]) and os.path.isfile(p["pdf_path"])
     if acounts is not None:
         p["annotation_count"] = acounts.get(p["id"], 0)
@@ -343,7 +358,7 @@ def load_paper(db, pid):
     row = db.execute("SELECT * FROM papers WHERE id=?", (pid,)).fetchone()
     if not row:
         return None
-    p = row_to_paper(row, group_map(db, pid), annotation_counts(db), share_map(db, pid))
+    p = row_to_paper(row, group_map(db, pid), annotation_counts(db), share_map(db, pid), pdf_shared_map(db, pid))
     _add_note_counts([p], public_note_counts(db) if p["share_ids"] else {})
     return p
 
@@ -355,11 +370,11 @@ def _add_note_counts(papers, pub):
 
 def load_papers(db, ids) -> list[dict]:
     ids = [int(i) for i in ids]
-    out, gmap, ac, sm = [], group_map(db), annotation_counts(db), share_map(db)
+    out, gmap, ac, sm, pm = [], group_map(db), annotation_counts(db), share_map(db), pdf_shared_map(db)
     for i in range(0, len(ids), 500):
         chunk = ids[i:i + 500]
         q = f"SELECT * FROM papers WHERE id IN ({','.join('?' * len(chunk))})"
-        out += [row_to_paper(r, gmap, ac, sm) for r in db.execute(q, chunk)]
+        out += [row_to_paper(r, gmap, ac, sm, pm) for r in db.execute(q, chunk)]
     _add_note_counts(out, public_note_counts(db) if sm else {})
     order = {pid: n for n, pid in enumerate(ids)}
     return sorted(out, key=lambda p: order.get(p["id"], 0))
@@ -1108,22 +1123,10 @@ def import_pdf():
     if b"%PDF-" not in data[:1024]:
         return error("That file doesn't look like a PDF.")
     s = get_settings(db)
-    meta, identified = None, False
-    ident = metadata.identifier_from_pdf(data)
-    if ident:
-        try:
-            meta, identified = metadata.resolve(ident, s["email"]), True
-        except metadata.MetadataError:
-            meta = None
-    if not meta:
-        meta = metadata.empty_meta()
-        stem = Path(f.filename or "paper.pdf").stem
-        meta["title"] = re.sub(r"[_]+", " ", stem).strip() or "Untitled paper"
-        meta["notes"] = ("Imported from a PDF - details could not be found automatically. "
-                         "Use 'Update metadata' and paste the DOI or title.")
+    meta, how = metadata.identify_pdf(data, f.filename or "paper.pdf", s["email"])
     meta["_pdf_bytes"] = data
     pid, dup = insert_paper(db, meta, _int(request.form.get("group_id")))
-    return jsonify(paper=load_paper(db, pid), duplicate=dup, identified=identified)
+    return jsonify(paper=load_paper(db, pid), duplicate=dup, identified=how in ("doi", "arxiv", "title"), how=how)
 
 
 # --------------------------------------------------------------------------- #
@@ -3269,7 +3272,8 @@ def share_summary_one(db, row, st, ident) -> dict:
             "role": "member" if author else "follower", "can_publish": ident["can_publish"], "local_papers": local,
             "group_id": row["group_id"], "color": row["color"] if "color" in row.keys() else "", "origin": row["origin"], "last_pull": row["last_pull"],
             "last_push": row["last_push"], "last_error": row["last_error"], "code": code,
-            "published": bool(row["published_hash"])}
+            "published": bool(row["published_hash"]),
+            "pdf_folder": bool((db.execute("SELECT folder FROM share_pdf WHERE share_id=?", (row["id"],)).fetchone() or {"folder": ""})["folder"])}
 
 def shares_summary(db) -> list:
     ident = share_identity(db)
@@ -3495,8 +3499,12 @@ def _lab_payload(db, sid, st=None):
               "mine": bool(me & set(sharing.task_people(t))), "paper": paper(t["paper"]) if t.get("paper") else None,
               "post_title": titles.get(t.get("post") or "", ""), "by_name": who(t.get("by"))} for t in v["tasks"]]
     plans = [{**pl, "remarks": remarks_of(pl), "owners": pl.get("owners") or [], "people": people_of(pl.get("owners")),
-              "mine": bool(me & set(pl.get("owners") or [])), "by_name": who(pl.get("by"))}
+              "mine": bool(me & set(pl.get("owners") or [])), "by_name": who(pl.get("by")), "arch": bool(pl.get("arch"))}
              for pl in v["plans"]]
+    gone = {pl["id"] for pl in plans if pl["arch"]}      # an archived plan takes its tasks with it
+    for t in tasks:
+        t["arch"] = bool(t.get("arch"))
+        t["archived"] = t["arch"] or (t.get("plan") or "") in gone
     return jsonify(group={"id": sid, "name": (st.get("name") or {}).get("v") or "Group"}, can_write=bool(author), me=author or ident["user"],
                    display_name=_display_name(db, ident), people=people, posts=posts, plans=plans, tasks=tasks,
                    kinds=LAB_KIND_LABEL)
@@ -3694,6 +3702,10 @@ def lab_overview():
             continue
         v = sharing.lab_view(st)
         name = (st.get("name") or {}).get("v") or "Group"
+        gone = {pl["id"] for pl in v["plans"] if pl.get("arch")}
+        v["plans"] = [pl for pl in v["plans"] if not pl.get("arch")]
+        in_plans = [t for t in v["tasks"] if not (t.get("arch") and t.get("status") != "done")]   # a plan's progress counts its archived finished tasks
+        v["tasks"] = [t for t in v["tasks"] if not t.get("arch") and (t.get("plan") or "") not in gone]
         open_t = [t for t in v["tasks"] if (t.get("status") or "todo") != "done"]
         for_me = []
         for p in v["posts"]:
@@ -3709,7 +3721,7 @@ def lab_overview():
         all_for_me.extend(for_me)
         for pl in v["plans"]:
             if me & set(pl.get("owners") or []):
-                ts = [t for t in v["tasks"] if t.get("plan") == pl["id"]]
+                ts = [t for t in in_plans if t.get("plan") == pl["id"]]
                 my_plans.append({"group": r["id"], "group_name": name, "id": pl["id"], "name": pl.get("name") or "", "due": pl.get("due") or "",
                                  "n": len(ts), "done": sum(1 for t in ts if t.get("status") == "done")})
         for t in open_t:
@@ -3745,6 +3757,10 @@ def lab_export(sid):
     dec = [p for p in d["posts"] if p["kind"] == "decision"]
     if dec:
         L += ["## Decisions", ""] + [f"- **{p['title'] or 'Decision'}** ({p['name']}, {p['created'][:10]}){(': ' + ' '.join(p['body'].split())[:300]) if p['body'] else ''}" for p in dec] + [""]
+    old_plans = [pl for pl in d["plans"] if pl["arch"]]
+    old_tasks = [t for t in d["tasks"] if t["archived"]]
+    d["plans"] = [pl for pl in d["plans"] if not pl["arch"]]
+    d["tasks"] = [t for t in d["tasks"] if not t["archived"]]
     if d["plans"] or d["tasks"]:
         L += ["## Plans and tasks", ""]
         for pl in d["plans"] + [{"id": "", "name": "Other tasks"}]:
@@ -3768,6 +3784,14 @@ def lab_export(sid):
                     L.append(f"    - 💬 **{r['name']}** ({r['created'][:10]}): " + " ".join(r["body"].split()))
             L.append("")
     posts = [p for p in d["posts"] if p["kind"] != "decision"]
+    if old_plans or old_tasks:
+        L += ["## Archive", ""]
+        for pl in old_plans:
+            ts = [t for t in old_tasks if (t.get("plan") or "") == pl["id"]]
+            L.append(f"- **{pl['name']}** (plan, {sum(1 for t in ts if t['status'] == 'done')} of {len(ts)} tasks done)")
+            L += [f"    - [{'x' if t['status'] == 'done' else ' '}] {t['title']}" for t in ts]
+        ids = {pl["id"] for pl in old_plans}
+        L += [f"- [{'x' if t['status'] == 'done' else ' '}] {t['title']}" for t in old_tasks if (t.get("plan") or "") not in ids] + [""]
     if posts:
         L += ["## Ideas and discussion", ""]
         for p in posts:
@@ -4359,6 +4383,8 @@ def leave_share(sid):
     db.execute("DELETE FROM activity WHERE share_id=?", (sid,))
     db.execute("DELETE FROM share_dismissed WHERE share_id=?", (sid,))
     db.execute("DELETE FROM note_hidden WHERE share_id=?", (sid,))
+    db.execute("DELETE FROM share_pdf WHERE share_id=?", (sid,))        # the folder setting; the files stay where they are
+    db.execute("DELETE FROM share_pdf_files WHERE share_id=?", (sid,))
     db.commit()
     return jsonify(ok=True)
 
@@ -4491,6 +4517,71 @@ def join_share():
             pass
         row, st = _load_share(db, sid)
     return jsonify(share=share_summary_one(db, row, st, ident), stats=stats)
+
+# --------------------------------------------------------------------------- #
+# API: PDFs passed to a group through a folder (nothing goes online, see pdfshare.py)
+# --------------------------------------------------------------------------- #
+def _pdf_save(row, data):
+    p = row_to_paper(row, {})
+    return pdffinder.save_pdf(data, p, get_settings()["pdf_dir"])
+
+
+def _pdfshare_call(sid, fn):
+    db = get_db()
+    if not db.execute("SELECT 1 FROM shares WHERE id=?", (sid,)).fetchone():
+        return error("Group not found", 404)
+    try:
+        return jsonify(**fn(db, get_settings(db)["pdf_dir"]))
+    except pdfshare.PdfShareError as exc:
+        return error(str(exc), 400)
+
+
+@app.get("/api/shares/<sid>/pdfs")
+def share_pdfs_status(sid):
+    return _pdfshare_call(sid, lambda db, own: pdfshare.status(db, sid, own))
+
+
+@app.put("/api/shares/<sid>/pdfs")
+def share_pdfs_config(sid):
+    b = request.get_json(silent=True) or {}
+
+    def go(db, own):
+        pdfshare.set_config(db, sid, str(b.get("folder") or ""), bool(b.get("auto")), own)
+        return pdfshare.status(db, sid, own)
+    return _pdfshare_call(sid, go)
+
+
+@app.post("/api/shares/<sid>/pdfs/share")
+def share_pdfs_share(sid):
+    b = request.get_json(silent=True) or {}
+    ids = None if b.get("all") else [i for i in (b.get("paper_ids") or []) if isinstance(i, int)]
+    return _pdfshare_call(sid, lambda db, own: {**pdfshare.share(db, sid, ids, own), **{"status": pdfshare.status(db, sid, own)}})
+
+
+@app.post("/api/shares/<sid>/pdfs/unshare")
+def share_pdfs_unshare(sid):
+    b = request.get_json(silent=True) or {}
+    ids = [i for i in (b.get("paper_ids") or []) if isinstance(i, int)]
+    return _pdfshare_call(sid, lambda db, own: {**pdfshare.unshare(db, sid, ids, own), **{"status": pdfshare.status(db, sid, own)}})
+
+
+@app.post("/api/shares/<sid>/pdfs/fetch")
+def share_pdfs_fetch(sid):
+    return _pdfshare_call(sid, lambda db, own: {**pdfshare.fetch(db, sid, _pdf_save, own), **{"status": pdfshare.status(db, sid, own)}})
+
+
+@app.post("/api/shares/<sid>/pdfs/sync")
+def share_pdfs_sync(sid):
+    """What the Update button does for a group with a PDF folder: receive the new PDFs and, if you asked for it, send yours."""
+    def go(db, own):
+        cfg = pdfshare.get_config(db, sid)
+        if not cfg["folder"]:
+            return {"received": 0, "shared": 0, "unreadable": 0}
+        out = pdfshare.fetch(db, sid, _pdf_save, own)
+        out["shared"] = pdfshare.share(db, sid, None, own)["shared"] if cfg["auto"] else 0
+        return out
+    return _pdfshare_call(sid, go)
+
 
 @app.get("/api/shares/<sid>/export")
 def export_share(sid):

@@ -74,11 +74,12 @@
 
   <main class="tab-library-only">
     <div class="view-head">
-      <div class="vh-left"><button class="btn icon side-toggle" id="side-toggle" type="button" title="Show labels and lists (or move the mouse to the left edge)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button><div>
+      <div class="vh-left"><button class="btn icon side-toggle" id="side-toggle" type="button" title="Show labels and lists (or move the mouse to the left edge)"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span class="st-label">Labels</span></button><div>
         <h1 id="view-title">All papers</h1>
         <div class="sub" id="view-sub"></div></div>
       </div>
       <div class="head-right">
+        <div class="menu-wrap vh-add-wrap"><button class="btn primary" id="vh-add" type="button" title="Add a paper, import PDFs, create a label or a group ( n )">＋ Add</button><div class="menu" id="vh-add-menu"></div></div>
         <div class="filters" id="filters"></div>
         <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><input id="search" type="search" placeholder="Search titles, notes, PDFs…" title="Searches titles, authors, journals, keywords, abstracts, notes – and the text inside your PDFs"><kbd>/</kbd></label>
         <div class="seg mode-seg" id="mode-seg" role="tablist">

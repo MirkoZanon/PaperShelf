@@ -721,6 +721,151 @@ def identifier_from_pdf(data: bytes) -> str:
     return ""
 
 
+def pdf_profile(data: bytes) -> dict:
+    """What can be read inside a PDF, on this computer only: DOI, arXiv ID, title, year, abstract, keywords.
+
+    The title is the text set in the largest type on the first page (the way a human finds it);
+    the PDF's own metadata and the first long line are fallbacks.
+    """
+    out = {"doi": "", "arxiv": "", "title": "", "year": None, "abstract": "", "keywords": [], "text": ""}
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(data))
+    except Exception:
+        return out
+    meta_title, blob = "", []
+    try:
+        info = reader.metadata
+        if info is not None:
+            meta_title = (getattr(info, "title", "") or "").strip()
+            blob.extend(str(v) for v in dict(info).values())
+    except Exception:
+        pass
+    runs = []   # (size, text), in reading order, of the first page
+
+    def visit(text, cm, tm, fdict, fsize):
+        t = (text or "").strip()
+        if len(t) < 2:
+            return
+        try:
+            size = abs(float(fsize or 1)) * (abs(tm[3]) or abs(tm[0]) or 1) * (abs(cm[3]) or abs(cm[0]) or 1)
+        except Exception:
+            return
+        if size > 0:
+            runs.append((round(size, 1), t))
+
+    first = ""
+    for i, page in enumerate(reader.pages[:2]):
+        try:
+            if i == 0:
+                first = page.extract_text(visitor_text=visit) or ""
+                blob.append(first)
+            else:
+                blob.append(page.extract_text() or "")
+        except Exception:
+            pass
+    text = "\n".join(blob)
+    out["text"] = first
+    labelled = re.search(r"(?:doi\.org/|doi:?\s*)(10\.\d{4,9}/[^\s\"'<>]+)", text, re.I)
+    if labelled:
+        out["doi"] = clean_doi(labelled.group(1))
+    ax = re.search(r"arXiv:\s*(\d{4}\.\d{4,5})(v\d+)?", text, re.I)
+    if ax:
+        out["arxiv"] = ax.group(1)
+    if not out["doi"] and not out["arxiv"]:
+        any_doi = DOI_RE.search(text)
+        if any_doi:
+            out["doi"] = clean_doi(any_doi.group(1))
+    # the title: the largest type whose text has the length of a title
+    title = ""
+    sizes = sorted({sz for sz, _ in runs}, reverse=True)
+    for sz in sizes[:6]:
+        parts = [t for z, t in runs if z >= sz * 0.92]
+        cand = " ".join(" ".join(parts).split())
+        if 15 <= len(cand) <= 300 and len(cand.split()) >= 3 and not re.fullmatch(r"[\W\d_]+", cand):
+            title = cand
+            break
+    if not title and meta_title and len(meta_title) > 15 and not meta_title.lower().endswith((".doc", ".docx", ".pdf", ".tex")):
+        title = meta_title
+    if not title:
+        for line in first.splitlines():
+            line = " ".join(line.split())
+            if len(line) >= 25 and len(line.split()) >= 4:
+                title = line
+                break
+    out["title"] = title.rstrip(" .")
+    # the year: after "Published", "Received", "©", or the most frequent plausible year on the first page
+    import datetime
+    now_year = datetime.date.today().year
+    years = [int(y) for y in re.findall(r"\b(19[5-9]\d|20[0-4]\d)\b", first) if int(y) <= now_year + 1]
+    m = re.search(r"(?:published|accepted|received|©|copyright)[^\n]{0,40}?\b(19[5-9]\d|20[0-4]\d)\b", first, re.I)
+    if m and int(m.group(1)) <= now_year + 1:
+        out["year"] = int(m.group(1))
+    elif years:
+        out["year"] = max(set(years), key=years.count)
+    # the abstract and the keywords
+    flat = " ".join(first.split())
+    m = re.search(r"\babstract\b[\s:.\-—–]*(.{200,2800}?)(?=\s(?:keywords?|key words|introduction|1\.?\s+introduction|index terms)\b|$)", flat, re.I)
+    if m:
+        out["abstract"] = m.group(1).strip()[:2500]
+    m = re.search(r"\b(?:key ?words?|index terms)\b[\s:.\-—–]*(.{5,300}?)(?=\s(?:introduction|1\.?\s+introduction|abstract)\b|$)", flat, re.I)
+    if m:
+        kws = [k.strip(" .") for k in re.split(r"[;,·•]", m.group(1)) if 2 < len(k.strip(" .")) < 50]
+        out["keywords"] = kws[:10]
+    return out
+
+
+def identify_pdf(data: bytes, filename: str = "", email: str = "") -> tuple:
+    """Read a PDF and build its metadata. Returns (meta, how).
+
+    how: "doi" / "arxiv" – found an identifier inside the PDF and checked it online;
+         "title"        – found the title inside the PDF and matched it to a record online;
+         "text"         – only what could be read in the PDF itself (to be checked by the user);
+         "name"         – nothing could be read: the file name is the title.
+    Only the DOI or the title text is looked up (as when you type it); the PDF is never sent anywhere.
+    """
+    prof = pdf_profile(data)
+    title = prof["title"]
+    same = lambda a, b: bool(a and b) and difflib.SequenceMatcher(None, _norm(a), _norm(b)).ratio() >= 0.6
+
+    def attempt(query, how):
+        try:
+            meta = resolve(query, email)
+        except MetadataError:
+            return None
+        # a DOI found in the text can be that of a reference: it has to agree with the title read in the PDF
+        if how in ("doi", "arxiv") and title and meta.get("title") and not same(meta["title"], title) \
+                and _norm(meta["title"]) not in _norm(prof["text"]):
+            return None
+        return meta, how
+
+    for query, how in ((prof["doi"], "doi"), ("arXiv:" + prof["arxiv"] if prof["arxiv"] else "", "arxiv")):
+        if query:
+            got = attempt(query, how)
+            if got:
+                return got
+    if title:
+        try:
+            meta = search_crossref(title, email, strict=True)
+            if same(meta.get("title", ""), title):
+                return meta, "title"
+        except MetadataError:
+            pass
+    meta = empty_meta()
+    stem = re.sub(r"[_]+", " ", re.sub(r"\.pdf$", "", filename or "", flags=re.I)).strip()
+    meta["title"] = title or stem or "Untitled paper"
+    meta["year"] = prof["year"]
+    meta["abstract"] = prof["abstract"]
+    meta["keywords"] = prof["keywords"]
+    if prof["doi"]:
+        meta["doi"] = prof["doi"]
+    meta["notes"] = ("Added from a PDF. The title and the other details were read from the file itself and may be incomplete: "
+                     "check them, or use 'Update metadata' and paste the DOI or the title."
+                     if title else "Added from a PDF: nothing could be read in it, so the file name is the title. "
+                                   "Use 'Update metadata' and paste the DOI or the title.")
+    return meta, ("text" if title else "name")
+
+
 def from_page(url: str, email: str = "") -> dict:
     if url.lower().startswith("www."):
         url = "https://" + url

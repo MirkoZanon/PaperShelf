@@ -6,6 +6,7 @@
       (to do / doing / done). A task opens in its own window: the checklist and the notes of the group
       on the left, the settings (who, by when, priority, plan) on the right – everything is saved as
       you change it. Plans have notes too, and can start from a template (experiment, paper).
+      Finished plans and tasks can be archived: kept, but out of the board and the overview.
    Overview: your tasks in every group, the plans you lead, what was written for you.
    Everything lives in the group's file and travels with it (see sharing.py). Readers only read. */
 const Lab = (() => {
@@ -49,6 +50,8 @@ const Lab = (() => {
     at: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM16 8v5a2.5 2.5 0 0 0 5 0v-1a9 9 0 1 0-3.6 7.2',
     chevron: 'M9 6l6 6-6 6',
     hash: 'M9 4 7 20M17 4l-2 16M4.5 9h16M3.5 15h16',
+    archive: 'M4 5.5h16v4H4zM5.5 9.5V19h13V9.5M10 13.5h4',
+    restore: 'M4.5 12a7.5 7.5 0 1 0 2.4-5.5M4.5 4.5v4.2h4.2',
   };
   const ic = (n, size = 16) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${IC[n] || ''}"/></svg>`;
 
@@ -209,7 +212,7 @@ const Lab = (() => {
   /* ------------------------------------------------------------------ a group */
   function groupHtml() {
     const d = S.data, g = groups().find(x => x.id === S.sid) || {name: d.group.name, papers: 0};
-    const open = d.tasks.filter(t => t.status !== 'done').length;
+    const open = d.tasks.filter(t => t.status !== 'done' && !t.archived).length;
     return `<div class="lab-head"><div class="lab-gh">${gdot(S.sid, d.group.name, g.color, 'big')}<div><h2>${esc(d.group.name)}</h2>
           <div class="muted small">${plural(d.people.length, 'member')}, ${plural(g.papers || 0, 'paper')}${W() ? '' : '. You are a reader: you can read, not write'}</div></div></div>
         <span class="grow"></span><span class="lab-people">${d.people.slice(0, 8).map(p => av(p.id, p.name, 26)).join('')}${d.people.length > 8 ? `<span class="muted small">+${d.people.length - 8}</span>` : ''}</span>
@@ -379,23 +382,28 @@ const Lab = (() => {
   }
 
   /* ---------------------------------------------------- plans & tasks */
-  const planProg = id => { const ts = S.data.tasks.filter(t => (t.plan || '') === id); return {n: ts.length, done: ts.filter(t => t.status === 'done').length}; };
+  // the progress of a plan: its tasks, also the finished ones already archived (not those set aside unfinished)
+  const planProg = id => { const ts = S.data.tasks.filter(t => (t.plan || '') === id && !(t.arch && t.status !== 'done')); return {n: ts.length, done: ts.filter(t => t.status === 'done').length}; };
   function plansHtml() {
     const d = S.data, w = W();
     let pl = d.plans.find(x => x.id === S.plan);
-    if (S.plan !== 'all' && S.plan !== 'none' && !pl) S.plan = 'all';
-    const T = d.tasks.filter(t => (S.plan === 'all' || (t.plan || '') === (S.plan === 'none' ? '' : S.plan)) && (!S.mine || t.mine));
-    const noPlan = d.tasks.filter(t => !t.plan).length;
+    if (!['all', 'none', 'archive'].includes(S.plan) && !pl) S.plan = 'all';
+    const T = shownTasks();
+    const live = d.tasks.filter(t => !t.archived), noPlan = live.filter(t => !t.plan).length;
+    const nArch = d.plans.filter(p => p.arch).length + d.tasks.filter(t => t.arch && !d.plans.some(p => p.arch && p.id === t.plan)).length;
+    const inArch = S.plan === 'archive' || !!pl?.arch;
     let head;
     if (pl) {
       const g = planProg(pl.id), notesOpen = S.pn[pl.id] ?? pl.remarks.length > 0;
       head = `<div class="lab-phead"><div class="lab-phead-top"><div class="lab-phead-main"><h3>${esc(pl.name)}</h3>
             ${pl.goal ? `<p class="lab-goal">${esc(pl.goal)}</p>` : ''}
-            <div class="lab-pmeta"><span class="lab-pm">${ic('user', 14)}${pl.people.length ? pl.people.map(x => `<span class="lab-pp-s">${av(x.id, x.name, 18)}${esc(x.me ? 'You' : x.name)}</span>`).join('') : '<span class="muted">Nobody is responsible yet</span>'}</span>
+            <div class="lab-pmeta">${pl.arch ? `<span class="lab-chip arch">${ic('archive', 12)}Archived</span>` : ''}<span class="lab-pm">${ic('user', 14)}${pl.people.length ? pl.people.map(x => `<span class="lab-pp-s">${av(x.id, x.name, 18)}${esc(x.me ? 'You' : x.name)}</span>`).join('') : '<span class="muted">Nobody is responsible yet</span>'}</span>
               ${dueChip(pl.due, g.n && g.done === g.n ? 'done' : '')}
               <span class="lab-pm">${prog(g.done, g.n)}<span class="muted">${g.done} of ${g.n} tasks done</span></span></div></div>
           <div class="lab-phead-acts"><button class="btn small ${notesOpen ? 'on' : ''}" data-lpnotes="${esc(pl.id)}" title="Notes of the group on this plan">${ic('message', 15)}Notes${pl.remarks.length ? `<span class="lab-n">${pl.remarks.length}</span>` : ''}</button>
-            ${w ? `<button class="btn small" data-lplanedit="${esc(pl.id)}">${ic('pencil', 14)}Edit</button>` : ''}</div></div>
+            ${w ? `<button class="btn small" data-lplanedit="${esc(pl.id)}">${ic('pencil', 14)}Edit</button>${pl.arch
+              ? `<button class="btn small primary" data-lplanarch="${esc(pl.id)}" data-v="0" title="Bring the plan and its tasks back to the board">${ic('restore', 14)}Restore</button>`
+              : `<button class="btn small" data-lplanarch="${esc(pl.id)}" title="Finished, or set aside? The plan and its tasks leave the board and the Overview, and stay in the Archive">${ic('archive', 14)}Archive</button>`}` : ''}</div></div>
           ${notesOpen ? `<div class="lab-pnotes">${threadHtml('plan', pl.id, pl.remarks, w ? 'No notes on this plan yet. Write what the group should know: constraints, ideas, changes of plan.' : 'No notes on this plan yet.')}</div>` : ''}</div>`;
     } else {
       head = `<div class="lab-phead plain"><div class="lab-phead-main"><h3>${S.plan === 'none' ? 'Tasks without a plan' : 'All tasks'}</h3>
@@ -404,23 +412,42 @@ const Lab = (() => {
     return `<div class="lab-plans2">
       <div class="lab-plist">
         <div class="lab-plist-h"><b>Plans</b>${w ? `<button class="btn small" data-lnewplan title="A project or a milestone that groups tasks">${ic('plus', 14)}New plan</button>` : ''}</div>
-        <button class="lab-pi ${S.plan === 'all' ? 'on' : ''}" data-lplan="all"><span class="lab-pi-h"><b>All tasks</b><span class="lab-n">${d.tasks.length || ''}</span></span></button>
-        ${d.plans.map(p => { const x = planProg(p.id); return `<button class="lab-pi ${S.plan === p.id ? 'on' : ''}" data-lplan="${esc(p.id)}" title="${esc(p.goal || '')}">
+        <button class="lab-pi ${S.plan === 'all' ? 'on' : ''}" data-lplan="all"><span class="lab-pi-h"><b>All tasks</b><span class="lab-n">${live.length || ''}</span></span></button>
+        ${d.plans.filter(p => !p.arch).map(p => { const x = planProg(p.id); return `<button class="lab-pi ${S.plan === p.id ? 'on' : ''}" data-lplan="${esc(p.id)}" title="${esc(p.goal || '')}">
             <span class="lab-pi-h"><b>${esc(p.name)}</b><span class="lab-task-ppl">${p.people.map(y => av(y.id, y.name, 18)).join('')}</span></span>
             ${prog(x.done, x.n)}
             <span class="lab-pi-m muted small"><span>${x.done}/${x.n} done</span>${p.remarks.length ? `<span class="ov-i">${ic('message', 12)}${p.remarks.length}</span>` : ''}<span class="grow"></span>${dueChip(p.due, x.n && x.done === x.n ? 'done' : '')}</span></button>`; }).join('')}
-        ${noPlan && d.plans.length ? `<button class="lab-pi ${S.plan === 'none' ? 'on' : ''}" data-lplan="none"><span class="lab-pi-h"><b>Without a plan</b><span class="lab-n">${noPlan}</span></span></button>` : ''}
+        ${noPlan && d.plans.some(p => !p.arch) ? `<button class="lab-pi ${S.plan === 'none' ? 'on' : ''}" data-lplan="none"><span class="lab-pi-h"><b>Without a plan</b><span class="lab-n">${noPlan}</span></span></button>` : ''}
+        ${nArch || inArch ? `<button class="lab-pi lab-pi-arch ${inArch ? 'on' : ''}" data-lplan="archive" title="Archived plans and tasks: kept, out of the way">${ic('archive', 15)}<b>Archive</b><span class="lab-n">${nArch || ''}</span></button>` : ''}
         ${!d.plans.length ? `<p class="muted small lab-plist-hint">${w ? 'No plans yet. Start one for an experiment or a paper: it can come with the usual steps already filled in.' : 'No plans yet.'}</p>` : ''}
       </div>
-      <div class="lab-pmain">${head}
+      <div class="lab-pmain">${S.plan === 'archive' ? archiveHtml() : `${head}
         <div class="lab-boardbar"><label class="lab-mine"><input type="checkbox" id="lab-mine" ${S.mine ? 'checked' : ''}> Only my tasks</label>
           <select class="input lab-order" id="lab-order" title="How the tasks are ordered in each column"><option value="auto" ${ORDER === 'auto' ? 'selected' : ''}>By deadline, then priority</option><option value="manual" ${ORDER === 'manual' ? 'selected' : ''}>In the order I drag them</option></select><span class="grow"></span>
-          ${w ? `<button class="btn small primary" data-lfocusquick>${ic('plus', 14)}New task</button>` : ''}</div>
+          ${w && !pl?.arch ? `<button class="btn small primary" data-lfocusquick>${ic('plus', 14)}New task</button>` : ''}</div>
         <div class="lab-board">${STATUS.map(([st, label]) => { const col = T.filter(t => t.status === st); if (ORDER === 'auto') col.sort(byDeadline); return `<div class="lab-col" data-col="${st}">
-            <div class="lab-col-h"><span class="lab-st ${st}"></span><b>${label}</b><span class="lab-n">${col.length}</span></div>
-            <div class="lab-col-list">${col.map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? (w ? 'Type a task below and press Enter.' : 'Nothing to do.') : st === 'doing' ? 'Drag a task here when you start it.' : 'Finished tasks land here.'}</div>`}</div>
-            ${w && st === 'todo' ? `<div class="lab-quickrow">${ic('plus', 15)}<input class="lab-quick" maxlength="300" placeholder="Add a task${pl ? ` to ${esc(truncate(pl.name, 22))}` : ''}" title="Press Enter to add it. Then open it to set people, a date, a checklist and notes."></div>` : ''}</div>`; }).join('')}</div>
+            <div class="lab-col-h"><span class="lab-st ${st}"></span><b>${label}</b><span class="lab-n">${col.length}</span>${w && st === 'done' && col.length && !pl?.arch ? `<button class="lab-col-act" data-larchdone title="Move the finished tasks of this column to the Archive: they leave the board, nothing is deleted">${ic('archive', 14)}Archive</button>` : ''}</div>
+            <div class="lab-col-list">${col.map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? (w && !pl?.arch ? 'Type a task below and press Enter.' : 'Nothing to do.') : st === 'doing' ? 'Drag a task here when you start it.' : 'Finished tasks land here.'}</div>`}</div>
+            ${w && st === 'todo' && !pl?.arch ? `<div class="lab-quickrow">${ic('plus', 15)}<input class="lab-quick" maxlength="300" placeholder="Add a task${pl ? ` to ${esc(truncate(pl.name, 22))}` : ''}" title="Press Enter to add it. Then open it to set people, a date, a checklist and notes."></div>` : ''}</div>`; }).join('')}</div>`}
       </div></div>`;
+  }
+  // the tasks of the board: those of the open plan, or all the ones not archived
+  function shownTasks() {
+    const d = S.data, pl = d.plans.find(x => x.id === S.plan);
+    return d.tasks.filter(t => (pl ? t.plan === pl.id && !t.arch : !t.archived && (S.plan !== 'none' || !t.plan)) && (!S.mine || t.mine));
+  }
+  // what was archived: kept with its checklists and notes, out of the board and the overview
+  function archiveHtml() {
+    const d = S.data, w = W();
+    const AP = d.plans.filter(p => p.arch), AT = d.tasks.filter(t => t.arch && !AP.some(p => p.id === t.plan));
+    const back = (attr, id) => w ? `<button class="btn small" ${attr}="${esc(id)}" data-v="0">${ic('restore', 14)}Restore</button>` : '';
+    return `<div class="lab-phead plain"><div class="lab-phead-main"><h3>Archive</h3>
+        <p class="muted small lab-explain">Plans and tasks that are finished or set aside. They keep their checklists and notes, and stay out of the board and the Overview. Restore one to bring it back.</p></div></div>
+      ${AP.length ? `<h4 class="lab-arch-h">Plans</h4><div class="lab-arch">${AP.map(p => { const x = planProg(p.id); return `<div class="lab-arch-row"><button class="lab-arch-main" data-lplan="${esc(p.id)}" title="Open the plan">
+            <b>${esc(p.name)}</b><span class="lab-task-ppl">${p.people.map(y => av(y.id, y.name, 18)).join('')}</span><span class="ov-i">${prog(x.done, x.n)}${x.done}/${x.n} done</span>${p.remarks.length ? `<span class="ov-i">${ic('message', 13)}${p.remarks.length}</span>` : ''}</button>${back('data-lplanarch', p.id)}</div>`; }).join('')}</div>` : ''}
+      ${AT.length ? `<h4 class="lab-arch-h">Tasks</h4><div class="lab-arch">${AT.map(t => { const pl = d.plans.find(x => x.id === t.plan), ck = t.checklist || []; return `<div class="lab-arch-row"><button class="lab-arch-main" data-task="${esc(t.id)}" title="Open the task">
+            <span class="lab-st ${t.status}"></span><b>${esc(t.title)}</b>${pl ? `<span class="lab-chip">${esc(truncate(pl.name, 28))}</span>` : ''}<span class="lab-task-ppl">${t.people.map(y => av(y.id, y.name, 18)).join('')}</span>${ck.length ? `<span class="ov-i">${ic('checks', 13)}${ck.filter(c => c.done).length}/${ck.length}</span>` : ''}${t.remarks.length ? `<span class="ov-i">${ic('message', 13)}${t.remarks.length}</span>` : ''}</button>${back('data-ltaskarch', t.id)}</div>`; }).join('')}</div>` : ''}
+      ${!AP.length && !AT.length ? `<div class="lab-empty"><div class="big">${ic('archive', 30)}</div><h3>The archive is empty</h3><p class="muted">Archive a finished plan with <b>Archive</b> next to its name, or the finished tasks with <b>Archive</b> at the top of the Done column.</p></div>` : ''}`;
   }
   function taskCard(t) {
     const pl = S.data.plans.find(x => x.id === t.plan), ck = t.checklist || [], done = ck.filter(c => c.done).length;
@@ -444,7 +471,7 @@ const Lab = (() => {
     const w = W(), ro = w ? '' : 'disabled';
     const papers = state.papers.filter(p => (p.share_ids || []).includes(S.sid));
     const m = modal(`<div class="tw-top"><div class="seg tw-status" id="tw-status"></div><span class="grow"></span>
-        <span class="muted small tw-auto">${w ? 'Changes are saved as you make them' : 'You are a reader: read only'}</span>
+        <span class="muted small tw-auto"></span>
         <button class="tw-x" data-close title="Close (Esc)" aria-label="Close">${ic('x', 18)}</button></div>
       <div class="tw-grid">
         <div class="tw-main">
@@ -469,15 +496,16 @@ const Lab = (() => {
         <div class="tw-f"><label>People</label>${pplChips(x.assignees, {id: 'tw-who', disabled: !w})}${w && !x.assignees.length ? '<p class="muted small">Click who does it. They get a notification.</p>' : ''}${!w && !x.assignees.length ? '<p class="muted small">Nobody yet</p>' : ''}</div>
         <div class="tw-f"><label for="tw-due">Deadline</label><div class="tw-due ${dueCls(x.due, x.status)}"><input class="input" type="date" id="tw-due" value="${esc(x.due || '')}" ${ro}>${x.due && w ? `<button class="tw-clear" data-twcleardue title="Remove the deadline">${ic('x', 14)}</button>` : ''}</div></div>
         <div class="tw-f"><label>Priority</label><div class="seg tw-prio">${[['high', 'High'], ['normal', 'Normal'], ['low', 'Low']].map(([k, l]) => `<button type="button" data-twprio="${k}" class="${x.prio === k ? 'on' : ''}" ${ro}>${k === 'high' ? ic('flag', 13) : ''}${l}</button>`).join('')}</div></div>
-        <div class="tw-f"><label for="tw-plan">Plan</label><select class="input" id="tw-plan" ${ro}><option value="">No plan</option>${S.data.plans.map(pl => `<option value="${esc(pl.id)}" ${x.plan === pl.id ? 'selected' : ''}>${esc(pl.name)}</option>`).join('')}</select></div>
+        <div class="tw-f"><label for="tw-plan">Plan</label><select class="input" id="tw-plan" ${ro}><option value="">No plan</option>${S.data.plans.filter(pl => !pl.arch || pl.id === x.plan).map(pl => `<option value="${esc(pl.id)}" ${x.plan === pl.id ? 'selected' : ''}>${esc(pl.name)}</option>`).join('')}</select></div>
         <div class="tw-f"><label for="tw-paper">Paper</label><select class="input" id="tw-paper" ${ro}><option value="">None</option>${papers.map(p => `<option value="${p.id}" ${x.paper?.paper_id === p.id ? 'selected' : ''}>${esc(truncate(p.title || 'Untitled', 60))}</option>`).join('')}</select>
           ${x.paper?.paper_id ? `<button class="linklike small" data-twpaper="${x.paper.paper_id}">Open the paper</button>` : ''}</div>
         ${x.post ? `<div class="tw-f"><label>From the post</label><button class="linklike tw-post" data-twpost>${ic('bulb', 14)}${esc(truncate(x.post_title || 'a post', 60))}</button></div>` : ''}
         <div class="tw-foot"><span class="muted small">Created by ${esc(x.by_name || x.by || '')}${x.created ? ', ' + esc(ago(x.created)) : ''}</span>
-          ${w ? `<button class="btn small danger-soft" data-twdel>${ic('trash', 14)}Delete task</button>` : ''}</div>`;
+          ${w ? `<div class="tw-foot-acts">${x.archived && !x.arch ? '' : `<button class="btn small" data-twarch title="${x.arch ? 'Bring it back to the board' : 'It leaves the board and the Overview, and stays in the Archive with its checklist and notes'}">${ic(x.arch ? 'restore' : 'archive', 14)}${x.arch ? 'Restore' : 'Archive'}</button>`}<button class="btn small danger-soft" data-twdel>${ic('trash', 14)}Delete</button></div>` : ''}</div>`;
     function paint() {
       t = get(); if (!t) { m.close(true); return; }
       const a = document.activeElement, inM = !!a && el.contains(a);
+      $('.tw-auto', el).innerHTML = t.archived ? `<span class="lab-chip arch">${ic('archive', 12)}${t.arch ? 'Archived' : 'In an archived plan'}</span>` : w ? 'Changes are saved as you make them' : 'You are a reader: read only';
       $('#tw-status', el).innerHTML = STATUS.map(([k, l]) => `<button type="button" data-twstatus="${k}" class="${t.status === k ? 'on' : ''}" ${ro}><span class="lab-st ${k}"></span>${l}</button>`).join('');
       if (a !== ti && ti.value !== t.title) ti.value = t.title;
       if (a !== de && de.value !== (t.notes || '')) de.value = t.notes || '';
@@ -527,6 +555,12 @@ const Lab = (() => {
       if (x.closest('[data-twcleardue]')) { put({due: ''}); return; }
       if (x.closest('[data-twpaper]')) { const pid = +x.closest('[data-twpaper]').dataset.twpaper; m.close(); setTab('library'); setView({type: 'share', id: S.sid}); openDetail(pid); return; }
       if (x.closest('[data-twpost]')) { const post = get().post; m.close(); gotoPost(post); return; }
+      if (x.closest('[data-twarch]')) {
+        const on = !get().arch;
+        if (!(await put({arch: on}))) return;
+        if (on) { m.close(true); toast('Task archived. It is in the Archive, at the bottom of the plans.', 'ok', 6000); } else toast('Task restored to the board.', 'ok');
+        return;
+      }
       if (x.closest('[data-twdel]')) {
         if (!(await confirmBox('Delete this task?', 'It is deleted for everybody in the group, with its checklist and notes.', {ok: 'Delete', danger: true}))) return;
         if (await call(`/tasks/${encodeURIComponent(id)}`, {method: 'DELETE'})) m.close(true);
@@ -683,6 +717,25 @@ const Lab = (() => {
         if (S.pn[id]) $(`[data-th="plan:${CSS.escape(id)}"] .th-text`, main())?.focus();
         return;
       }
+      const pa = t.closest('[data-lplanarch]');
+      if (pa) {
+        const id = pa.dataset.lplanarch, on = pa.dataset.v !== '0', pl = S.data.plans.find(x => x.id === id), n = planProg(id).n;
+        if (!(await call(`/plans/${encodeURIComponent(id)}`, {method: 'PUT', body: {arch: on}}))) return;
+        S.plan = on ? 'all' : id; render();
+        toast(on ? `“${truncate(pl?.name || 'Plan', 40)}” archived${n ? ` with its ${plural(n, 'task')}` : ''}. It is in the Archive, at the bottom of the plans.` : 'Plan restored, with its tasks.', 'ok', 6000);
+        return;
+      }
+      const ta = t.closest('[data-ltaskarch]');
+      if (ta) { if (await call(`/tasks/${encodeURIComponent(ta.dataset.ltaskarch)}`, {method: 'PUT', body: {arch: false}})) toast('Task restored to the board.', 'ok'); return; }
+      const ad = t.closest('[data-larchdone]');
+      if (ad) {
+        const ids = shownTasks().filter(x => x.status === 'done').map(x => x.id); if (!ids.length) return;
+        ad.disabled = true;
+        try { for (const id of ids) await api(`/api/shares/${sidQ()}/lab/tasks/${encodeURIComponent(id)}`, {method: 'PUT', body: {arch: true}}); } catch (err) { toast(err.message, 'error'); }
+        await load(); render(); flashSaved();
+        toast(`${plural(ids.length, 'finished task')} archived. ${ids.length === 1 ? 'It is' : 'They are'} in the Archive, at the bottom of the plans.`, 'ok', 6000);
+        return;
+      }
       const pb = t.closest('[data-lplan]'); if (pb) { S.plan = pb.dataset.lplan; render(); return; }
       if (t.closest('[data-lnewplan]')) { planDialog(); return; }
       if (t.closest('[data-lfocusquick], .lab-quickrow')) { const q = $('.lab-quick', main()); if (q) { q.scrollIntoView({block: 'nearest'}); q.focus(); } return; }
@@ -708,7 +761,7 @@ const Lab = (() => {
         e.preventDefault();
         const title = e.target.value.trim(), andOpen = e.shiftKey; if (!title) return;
         e.target.value = '';
-        const nt = await newTask({title, plan: S.plan !== 'all' && S.plan !== 'none' ? S.plan : ''}, {open: andOpen});
+        const nt = await newTask({title, plan: S.data.plans.some(x => x.id === S.plan) ? S.plan : ''}, {open: andOpen});
         const q = $('.lab-quick', main());
         if (!nt && q) q.value = title;
         if (!andOpen) q?.focus();
