@@ -160,6 +160,15 @@ one side and its settings (who, by when, priority, plan) on the other; plans hav
 plans and tasks can be archived (kept, out of the way) and restored. The Overview
 shows your tasks in every group. *Report* exports everything as Markdown for a lab meeting.
 
+**📄 Documents** (in the Lab, per group) – shared documents that everybody can write at the same time, without
+anyone overwriting anyone: the text is a conflict-free replicated sequence, every member appends to their own log
+and the text is rebuilt from all logs in one fixed order (`sharing.py`; the browser has an equivalent replay in
+`static/docs.js`, tested to give identical results). Markdown editor with a toolbar, *Preview*, *Review* (who wrote
+what, comments), comments with replies, suggestions to accept or reject, citations of the group's papers
+(`[@Smith2020]`, with an automatic list of references), named versions and a full editing history with restore,
+export to Word / Markdown / text / PDF. It is near real time (the open document is refreshed every ~12 s through the
+members' gists), not instant. Nothing leaves the group's own gists.
+
 **Notifications** – the bell at the top shows what the other members of your groups did since the last
 update: *"Anna added a note on …"*, *"… added an entry in Method on …"*, *"… added a paper to the group"*.
 Click one to open that note, table cell or paper. Kept only on your computer.

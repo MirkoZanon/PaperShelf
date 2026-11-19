@@ -2,6 +2,16 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.23 – 2026-11-19
+
+- **Shared documents** – a new *Documents* tab in each group's Lab: write a manuscript, a proposal, a review or
+  the minutes together. Everybody can type at the same time and nothing is overwritten (each person's changes are
+  kept and combined the same way for everyone); the others' work appears within a few seconds. Markdown editor with
+  a toolbar, *Preview* and *Review* (who wrote what), **comments** with replies, **suggested changes** to accept or
+  reject, **citations** of the group's papers with an automatic list of references, **named versions** and the full
+  editing history with restore, and export to Word, Markdown, text or PDF. Everyone in the group needs this version.
+- Safer syncing: changes made on this computer while PaperShelf was talking to GitHub are never lost.
+
 ## 2.22 – 2026-11-19
 
 - **Small windows** – in a group's view the people of the group, “updated…”, *People & options* and

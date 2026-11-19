@@ -3324,6 +3324,12 @@ def _apply_join_comments(st, sid, ident, joins):
             j["used"] = True
 
 
+def _fold_local(db, sid, st):
+    """Edits made on this computer while a sync was waiting for GitHub are in the stored copy: merge them back in, never lose them."""
+    row, cur = _load_share(db, sid)
+    return sharing.merge(st, cur) if cur else st
+
+
 def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     """Read every member's copy of the list, merge, update the library and publish your copy."""
     ident = ident or share_identity(db)
@@ -3353,6 +3359,7 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
             errors.append(f"{owner}: {exc}")
     for owner, data in authority:  # each member's own copy decides about that member's notes
         sharing.trust_author_copy(st, owner, data)
+    st = _fold_local(db, sid, st)
     _apply_join_comments(st, sid, ident, joins)
     if row["last_pull"]:   # not on the first update of a group you just joined: everything would be "new"
         record_activity(db, sid, before, st, {ident["user"], ident["local"]} - {""})
@@ -3396,6 +3403,7 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
                     gh.comment(o_src, sharing.join_comment(ident["user"], ident["src"], sid))
                 except sharing.ShareError:
                     pass
+    st = _fold_local(db, sid, st)
     _save_share(db, sid, st, **fields)
     db.commit()
     return {**stats, "published": published, "errors": errors}
@@ -3743,6 +3751,251 @@ def lab_overview():
     my_tasks.sort(key=lambda t: (t["due"] or "9999", {"high": 0, "normal": 1, "low": 2}.get(t["prio"], 1)))
     all_for_me.sort(key=lambda x: x["created"] or "", reverse=True)
     return jsonify(groups=out, my_tasks=my_tasks, my_plans=my_plans, for_me=all_for_me[:12], today=date.today().isoformat())
+
+
+# --------------------------------------------------------------------------- shared documents
+import docexport  # noqa: E402
+
+_DOC_SYNC = {}   # share id -> time of the last update triggered by an open document
+
+
+def _doc_names(db, st, ident):
+    names = {p["id"]: p["name"] or p["id"] for p in sharing.people(st)}
+    author = _my_author(st, ident)
+    if author and author not in names:
+        names[author] = _display_name(db, ident) or author
+    return names, author
+
+
+def _doc_items(st) -> dict:
+    return {k: e for k, e in (st.get("items") or {}).items() if sharing.present(e)}
+
+
+def _doc_row(d, did, names, me):
+    s = sharing.doc_stats(d)
+    cm = sharing._cm_view(d)["comments"]
+    return {"id": did, "title": d["title"]["v"], "by": d["by"], "by_name": names.get(d["by"], d["by"]), "created": d.get("created"),
+            "updated": s["updated"], "words": s["words"], "chars": s["chars"], "arch": bool(d["arch"]["v"]),
+            "authors": [names.get(a, a) for a in s["authors"]],
+            "open": sum(1 for c in cm if c["state"] == "open" and not c.get("parent")),
+            "mine": d["by"] in me}
+
+
+def _docs_list(db, sid, st=None, **extra):
+    row, st0 = _load_share(db, sid)
+    st = st or st0
+    if not st:
+        return error("Group not found.", 404)
+    ident = share_identity(db)
+    names, author = _doc_names(db, st, ident)
+    me = {ident["user"], ident["local"]} - {""}
+    docs = [_doc_row(d, did, names, me) for did, d in (st.get("docs") or {}).items()]
+    docs.sort(key=lambda x: x["updated"] or "", reverse=True)
+    return jsonify(docs=docs, can_write=bool(author), **extra)
+
+
+def _doc_payload(db, sid, did, have=None, st=None, **extra):
+    row, st0 = _load_share(db, sid)
+    st = st or st0
+    if not st:
+        return error("Group not found.", 404)
+    d = (st.get("docs") or {}).get(did)
+    if not d:
+        return error("That document doesn't exist any more.", 404)
+    ident = share_identity(db)
+    names, author = _doc_names(db, st, ident)
+    have = have if isinstance(have, dict) else {}
+    ops = {}
+    for a, log in (d.get("ops") or {}).items():
+        n = have.get(a)
+        n = n if isinstance(n, int) and 0 <= n <= len(log) else 0
+        ops[a] = {"from": n, "ops": log[n:], "n": len(log)}
+    cmv = sharing._cm_view(d)
+    who = lambda a, n="": names.get(a) or n or a
+    items = _doc_items(st)
+    lab = docexport.labels(items)
+    papers = sorted(({"key": k, "label": lab[k], "title": (e.get("meta") or {}).get("title") or "", "cite": docexport.short_cite(e.get("meta") or {}),
+                      "ref": docexport.reference(e.get("meta") or {})} for k, e in items.items()), key=lambda p: p["label"].lower())
+    return jsonify(id=did, title=d["title"]["v"], arch=bool(d["arch"]["v"]), by=d["by"], by_name=who(d["by"]), can_write=bool(author), me=author or ident["user"],
+                   people=[{"id": a, "name": n} for a, n in names.items()], ops=ops,
+                   comments=[{**{k: c.get(k) for k in ("id", "body", "created", "at", "by", "anchor", "quote", "rep", "parent", "state")},
+                              "name": who(c["by"], c.get("name")), "mine": c["by"] in ({ident["user"], ident["local"]} - {""})} for c in cmv["comments"]],
+                   snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
+                   papers=papers, **extra)
+
+
+def _doc_write(db, sid, did=None):
+    st, author, err = _lab_write(db, sid)
+    if err:
+        return None, None, err
+    if did and did not in (st.get("docs") or {}):
+        return None, None, error("That document doesn't exist any more.", 404)
+    return st, author, None
+
+
+_DOC_PUB = set()
+
+
+def _doc_saved(db, sid, st):
+    _save_share(db, sid, st)
+    db.commit()
+    if sid in _DOC_PUB:          # typing: publish a few seconds after the first change, not after every keystroke
+        return
+    _DOC_PUB.add(sid)
+
+    def later():
+        _DOC_PUB.discard(sid)
+        publish_soon(sid)
+    t = threading.Timer(3.0, later)
+    t.daemon = True
+    t.start()
+
+
+def _doc_have(raw):
+    try:
+        v = json.loads(raw or "{}")
+        return v if isinstance(v, dict) else {}
+    except ValueError:
+        return {}
+
+
+@app.get("/api/shares/<sid>/docs")
+def docs_list(sid):
+    return _docs_list(get_db(), sid)
+
+
+@app.post("/api/shares/<sid>/docs")
+def docs_new(sid):
+    db = get_db()
+    st, author, err = _doc_write(db, sid)
+    if err:
+        return err
+    b = request.get_json(silent=True) or {}
+    try:
+        did = sharing.new_doc(st, author, b.get("title"))
+        text = sharing.clean_text(b.get("text"))
+        if text.strip():
+            sharing.doc_append(st, author, did, 0, [{"k": "i", "c": 1, "a": None, "t": text, "at": now()}])
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    _doc_saved(db, sid, st)
+    return _docs_list(db, sid, st, id=did)
+
+
+@app.put("/api/shares/<sid>/docs/<did>")
+def docs_edit(sid, did):
+    db = get_db()
+    st, author, err = _doc_write(db, sid, did)
+    if err:
+        return err
+    b = request.get_json(silent=True) or {}
+    try:
+        sharing.set_doc(st, author, did, title=b.get("title"), arch=b.get("arch"))
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    _doc_saved(db, sid, st)
+    return _docs_list(db, sid, st)
+
+
+@app.get("/api/shares/<sid>/docs/<did>")
+def doc_get(sid, did):
+    """The document, and only what the caller doesn't have yet: ?have={"alice":12,"bob":3} (operations already known per author)."""
+    return _doc_payload(get_db(), sid, did, _doc_have(request.args.get("have")))
+
+
+@app.post("/api/shares/<sid>/docs/<did>/sync")
+def doc_sync(sid, did):
+    """While a document is open: fetch the others' latest work (at most every ~12 seconds) and return what is new."""
+    db = get_db()
+    err = None
+    if time.time() - _DOC_SYNC.get(sid, 0) > 9 and share_identity(db)["can_publish"]:
+        _DOC_SYNC[sid] = time.time()
+        try:
+            sync_all_shares(db, only=sid)
+        except sharing.ShareError as exc:
+            err = str(exc)
+    return _doc_payload(db, sid, did, (request.get_json(silent=True) or {}).get("have"), sync_error=err)
+
+
+@app.post("/api/shares/<sid>/docs/<did>/ops")
+def doc_ops(sid, did):
+    db = get_db()
+    st, author, err = _doc_write(db, sid, did)
+    if err:
+        return err
+    b = request.get_json(silent=True) or {}
+    try:
+        n = sharing.doc_append(st, author, did, b.get("from"), b.get("ops"))
+    except sharing.ShareError as exc:
+        return error(str(exc), 409, n=len((st["docs"][did].get("ops") or {}).get(author, [])))
+    _doc_saved(db, sid, st)
+    return jsonify(ok=True, n=n)
+
+
+def _doc_cm_call(sid, did, fn):
+    db = get_db()
+    st, author, err = _doc_write(db, sid, did)
+    if err:
+        return err
+    try:
+        res = fn(db, st, author, request.get_json(silent=True) or {})
+    except sharing.ShareError as exc:
+        return error(str(exc))
+    if isinstance(res, (Response, tuple)):
+        return res
+    _doc_saved(db, sid, st)
+    return _doc_payload(db, sid, did, {a: 10 ** 9 for a in (st["docs"][did].get("ops") or {})}, st=st)
+
+
+@app.post("/api/shares/<sid>/docs/<did>/comments")
+def doc_comment_add(sid, did):
+    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.add_doc_comment(
+        st, au, _display_name(db), did, b.get("body"), b.get("anchor"), b.get("quote"), b.get("rep"), b.get("parent")))
+
+
+@app.put("/api/shares/<sid>/docs/<did>/comments/<cid>")
+def doc_comment_edit(sid, did, cid):
+    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.edit_doc_comment(st, au, did, cid, body=b.get("body")))
+
+
+@app.delete("/api/shares/<sid>/docs/<did>/comments/<cid>")
+def doc_comment_del(sid, did, cid):
+    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.edit_doc_comment(st, au, did, cid, delete=True))
+
+
+@app.post("/api/shares/<sid>/docs/<did>/comments/<cid>/resolve")
+def doc_comment_resolve(sid, did, cid):
+    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.resolve_doc_comment(st, au, _display_name(db), did, cid, b.get("state")))
+
+
+@app.post("/api/shares/<sid>/docs/<did>/snaps")
+def doc_snap(sid, did):
+    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.add_snap(st, au, _display_name(db), did, b.get("label")))
+
+
+@app.get("/api/shares/<sid>/docs/<did>/export")
+def doc_export(sid, did):
+    """The document as Markdown, plain text or Word, with the citations written out and a list of references."""
+    db = get_db()
+    row, st = _load_share(db, sid)
+    d = ((st or {}).get("docs") or {}).get(did)
+    if not d:
+        return error("That document doesn't exist any more.", 404)
+    fmt = request.args.get("format", "md")
+    upto = _int(request.args.get("upto"))
+    names, _ = _doc_names(db, st, share_identity(db))
+    title = d["title"]["v"]
+    md = docexport.markdown(title, sharing.doc_text(d, upto if upto else None), _doc_items(st),
+                            ", ".join(names.get(a, a) for a in sharing.doc_stats(d)["authors"]), date.today().isoformat())
+    fname = re.sub(r"[^\w.-]+", "_", title).strip("_")[:60] or "document"
+    if fmt == "docx":
+        return Response(docexport.docx_bytes(md, title), mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": f'attachment; filename="{fname}.docx"'})
+    if fmt == "txt":
+        return Response(docexport.plain(md), mimetype="text/plain; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{fname}.txt"'})
+    if fmt == "json":
+        return jsonify(markdown=md, title=title)
+    return Response(md, mimetype="text/markdown; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{fname}.md"'})
 
 
 @app.get("/api/shares/<sid>/lab/export")

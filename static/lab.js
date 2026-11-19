@@ -13,7 +13,7 @@ const Lab = (() => {
   const S = {sid: null, sub: 'ideas', data: null, ov: null, open: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, focus: null, pn: {}, tw: null};
   const TH = {};   // the note threads being written: {'task:<id>' | 'plan:<id>': {edit, to, draft}}
-  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = p.sub === 'plans' ? 'plans' : 'ideas'; } catch { /* storage unavailable */ }
+  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['plans', 'docs'].includes(p.sub) ? p.sub : 'ideas'; } catch { /* storage unavailable */ }
   let ORDER = 'auto'; try { ORDER = localStorage.getItem('papershelf-lab-order') === 'manual' ? 'manual' : 'auto'; } catch { /* ignore */ }
   const PR = {high: 0, normal: 1, low: 2};
   // the board's order: by deadline (the closest first, overdue on top, no date last), then priority
@@ -146,6 +146,7 @@ const Lab = (() => {
   /* ------------------------------------------------------------------ page */
   function render() {
     const el = main(); if (!el) return;
+    if (S.sub === 'docs' && S.sid && S.data && typeof Docs !== 'undefined' && Docs.busy(S.sid)) return;   // somebody is writing a document: don't redraw under their fingers
     // keep what is being written (the page is redrawn after each change, also by the others' updates)
     if (S.composing) readComposer();
     const drafts = {}, foc = document.activeElement, inMain = !!foc && el.contains(foc);
@@ -172,6 +173,8 @@ const Lab = (() => {
     else if (S.composing && !$('#lc-title', el)?.value && document.activeElement === document.body) $('#lc-title', el)?.focus();
     $$('.th-text', el).forEach(grow);
     S.tw?.paint();
+    if (S.sub === 'docs' && S.sid && S.data && typeof Docs !== 'undefined') Docs.mount($('#docs-host', el), S.sid, W());
+    else if (typeof Docs !== 'undefined') Docs.leave();
   }
   const grow = ta => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 220) + 'px'; };
 
@@ -220,8 +223,9 @@ const Lab = (() => {
           <button class="btn small" data-lexport title="Download the lab as a Markdown report, for a meeting, the minutes or a lab notebook">${ic('download', 15)}Report</button>
           <button class="btn small" data-lsync title="Get the latest from the others now">${ic('refresh', 15)}Update</button></div></div>
       <div class="lab-tabs"><button data-lsub="ideas" class="${S.sub === 'ideas' ? 'on' : ''}">${ic('bulb', 16)}Ideas and discussion<span class="lab-n">${d.posts.length || ''}</span></button>
-        <button data-lsub="plans" class="${S.sub === 'plans' ? 'on' : ''}">${ic('checks', 16)}Plans and tasks<span class="lab-n">${open || ''}</span></button></div>
-      ${S.sub === 'plans' ? plansHtml() : ideasHtml()}`;
+        <button data-lsub="plans" class="${S.sub === 'plans' ? 'on' : ''}">${ic('checks', 16)}Plans and tasks<span class="lab-n">${open || ''}</span></button>
+        <button data-lsub="docs" class="${S.sub === 'docs' ? 'on' : ''}">${ic('file', 16)}Documents</button></div>
+      ${S.sub === 'plans' ? plansHtml() : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : ideasHtml()}`;
   }
 
   /* ---------------------------------------------------- ideas */

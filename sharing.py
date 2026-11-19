@@ -180,6 +180,8 @@ def clock(st: dict) -> int:
             c = max(c, col["s"][0])
     if st.get("lab"):
         c = max(c, _lab_stamps(st["lab"]))
+    if st.get("docs"):
+        c = max(c, _doc_stamps(st["docs"]))
     for x in (st.get("aliases") or {}).values():
         c = max(c, (x.get("s") or [0])[0])
     for e in st.get("items", {}).values():
@@ -798,6 +800,8 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
                     d[owner] = dict(tv)
                 else:
                     del d[owner]
+    if st.get("docs"):
+        _trust_docs(st, owner, copy)
     for key, e in (st.get("items") or {}).items():
         mine = ((copy.get("items") or {}).get(key) or {})
         if not mine:
@@ -819,6 +823,353 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
                     del cell[eid]
                 elif n != theirs_c[eid]:
                     cell[eid] = dict(theirs_c[eid])
+
+
+# --------------------------------------------------------------------------- shared documents
+# A document is a character-level sequence CRDT (RGA). Each member appends operations to their OWN log and
+# nobody else's, so two people typing at the same time never overwrite each other: the text is rebuilt from
+# all the logs, always in the same order, whatever the order in which copies are merged. Comments,
+# suggestions and named versions are entries owned by their author, like the notes.
+DOC_LIMITS = {"docs": 300, "ops": 30000, "insert": 20000, "chars": 2_000_000, "comments": 3000, "body": 5000, "title": 150, "ranges": 400}
+DOC_KINDS = ("c", "res", "snap")
+RES_STATES = ("resolved", "open", "accepted", "rejected")
+_SURR = re.compile("[\ud800-\udfff]")
+_CTRL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def clean_text(t) -> str:
+    """Text typed in a document: no carriage returns, no control characters, no lone surrogates (1 character stays 1 character)."""
+    t = str(t or "").replace("\r\n", "\n").replace("\r", "\n")
+    return _CTRL.sub("�", _SURR.sub("�", t))
+
+
+def _docs(st) -> dict:
+    return st.setdefault("docs", {})
+
+
+def _id_ok(v):
+    return (isinstance(v, (list, tuple)) and len(v) == 2 and isinstance(v[0], int) and not isinstance(v[0], bool)
+            and 0 < v[0] < 10 ** 10 and isinstance(v[1], str) and (NAME_RE.match(v[1]) or v[1].startswith("local-")))
+
+
+def _clean_op(op, owner, last_end):
+    """A cleaned copy of one operation of `owner`, or None. `last_end` is the last character counter owner used."""
+    if not isinstance(op, dict) or not isinstance(op.get("c"), int) or isinstance(op.get("c"), bool):
+        return None
+    c = op["c"]
+    if not (last_end < c < 10 ** 10):
+        return None
+    at = str(op.get("at") or "")[:30]
+    if op.get("k") == "i":
+        t = clean_text(op.get("t"))
+        if not t or len(t) > DOC_LIMITS["insert"]:
+            return None
+        a = op.get("a")
+        if a is not None and not _id_ok(a):
+            return None
+        return {"k": "i", "c": c, "a": [a[0], a[1]] if a else None, "t": t, "at": at}
+    if op.get("k") == "d":
+        rs = []
+        for r in (op.get("r") or [])[:DOC_LIMITS["ranges"]]:
+            if (isinstance(r, (list, tuple)) and len(r) == 3 and _id_ok(r[:2]) and isinstance(r[2], int) and 0 < r[2] <= DOC_LIMITS["chars"]):
+                rs.append([r[0], r[1], r[2]])
+        return {"k": "d", "c": c, "r": rs, "at": at} if rs else None
+    return None
+
+
+def _op_end(op) -> int:
+    return op["c"] + (len(op["t"]) - 1 if op["k"] == "i" else 0)
+
+
+def doc_nodes(doc: dict, upto: int | None = None) -> list:
+    """The whole sequence, deleted characters included: [[(counter, author), char, deleted], ...]. Deterministic:
+    operations are replayed in (counter, author) order, which is a causal order, so every copy gets the same result."""
+    ops = []
+    for a, log in (doc.get("ops") or {}).items():
+        for i, op in enumerate(log):
+            if upto is None or op["c"] <= upto:
+                ops.append((op["c"], a, i, op))
+    ops.sort(key=lambda x: (x[0], x[1], x[2]))
+    head = (0, "")
+    nxt, chars = {head: None}, {}
+    for c, a, _i, op in ops:
+        if op["k"] != "i":
+            continue
+        anchor = tuple(op["a"]) if op.get("a") else head
+        if anchor not in nxt or (c, a) in chars:
+            continue
+        p = anchor
+        while nxt[p] is not None and nxt[p] > (c, a):
+            p = nxt[p]
+        after, prev = nxt[p], p
+        for j, ch in enumerate(op["t"]):
+            nid = (c + j, a)
+            nxt[prev] = nid
+            nxt[nid] = None
+            chars[nid] = ch
+            prev = nid
+        nxt[prev] = after
+    dead = set()
+    for _c, _a, _i, op in ops:
+        if op["k"] == "d":
+            for c0, a0, n in op["r"]:
+                for k in range(n):
+                    if (c0 + k, a0) in chars:
+                        dead.add((c0 + k, a0))
+    out, p = [], nxt[head]
+    while p is not None:
+        out.append([p, chars[p], p in dead])
+        p = nxt[p]
+    return out
+
+
+def doc_text(doc: dict, upto: int | None = None) -> str:
+    return "".join(ch for _i, ch, dead in doc_nodes(doc, upto) if not dead)
+
+
+def _tail(log) -> int:
+    return _op_end(log[-1]) if log else 0
+
+
+def new_doc(st, author, title="") -> str:
+    docs = _docs(st)
+    if len(docs) >= DOC_LIMITS["docs"]:
+        raise ShareError("This group has too many documents.")
+    did = uuid.uuid4().hex[:12]
+    s = tick(st, author)
+    docs[did] = {"by": author, "created": _now(), "title": {"v": " ".join(str(title or "").split())[:DOC_LIMITS["title"]] or "Untitled document", "s": s},
+                 "arch": {"v": False, "s": s}, "ops": {}, "cm": {}}
+    return did
+
+
+def doc_of(st, did) -> dict:
+    d = (st.get("docs") or {}).get(did)
+    if not d:
+        raise ShareError("That document doesn't exist any more.")
+    return d
+
+
+def set_doc(st, author, did, title=None, arch=None):
+    d = doc_of(st, did)
+    if title is not None:
+        d["title"] = {"v": " ".join(str(title).split())[:DOC_LIMITS["title"]] or "Untitled document", "s": tick(st, author)}
+    if arch is not None:
+        d["arch"] = {"v": bool(arch), "s": tick(st, author)}
+
+
+def doc_append(st, author, did, frm, ops) -> int:
+    """Append operations to the author's own log. `frm` is how many of the author's operations the sender already
+    had stored; a resend of operations already stored is accepted (idempotent). Returns the new length of the log."""
+    d = doc_of(st, did)
+    log = d.setdefault("ops", {}).setdefault(author, [])
+    if not isinstance(ops, list) or not isinstance(frm, int) or frm < 0 or frm > len(log):
+        raise ShareError("Your copy of this document is out of date. It has been refreshed: try again.")
+    ops = ops[:2000]
+    total = sum(len(o["t"]) for lg in d["ops"].values() for o in lg if o["k"] == "i")
+    for i, raw in enumerate(ops):
+        pos = frm + i
+        if pos < len(log):
+            clean = _clean_op(raw, author, _tail(log[:pos]) if pos else 0)
+            if clean != log[pos]:
+                raise ShareError("Your copy of this document is out of date. It has been refreshed: try again.")
+            continue
+        clean = _clean_op(raw, author, _tail(log))
+        if not clean:
+            raise ShareError("An edit was not valid and was refused.")
+        if len(log) >= DOC_LIMITS["ops"] or (clean["k"] == "i" and total + len(clean["t"]) > DOC_LIMITS["chars"]):
+            raise ShareError("This document is full. Export it and continue in a new document.")
+        log.append(clean)
+        if clean["k"] == "i":
+            total += len(clean["t"])
+    return len(log)
+
+
+def _anchor_ok(v):
+    return v is None or (isinstance(v, (list, tuple)) and len(v) == 2 and _id_ok(v[0]) and _id_ok(v[1]))
+
+
+def _dcm(st, author, name, did, kind, **f) -> str:
+    d = doc_of(st, did)
+    if len(d.setdefault("cm", {})) >= DOC_LIMITS["comments"]:
+        raise ShareError("This document has too many comments.")
+    cid = uuid.uuid4().hex[:16]
+    s = tick(st, author)
+    d["cm"][cid] = {"k": kind, "by": author, "name": (name or "")[:60], "created": _now(), "at": _now(), "del": False, "s": s, "c": s[0], **f}
+    return cid
+
+
+def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None, parent=None) -> str:
+    body = str(body or "").strip()[:DOC_LIMITS["body"]]
+    if rep is None and not body:
+        raise ShareError("Write a comment first.")
+    if not _anchor_ok(anchor):
+        raise ShareError("That selection is not valid.")
+    d = doc_of(st, did)
+    if parent and (d.get("cm") or {}).get(parent, {}).get("k") != "c":
+        raise ShareError("That comment doesn't exist any more.")
+    return _dcm(st, author, name, did, "c", body=body, anchor=[list(anchor[0]), list(anchor[1])] if anchor else None,
+                quote=str(quote or "")[:300], rep=None if rep is None else clean_text(rep)[:DOC_LIMITS["body"]], parent=parent or None)
+
+
+def edit_doc_comment(st, author, did, cid, body=None, delete=False):
+    e = (doc_of(st, did).get("cm") or {}).get(cid)
+    if not e or e.get("k") != "c" or e["by"] != author:
+        raise ShareError("You can only change your own comments.")
+    if body is not None:
+        e["body"] = str(body).strip()[:DOC_LIMITS["body"]]
+    if delete:
+        e["del"] = True
+    e["at"] = _now()
+    e["s"] = tick(st, author)
+
+
+def resolve_doc_comment(st, author, name, did, cid, state):
+    d = doc_of(st, did)
+    if (d.get("cm") or {}).get(cid, {}).get("k") != "c" or state not in RES_STATES:
+        raise ShareError("That comment doesn't exist any more.")
+    return _dcm(st, author, name, did, "res", on=cid, v=state)
+
+
+def add_snap(st, author, name, did, label) -> str:
+    d = doc_of(st, did)
+    upto = max([_op_end(o) for lg in (d.get("ops") or {}).values() for o in lg] or [0])
+    return _dcm(st, author, name, did, "snap", label=" ".join(str(label or "").split())[:80] or "Saved version", upto=upto)
+
+
+def _cm_view(d) -> dict:
+    """Comments with replies, suggestions and their state; and the named versions."""
+    cm = {k: v for k, v in (d.get("cm") or {}).items()}
+    state = {}
+    for k, v in sorted(cm.items(), key=lambda kv: (kv[1].get("s") or [0, ""])[0:2]):
+        if v.get("k") == "res" and not v.get("del"):
+            state[v.get("on")] = v.get("v")
+    out, snaps = [], []
+    for k, v in cm.items():
+        if v.get("del"):
+            continue
+        if v.get("k") == "c":
+            out.append({**v, "id": k, "state": state.get(k) or "open"})
+        elif v.get("k") == "snap":
+            snaps.append({**v, "id": k})
+    key = lambda x: (x.get("created") or "", x["id"])
+    return {"comments": sorted(out, key=key), "snaps": sorted(snaps, key=key)}
+
+
+def doc_stats(d) -> dict:
+    nodes = doc_nodes(d)
+    text = "".join(ch for _i, ch, dead in nodes if not dead)
+    ats = [o.get("at") or "" for lg in (d.get("ops") or {}).values() for o in lg]
+    return {"chars": len(text), "words": len(text.split()), "authors": sorted(a for a, lg in (d.get("ops") or {}).items() if lg),
+            "updated": max(ats or [d.get("created") or ""])}
+
+
+def _merge_docs(a: dict, b: dict) -> dict:
+    out = {}
+    for did in set(a) | set(b):
+        x, y = a.get(did), b.get(did)
+        if not x or not y:
+            out[did] = json.loads(json.dumps(x or y))
+            continue
+        m = {"by": min(x.get("by") or "", y.get("by") or "") or x.get("by") or y.get("by"),
+             "created": min(x.get("created") or "9", y.get("created") or "9")}
+        for k in ("title", "arch"):
+            p, q = x.get(k) or {}, y.get(k) or {}
+            m[k] = dict(q if newer(q.get("s"), p.get("s")) else p)
+        m["ops"] = {}
+        for au in set(x.get("ops") or {}) | set(y.get("ops") or {}):
+            lx, ly = (x.get("ops") or {}).get(au) or [], (y.get("ops") or {}).get(au) or []
+            if len(lx) != len(ly):
+                best = lx if len(lx) > len(ly) else ly
+            else:
+                best = lx if json.dumps(lx, sort_keys=True) >= json.dumps(ly, sort_keys=True) else ly
+            m["ops"][au] = [dict(o) for o in best]
+        m["cm"] = _merge_notes(x.get("cm") or {}, y.get("cm") or {})
+        out[did] = m
+    return out
+
+
+def _doc_stamps(docs) -> int:
+    c = 0
+    for d in docs.values():
+        for k in ("title", "arch"):
+            c = max(c, ((d.get(k) or {}).get("s") or [0])[0])
+        for n in (d.get("cm") or {}).values():
+            c = max(c, (n.get("s") or [0])[0])
+    return c
+
+
+def _validate_docs(raw) -> dict:
+    out = {}
+    for did, d in list((raw if isinstance(raw, dict) else {}).items())[:DOC_LIMITS["docs"]]:
+        if not (ID_RE.match(str(did)) and isinstance(d, dict)):
+            continue
+        by = str(d.get("by") or "")
+        if not (NAME_RE.match(by) or by.startswith("local-")):
+            continue
+        doc = {"by": by, "created": str(d.get("created") or "")[:40], "ops": {}, "cm": {}}
+        for k, dflt in (("title", "Untitled document"), ("arch", False)):
+            v = d.get(k) if isinstance(d.get(k), dict) else {}
+            stp = _stamp(v.get("s"))
+            if k == "title":
+                doc[k] = {"v": " ".join(str(v.get("v") or "").split())[:DOC_LIMITS["title"]] or dflt, "s": stp}
+            else:
+                doc[k] = {"v": bool(v.get("v")), "s": stp}
+        for au, log in list((d.get("ops") if isinstance(d.get("ops"), dict) else {}).items())[:MAX_MEMBERS]:
+            if not (NAME_RE.match(str(au)) or str(au).startswith("local-")) or not isinstance(log, list):
+                continue
+            ok, last = [], 0
+            for raw_op in log[:DOC_LIMITS["ops"]]:
+                op = _clean_op(raw_op, au, last)
+                if not op:
+                    break          # a log is cut at its first invalid operation
+                ok.append(op)
+                last = _op_end(op)
+            if ok:
+                doc["ops"][str(au)] = ok
+        for cid, n in list((d.get("cm") if isinstance(d.get("cm"), dict) else {}).items())[:DOC_LIMITS["comments"]]:
+            if not (isinstance(n, dict) and OID_RE.match(str(cid)) and n.get("k") in DOC_KINDS):
+                continue
+            who, stp = str(n.get("by") or ""), _stamp(n.get("s"))
+            if not (NAME_RE.match(who) or who.startswith("local-")) or not stp or stp[1] != who:
+                continue
+            e = {"k": n["k"], "by": who, "name": str(n.get("name") or "")[:60], "created": str(n.get("created") or "")[:40],
+                 "at": str(n.get("at") or "")[:40], "del": bool(n.get("del")), "s": stp,
+                 "c": n["c"] if isinstance(n.get("c"), int) and 0 <= n["c"] <= stp[0] else stp[0]}
+            if n["k"] == "c":
+                an = n.get("anchor")
+                e.update(body=str(n.get("body") or "")[:DOC_LIMITS["body"]], quote=str(n.get("quote") or "")[:300],
+                         anchor=[list(an[0]), list(an[1])] if _anchor_ok(an) and an else None,
+                         rep=None if n.get("rep") is None else clean_text(n.get("rep"))[:DOC_LIMITS["body"]],
+                         parent=str(n["parent"]) if OID_RE.match(str(n.get("parent") or "")) else None)
+            elif n["k"] == "res":
+                if n.get("v") not in RES_STATES or not OID_RE.match(str(n.get("on") or "")):
+                    continue
+                e.update(on=str(n["on"]), v=n["v"])
+            else:
+                e.update(label=" ".join(str(n.get("label") or "").split())[:80],
+                         upto=n["upto"] if isinstance(n.get("upto"), int) and 0 <= n["upto"] < 10 ** 10 else 0)
+            doc["cm"][str(cid)] = e
+        out[str(did)] = doc
+    return out
+
+
+def _trust_docs(st, owner, copy):
+    their = copy.get("docs") or {}
+    for did, d in (st.get("docs") or {}).items():
+        t = their.get(did) or {}
+        if owner in (d.get("ops") or {}):
+            if owner in (t.get("ops") or {}):
+                d["ops"][owner] = [dict(o) for o in t["ops"][owner]]
+            else:
+                del d["ops"][owner]
+        for cid, e in list((d.get("cm") or {}).items()):
+            if e.get("by") != owner:
+                continue
+            te = (t.get("cm") or {}).get(cid)
+            if te is None:
+                del d["cm"][cid]
+            elif e != te:
+                d["cm"][cid] = dict(te)
 
 
 def members(st) -> dict:
@@ -886,6 +1237,8 @@ def merge(a: dict, b: dict) -> dict:
         out["cols"] = cols
     if a.get("lab") or b.get("lab"):
         out["lab"] = _merge_lab(a.get("lab"), b.get("lab"))
+    if a.get("docs") or b.get("docs"):
+        out["docs"] = _merge_docs(a.get("docs") or {}, b.get("docs") or {})
     if a.get("aliases") or b.get("aliases"):
         out["aliases"] = {}
         for loc in set(a.get("aliases") or {}) | set(b.get("aliases") or {}):
@@ -981,6 +1334,8 @@ def validate(data) -> dict:
         st["creator"] = {"by": str(c["by"])[:60], "name": str(c.get("name") or "")[:60], "at": str(c.get("at") or "")[:40]}
     if data.get("lab"):
         st["lab"] = _validate_lab(data.get("lab"))
+    if data.get("docs"):
+        st["docs"] = _validate_docs(data.get("docs"))
     raw_al = data.get("aliases") if isinstance(data.get("aliases"), dict) else {}
     for loc, x in list(raw_al.items())[:MAX_MEMBERS * 2]:
         stp = _stamp(x.get("s")) if isinstance(x, dict) else None
