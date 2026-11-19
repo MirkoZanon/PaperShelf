@@ -1097,8 +1097,12 @@ table.rv { border-collapse: separate; border-spacing: 0; font-size: 13px; min-wi
 .view-clear:hover { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
 #nav[hidden] { display: none; }
 /* reading list: no menu above the labels – the pin sits on the Labels row */
-body.area-reading aside > .side-head:first-child { height: 0; padding: 0; position: relative; }
-body.area-reading aside > .side-head:first-child #side-pin { position: absolute; right: 8px; top: 12px; z-index: 1; }
+.scope-seg button { white-space: nowrap; }
+.scope-seg .tab-n { background: var(--chip); color: var(--muted); border-radius: 9px; padding: 1px 6px; font-size: 11px; margin-left: 3px; }
+.scope-seg .tab-n:empty { display: none; }
+.scope-seg button.on .tab-n { background: var(--accent); color: var(--accent-ink); }
+body.tab-discover #scope-seg { display: none; }
+@media (max-width: 1100px) { .scope-seg .sc-ico { display: none; } }
 /* bars with long names: the name on its own line, wrapped – never cut */
 .hbars.stack { gap: 9px; }
 .hbars.stack .hb { grid-template-columns: 1fr 30px; row-gap: 3px; }
@@ -1116,7 +1120,7 @@ header { gap: 10px; padding: 0 14px 0 12px; }
 .nt.on .tab-n { background: var(--accent); color: var(--accent-ink); }
 /* Reading list + the Add box belong together */
 .nt-read-group { display: flex; align-items: center; gap: 8px; flex: 1 1 640px; min-width: 0; max-width: 820px; }
-body:not(.area-reading) #add-form { display: none; }
+#add-form .menu-wrap { display: none; }
 #add-form { flex: 1; gap: 6px; max-width: none; align-items: center; }
 #add-form .add-plus { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--accent); font-weight: 700; pointer-events: none; font-size: 15px; }
 #add-form #add-input { height: 36px; padding-left: 32px; border-radius: 10px; background: var(--bg); }

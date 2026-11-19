@@ -14,10 +14,15 @@ Each section's text is used as the release notes shown in the app's Update windo
   (*Share the PDF with …* in the paper), all those of the group, or automatically at every update. The
   PDFs the others put there are copied to your folder for the papers you miss. Nothing goes online from
   PaperShelf, files are named by a code (not the title), nothing is overwritten, and you can take yours back.
-- **Easier to find things** – a green **＋ Add** button in the header of every view (Reading list and
-  Library): paper by DOI, link or title (with a drop zone for PDFs), PDF files, many at once, manual,
-  **＋ New label**, new group or join. The sidebar button now says **Labels**. The `n` key opens the add
-  window in the Library instead of jumping to the Reading list.
+- **One Library, two views** – the separate *Reading list* tab is gone: the **Library** has a switch
+  above the list, **📖 Reading list | 📚 All papers**, with the same labels in both and the choice
+  remembered. The tabs are now Library, Discover, Researchers, Lab. The quick *Add a paper* box is
+  always at the top, and the labels sidebar (with its **＋ New label**) stays open on a wide window,
+  also in the Reading list – before, the pin covered the ＋ there.
+- **Easier to find things** – a green **＋ Add** button next to the switch: paper by DOI, link or title
+  (with a drop zone for PDFs), PDF files, many at once, manual, **＋ New label**, new group or join.
+  The sidebar button now says **Labels**. The `n` key focuses the quick box, or opens the Add window
+  where there is no box.
 
 ## 2.17.1 – 2026-11-13
 

@@ -33,11 +33,11 @@ function loadPrefs() {
     state.collapsed = new Set(p.collapsed || []);
     if (['list', 'map', 'discover'].includes(p.mode)) state.mode = p.mode;
     if (p.tab === 'people' || p.tab === 'lab') state.tab = p.tab;
-    state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.arrange = p.arrange || {}; state.grpMode = p.grpMode === 'combo' ? 'combo' : 'each'; state.grpClosed = new Set(p.grpClosed || []); state.grpRank = p.grpRank || {}; state.closed = new Set(p.v >= 2 ? (p.closed || []) : []); state.sidePin = p.sidePin || {};  // v2.2.1: sections open again once
+    state.libScope = p.libScope === 'library' ? 'library' : (p.libScope === 'reading' ? 'reading' : null); state.navMore = !!p.navMore; state.kwOpen = p.kwOpen !== false; state.details = !!p.details; state.arrange = p.arrange || {}; state.grpMode = p.grpMode === 'combo' ? 'combo' : 'each'; state.grpClosed = new Set(p.grpClosed || []); state.grpRank = p.grpRank || {}; state.closed = new Set(p.v >= 2 ? (p.closed || []) : []); state.sidePin = p.sidePin || {};  // v2.2.1: sections open again once
   } catch (e) { /* storage unavailable */ }
 }
 function savePrefs() {
-  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, arrange: state.arrange || {}, grpMode: state.grpMode || 'each', grpClosed: [...(state.grpClosed || [])], grpRank: state.grpRank || {}, closed: [...(state.closed || [])], sidePin: state.sidePin || {}, v: 2})); }
+  try { localStorage.setItem('papershelf-prefs', JSON.stringify({sort: state.sort, includeSub: state.includeSub, collapsed: [...state.collapsed], mode: state.mode, tab: state.tab, libScope: state.libScope, navMore: !!state.navMore, kwOpen: state.kwOpen !== false, details: !!state.details, arrange: state.arrange || {}, grpMode: state.grpMode || 'each', grpClosed: [...(state.grpClosed || [])], grpRank: state.grpRank || {}, closed: [...(state.closed || [])], sidePin: state.sidePin || {}, v: 2})); }
   catch (e) { /* ignore */ }
 }
 
@@ -321,7 +321,7 @@ function renderSidebar() {
     ['unfiled', 'Without labels', '▫︎', P.filter(p => !p.group_ids.length).length],
     ['nopdf', 'Without PDF', '⌀', P.filter(p => !p.pdf_exists).length],
   ];
-  $('#nav-head').textContent = reading ? '' : 'Library';
+  $('#nav-head').textContent = 'Library';
   $('#nav').hidden = reading;
   const key = viewKey();
   const open = state.navMore || more.some(([k]) => k === key);
@@ -329,7 +329,7 @@ function renderSidebar() {
   $('#nav').innerHTML = main.map(item).join('')
     + (more.length ? `<div class="nav-item nav-more" data-navmore><span class="ico">${open ? '▾' : '▸'}</span><span class="label">${open ? 'Less' : 'More'}</span>${open ? '' : '<span class="count">read, starred…</span>'}</div>`
     + (open ? `<div class="nav-sub">${more.map(item).join('')}</div>` : '') : '');
-  const tn = $('#tab-reading-n'); if (tn) tn.textContent = P.filter(p => p.status !== 'read').length || '';
+  const tn = $('#scope-n'); if (tn) tn.textContent = P.filter(p => p.status !== 'read').length || '';
   // collapsible sections: Labels, and inside it Personal and Shared
   const C = state.closed || (state.closed = new Set());
     const nShared = (state.shares || []).length;
@@ -436,7 +436,7 @@ function emptyHtml() {
   if (state.area === 'reading' && state.papers.length && !state.search && !state.keyword) return `<div class="empty"><div class="big">📖</div><h2>Nothing to read here</h2>
     <div>Papers you add are <b>To read</b> and appear here; when you mark them <b>Read</b> they stay in the <button class="linklike" data-goto-library>Library</button>.</div></div>`;
   if (!state.papers.length) return `<div class="empty"><div class="big">📄</div><h2>Your shelf is empty</h2>
-    <div>Paste something in the <button class="linklike" data-focus-add>＋ Add a paper</button> box (next to Reading list, top left) and press Enter. It understands:</div>
+    <div>Paste something in the <button class="linklike" data-focus-add>＋ Add a paper</button> box (top left) and press Enter. It understands:</div>
     <ul><li>DOIs – <code>10.1038/s41586-020-2649-2</code></li><li>arXiv links or IDs – <code>2106.09685</code></li>
     <li>publisher, PubMed or Google Scholar result links</li><li>a paper title, or a whole reference you copied</li></ul>
     <div style="margin-top:14px">You can also drop PDF files onto this window, or add the browser button from ⚙︎ Settings.</div>
@@ -1022,7 +1022,7 @@ function openSettings(startTab) {
 
     <div class="stab-panel" data-panel="general">
     <div class="section-label">Open PaperShelf on</div>
-    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📖 Reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option><option value="lab" ${s.start_page === 'lab' ? 'selected' : ''}>🧪 Lab</option></select>
+    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📚 Library – reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library – all papers</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option><option value="lab" ${s.start_page === 'lab' ? 'selected' : ''}>🧪 Lab</option></select>
     <div class="section-label">Look</div>
     <div class="seg look-seg"><button type="button" data-look="glass" class="${s.look !== 'flat' ? 'on' : ''}">✦ Glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
     <div class="section-label">Colour <span class="muted small">– buttons, tabs and what is selected</span></div>
@@ -1283,18 +1283,18 @@ function ftSnippet(p) {
 
 /* ------------------------------------------------------------------ quit */
 /* ------------------------------------------------------------------ sidebar: pinned or auto-hide */
-// Each page (Reading list / Library) remembers whether its sidebar stays open. Unpinned, the sidebar
+// The Library and Researchers remember whether its sidebar stays open. Unpinned, the sidebar
 // hides and slides in when the mouse reaches the left edge, with ☰, or while dragging papers there.
 const Side = {
   timer: null,
-  key: () => state.tab === 'people' ? 'people' : state.area,  // reading / library / people, each remembered
+  key: () => state.tab === 'people' ? 'people' : 'library',  // Library / Researchers, each remembered
   el: () => $(state.tab === 'people' ? '#people-side' : '#sidebar'),
-  pinned: () => !!(state.sidePin || {})[Side.key()],
+  pinned: () => { const v = (state.sidePin || {})[Side.key()]; return v === undefined ? window.innerWidth >= 1100 : !!v; },   // open by default on a wide window: the labels and the ＋ are always in sight
   apply() {
     const auto = !Side.pinned();
     document.body.classList.toggle('side-auto', auto);
     if (!auto) document.body.classList.remove('side-open');
-    const where = {reading: 'Reading list', library: 'Library', people: 'Researchers'}[Side.key()];
+    const where = {library: 'the Library', people: 'Researchers'}[Side.key()];
     $$('#side-toggle, #people-side-toggle').forEach(t => { t.classList.toggle('on', Side.pinned()); t.title = Side.pinned() ? 'Hide the sidebar (it slides in when you move the mouse to the left edge)' : 'Keep the sidebar open (now it slides in when you move the mouse to the left edge)'; });
     $$('[data-sidepin]').forEach(b => { b.classList.toggle('on', Side.pinned()); b.title = Side.pinned() ? `The sidebar stays open on ${where} – click to hide it automatically` : `Keep the sidebar open on ${where}`; });
   },
@@ -1397,7 +1397,7 @@ async function brandMenu() {
     if (a === 'update') syncNow();
     if (a === 'install-update' || a === 'check') Updates.open();
     if (a === 'topic') { setTab('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
-    if (a === 'bulk') { if (state.tab !== 'library' || state.area !== 'reading') setTab('reading'); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
+    if (a === 'bulk') { if (state.tab !== 'library') setTab(state.libScope === 'library' ? 'library' : 'reading'); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
     if (a === 'export') openExport();
     if (a === 'feed') Feed.open();
     if (a === 'stats') Stats.open();
@@ -1503,8 +1503,8 @@ function setTab(tab, {keepView = false} = {}) {
   if (tab === 'reading' || tab === 'library' || tab === 'discover') {
     // each button shows its whole page (no label or keyword selected) – Discover can keep the label you were looking at
     const area = tab === 'reading' ? 'reading' : 'library';
-    const keep = keepView && area === state.area && ['group', 'all'].includes(state.view.type);
-    state.area = area; state.selected.clear(); state.keyword = null; state.lastIndex = null;
+    const keep = keepView && ['group', 'share'].includes(state.view.type);
+    state.area = area; if (tab !== 'discover') state.libScope = area; state.selected.clear(); state.keyword = null; state.lastIndex = null;
     if (!keep) state.view = homeView();
     if (tab === 'discover') state.mode = 'discover';
     else if (tab === 'reading' || state.mode === 'discover') state.mode = 'list';
@@ -1515,8 +1515,9 @@ function setTab(tab, {keepView = false} = {}) {
   document.body.classList.toggle('tab-lab', state.tab === 'lab');
   document.body.classList.toggle('area-reading', state.tab === 'library' && state.area === 'reading');
   document.body.classList.toggle('tab-discover', isDiscover());
-  const on = state.tab === 'people' || state.tab === 'lab' ? state.tab : isDiscover() ? 'discover' : state.area;
+  const on = state.tab === 'people' || state.tab === 'lab' ? state.tab : isDiscover() ? 'discover' : 'library';   // Reading list and All papers are two views of the Library
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
+  $$('#scope-seg [data-scope]').forEach(b => b.classList.toggle('on', b.dataset.scope === state.area));
   document.body.classList.remove('side-open'); Side.apply();
   if (state.tab === 'people') { Graph.stop(); People.show(); }
   else if (state.tab === 'lab') { Graph.stop(); closeDetail(); Lab.show(); }
@@ -1923,7 +1924,7 @@ function bind() {
     state.lastIndex = idx; openDetail(id);
   });
   document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
-  document.addEventListener('click', e => { if (e.target.closest('[data-focus-add]')) { e.preventDefault(); if (state.tab === 'library' && state.area === 'reading') $('#add-input').focus(); else openAddPaper(); } });
+  document.addEventListener('click', e => { if (e.target.closest('[data-focus-add]')) { e.preventDefault(); if (state.tab === 'library' && !isDiscover()) $('#add-input').focus(); else openAddPaper(); } });
   $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setTab('discover', {keepView: true}); });
   $('#view-title').addEventListener('click', e => { if (e.target.closest('[data-view-clear]')) setView(homeView()); });
   $('#select-all').addEventListener('change', e => {
@@ -1951,7 +1952,8 @@ function bind() {
   $('#export-btn').addEventListener('click', openExport);
   $('#settings-btn').addEventListener('click', openSettings);
   $('#sync-btn').addEventListener('click', syncNow);
-  $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+  $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab === 'library' ? (state.libScope === 'library' ? 'library' : 'reading') : b.dataset.tab); });
+  $('#scope-seg').addEventListener('click', e => { const b = e.target.closest('[data-scope]'); if (!b) return; if (state.area === b.dataset.scope && !isDiscover()) return; setTab(b.dataset.scope === 'reading' ? 'reading' : 'library', {keepView: true}); });
   $('#mode-seg').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
 
   // Detail panel
@@ -2020,7 +2022,7 @@ function bind() {
     }
     if (typing || topModal() || Reader.isOpen() || Help.isOpen() || state.tab === 'people' || state.tab === 'lab') return;
     if (e.key === '/') { e.preventDefault(); $('#search').focus(); }
-    if (e.key === 'n') { e.preventDefault(); if (state.tab === 'library' && state.area === 'reading') $('#add-input').focus(); else openAddPaper(); }
+    if (e.key === 'n') { e.preventDefault(); if (state.tab === 'library' && !isDiscover()) $('#add-input').focus(); else openAddPaper(); }
     if ((e.key === 'Backspace' || e.key === 'Delete') && state.selected.size) deletePapers([...state.selected]);
   });
 
