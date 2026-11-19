@@ -938,7 +938,7 @@ def new_doc(st, author, title="") -> str:
     did = uuid.uuid4().hex[:12]
     s = tick(st, author)
     docs[did] = {"by": author, "created": _now(), "title": {"v": " ".join(str(title or "").split())[:DOC_LIMITS["title"]] or "Untitled document", "s": s},
-                 "arch": {"v": False, "s": s}, "ops": {}, "cm": {}}
+                 "arch": {"v": False, "s": s}, "gone": {"v": False, "s": s}, "ops": {}, "cm": {}}
     return did
 
 
@@ -957,10 +957,44 @@ def set_doc(st, author, did, title=None, arch=None):
         d["arch"] = {"v": bool(arch), "s": tick(st, author)}
 
 
+def delete_doc(st, author, did):
+    """The creator deletes the document for the group: a marker travels, the text stops being published. The other
+    members keep their own copy on their computer until they remove it themselves."""
+    d = doc_of(st, did)
+    if d["by"] != author:
+        raise ShareError("Only the person who created the document can delete it for the group.")
+    d["gone"] = {"v": True, "s": tick(st, author)}
+    d["ops"], d["cm"] = {}, {}
+
+
+def purge_doc(st, did):
+    """Remove the text of a deleted document from this computer."""
+    d = doc_of(st, did)
+    if not (d.get("gone") or {}).get("v"):
+        raise ShareError("Only a deleted document can be removed from your computer. Ask its creator to delete it first.")
+    d["ops"], d["cm"] = {}, {}
+
+
+def is_gone(d) -> bool:
+    return bool((d.get("gone") or {}).get("v"))
+
+
+def for_publish(st: dict) -> dict:
+    """The copy that goes to the group's gists: deleted documents are no longer synchronised (only the marker)."""
+    docs = st.get("docs") or {}
+    if not any(is_gone(d) for d in docs.values()):
+        return st
+    out = dict(st)
+    out["docs"] = {k: (dict(d, ops={}, cm={}) if is_gone(d) else d) for k, d in docs.items()}
+    return out
+
+
 def doc_append(st, author, did, frm, ops) -> int:
     """Append operations to the author's own log. `frm` is how many of the author's operations the sender already
     had stored; a resend of operations already stored is accepted (idempotent). Returns the new length of the log."""
     d = doc_of(st, did)
+    if is_gone(d):
+        raise ShareError("This document was deleted by its creator.")
     log = d.setdefault("ops", {}).setdefault(author, [])
     if not isinstance(ops, list) or not isinstance(frm, int) or frm < 0 or frm > len(log):
         raise ShareError("Your copy of this document is out of date. It has been refreshed: try again.")
@@ -998,17 +1032,21 @@ def _dcm(st, author, name, did, kind, **f) -> str:
     return cid
 
 
-def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None, parent=None) -> str:
+def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None, parent=None, ins=False) -> str:
     body = str(body or "").strip()[:DOC_LIMITS["body"]]
     if rep is None and not body:
         raise ShareError("Write a comment first.")
     if not _anchor_ok(anchor):
         raise ShareError("That selection is not valid.")
     d = doc_of(st, did)
+    if is_gone(d):
+        raise ShareError("This document was deleted by its creator.")
+    if ins and (rep is None or not str(rep)):
+        raise ShareError("Write the text to insert.")
     if parent and (d.get("cm") or {}).get(parent, {}).get("k") != "c":
         raise ShareError("That comment doesn't exist any more.")
     return _dcm(st, author, name, did, "c", body=body, anchor=[list(anchor[0]), list(anchor[1])] if anchor else None,
-                quote=str(quote or "")[:300], rep=None if rep is None else clean_text(rep)[:DOC_LIMITS["body"]], parent=parent or None)
+                quote=str(quote or "")[:300], rep=None if rep is None else clean_text(rep)[:DOC_LIMITS["body"]], parent=parent or None, ins=bool(ins))
 
 
 def edit_doc_comment(st, author, did, cid, body=None, delete=False):
@@ -1072,7 +1110,7 @@ def _merge_docs(a: dict, b: dict) -> dict:
             continue
         m = {"by": min(x.get("by") or "", y.get("by") or "") or x.get("by") or y.get("by"),
              "created": min(x.get("created") or "9", y.get("created") or "9")}
-        for k in ("title", "arch"):
+        for k in ("title", "arch", "gone"):
             p, q = x.get(k) or {}, y.get(k) or {}
             m[k] = dict(q if newer(q.get("s"), p.get("s")) else p)
         m["ops"] = {}
@@ -1091,7 +1129,7 @@ def _merge_docs(a: dict, b: dict) -> dict:
 def _doc_stamps(docs) -> int:
     c = 0
     for d in docs.values():
-        for k in ("title", "arch"):
+        for k in ("title", "arch", "gone"):
             c = max(c, ((d.get(k) or {}).get("s") or [0])[0])
         for n in (d.get("cm") or {}).values():
             c = max(c, (n.get("s") or [0])[0])
@@ -1107,7 +1145,7 @@ def _validate_docs(raw) -> dict:
         if not (NAME_RE.match(by) or by.startswith("local-")):
             continue
         doc = {"by": by, "created": str(d.get("created") or "")[:40], "ops": {}, "cm": {}}
-        for k, dflt in (("title", "Untitled document"), ("arch", False)):
+        for k, dflt in (("title", "Untitled document"), ("arch", False), ("gone", False)):
             v = d.get(k) if isinstance(d.get(k), dict) else {}
             stp = _stamp(v.get("s"))
             if k == "title":
@@ -1140,7 +1178,7 @@ def _validate_docs(raw) -> dict:
                 e.update(body=str(n.get("body") or "")[:DOC_LIMITS["body"]], quote=str(n.get("quote") or "")[:300],
                          anchor=[list(an[0]), list(an[1])] if _anchor_ok(an) and an else None,
                          rep=None if n.get("rep") is None else clean_text(n.get("rep"))[:DOC_LIMITS["body"]],
-                         parent=str(n["parent"]) if OID_RE.match(str(n.get("parent") or "")) else None)
+                         parent=str(n["parent"]) if OID_RE.match(str(n.get("parent") or "")) else None, ins=bool(n.get("ins")))
             elif n["k"] == "res":
                 if n.get("v") not in RES_STATES or not OID_RE.match(str(n.get("on") or "")):
                     continue
@@ -1157,6 +1195,8 @@ def _trust_docs(st, owner, copy):
     their = copy.get("docs") or {}
     for did, d in (st.get("docs") or {}).items():
         t = their.get(did) or {}
+        if is_gone(d) or is_gone(t):
+            continue        # a deleted document is no longer synchronised: everybody keeps what they have
         if owner in (d.get("ops") or {}):
             if owner in (t.get("ops") or {}):
                 d["ops"][owner] = [dict(o) for o in t["ops"][owner]]

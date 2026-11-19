@@ -3308,9 +3308,10 @@ def _index_entries(db, gh, ident, drop=()):
 
 
 def _publish(db, gh, ident, sid, st, drop=()):
-    files = {} if sid in drop else {sharing.file_for(ident["src"], "list", sid): st}
+    pub = sharing.for_publish(st)     # deleted documents are no longer synchronised
+    files = {} if sid in drop else {sharing.file_for(ident["src"], "list", sid): pub}
     if sid in drop:
-        files[sharing.file_for(ident["src"], "list", sid)] = st  # the copy that says you left
+        files[sharing.file_for(ident["src"], "list", sid)] = pub  # the copy that says you left
     files["index.json"] = _index_entries(db, gh, ident, drop)
     gh.publish(ident["src"], files)
 
@@ -3774,7 +3775,8 @@ def _doc_items(st) -> dict:
 def _doc_row(d, did, names, me):
     s = sharing.doc_stats(d)
     cm = sharing._cm_view(d)["comments"]
-    return {"id": did, "title": d["title"]["v"], "by": d["by"], "by_name": names.get(d["by"], d["by"]), "created": d.get("created"),
+    gone = sharing.is_gone(d)
+    return {"id": did, "gone": gone, "title": d["title"]["v"], "by": d["by"], "by_name": names.get(d["by"], d["by"]), "created": d.get("created"),
             "updated": s["updated"], "words": s["words"], "chars": s["chars"], "arch": bool(d["arch"]["v"]),
             "authors": [names.get(a, a) for a in s["authors"]],
             "open": sum(1 for c in cm if c["state"] == "open" and not c.get("parent")),
@@ -3789,7 +3791,11 @@ def _docs_list(db, sid, st=None, **extra):
     ident = share_identity(db)
     names, author = _doc_names(db, st, ident)
     me = {ident["user"], ident["local"]} - {""}
-    docs = [_doc_row(d, did, names, me) for did, d in (st.get("docs") or {}).items()]
+    docs = []
+    for did, d in (st.get("docs") or {}).items():
+        if sharing.is_gone(d) and (d["by"] in me or not (d.get("ops") or d.get("cm"))):
+            continue       # deleted by me, or deleted and already removed from this computer
+        docs.append(_doc_row(d, did, names, me))
     docs.sort(key=lambda x: x["updated"] or "", reverse=True)
     return jsonify(docs=docs, can_write=bool(author), **extra)
 
@@ -3816,9 +3822,12 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
     lab = docexport.labels(items)
     papers = sorted(({"key": k, "label": lab[k], "title": (e.get("meta") or {}).get("title") or "", "cite": docexport.short_cite(e.get("meta") or {}),
                       "ref": docexport.reference(e.get("meta") or {})} for k, e in items.items()), key=lambda p: p["label"].lower())
-    return jsonify(id=did, title=d["title"]["v"], arch=bool(d["arch"]["v"]), by=d["by"], by_name=who(d["by"]), can_write=bool(author), me=author or ident["user"],
+    gone = sharing.is_gone(d)
+    return jsonify(id=did, title=d["title"]["v"], arch=bool(d["arch"]["v"]), gone=gone, by=d["by"], by_name=who(d["by"]),
+                   can_write=bool(author) and not gone, can_delete=bool(author) and d["by"] in ({ident["user"], ident["local"]} - {""}) and not gone,
+                   me=author or ident["user"],
                    people=[{"id": a, "name": n} for a, n in names.items()], ops=ops,
-                   comments=[{**{k: c.get(k) for k in ("id", "body", "created", "at", "by", "anchor", "quote", "rep", "parent", "state")},
+                   comments=[{**{k: c.get(k) for k in ("id", "body", "created", "at", "by", "anchor", "quote", "rep", "parent", "state", "ins")},
                               "name": who(c["by"], c.get("name")), "mine": c["by"] in ({ident["user"], ident["local"]} - {""})} for c in cmv["comments"]],
                    snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
                    papers=papers, **extra)
@@ -3830,6 +3839,8 @@ def _doc_write(db, sid, did=None):
         return None, None, err
     if did and did not in (st.get("docs") or {}):
         return None, None, error("That document doesn't exist any more.", 404)
+    if did and sharing.is_gone(st["docs"][did]):
+        return None, None, error("This document was deleted by its creator. Your copy stays on this computer until you remove it.", 403)
     return st, author, None
 
 
@@ -3845,8 +3856,9 @@ def _doc_saved(db, sid, st):
 
     def later():
         _DOC_PUB.discard(sid)
+        _DOC_SYNC[sid] = time.time()
         publish_soon(sid)
-    t = threading.Timer(3.0, later)
+    t = threading.Timer(2.5, later)
     t.daemon = True
     t.start()
 
@@ -3897,6 +3909,28 @@ def docs_edit(sid, did):
     return _docs_list(db, sid, st)
 
 
+@app.delete("/api/shares/<sid>/docs/<did>")
+def doc_delete(sid, did):
+    """The creator deletes a document for the group; anyone can then remove the leftover copy from their own computer."""
+    db = get_db()
+    row, st = _load_share(db, sid)
+    if not st or did not in (st.get("docs") or {}):
+        return error("That document doesn't exist any more.", 404)
+    ident = share_identity(db)
+    try:
+        if sharing.is_gone(st["docs"][did]):
+            sharing.purge_doc(st, did)
+        else:
+            author = _my_author(st, ident)
+            if not author:
+                return error("You are a reader of this group, so you can't delete its documents.", 403)
+            sharing.delete_doc(st, author, did)
+    except sharing.ShareError as exc:
+        return error(str(exc), 403)
+    _doc_saved(db, sid, st)
+    return _docs_list(db, sid, st)
+
+
 @app.get("/api/shares/<sid>/docs/<did>")
 def doc_get(sid, did):
     """The document, and only what the caller doesn't have yet: ?have={"alice":12,"bob":3} (operations already known per author)."""
@@ -3908,7 +3942,7 @@ def doc_sync(sid, did):
     """While a document is open: fetch the others' latest work (at most every ~12 seconds) and return what is new."""
     db = get_db()
     err = None
-    if time.time() - _DOC_SYNC.get(sid, 0) > 9 and share_identity(db)["can_publish"]:
+    if time.time() - _DOC_SYNC.get(sid, 0) > 4 and share_identity(db)["can_publish"]:
         _DOC_SYNC[sid] = time.time()
         try:
             sync_all_shares(db, only=sid)
@@ -3950,7 +3984,7 @@ def _doc_cm_call(sid, did, fn):
 @app.post("/api/shares/<sid>/docs/<did>/comments")
 def doc_comment_add(sid, did):
     return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.add_doc_comment(
-        st, au, _display_name(db), did, b.get("body"), b.get("anchor"), b.get("quote"), b.get("rep"), b.get("parent")))
+        st, au, _display_name(db), did, b.get("body"), b.get("anchor"), b.get("quote"), b.get("rep"), b.get("parent"), bool(b.get("ins"))))
 
 
 @app.put("/api/shares/<sid>/docs/<did>/comments/<cid>")

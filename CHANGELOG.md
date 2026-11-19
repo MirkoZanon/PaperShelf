@@ -2,6 +2,18 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.24 – 2026-11-19
+
+- **Suggestions like in Google Docs** – in a document's *Review* view, select text and choose *Comment*, *Suggest
+  edit* or *Suggest deleting*, or click between words to *suggest inserting* text. Suggestions appear in the text
+  (old text struck out, new text in green) and as cards you can accept or reject.
+- **See who is writing** – the top bar shows who is writing right now and in which section, and in Review a flag with
+  their name marks where they edited last. The document refreshes about every 4 seconds while someone else is active.
+- **Library next to your document, or in its own window** – *Library* shows your library beside the text, *New window*
+  opens the document in a separate window (for a second screen).
+- **Delete a document** – the creator can delete it for the group (⋯ menu); the others keep a read-only copy on their
+  computer until they remove it themselves. *Archive* tidies a document away. Everyone in the group needs this version.
+
 ## 2.23 – 2026-11-19
 
 - **Shared documents** – a new *Documents* tab in each group's Lab: write a manuscript, a proposal, a review or

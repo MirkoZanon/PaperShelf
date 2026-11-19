@@ -4,7 +4,8 @@
    anybody. This file: the replay, the editor, comments and suggestions, versions, citations, export. */
 const Docs = (() => {
   const D = {sid: null, can: false, list: null, id: null, host: null, R: null, mode: 'write', side: 'comments', sel: null, view: null,
-             pending: null, poll: null, flushT: null, flushing: false, status: 'saved', showArch: false, composing: false, selCm: null, filter: 'open'};
+             pending: null, poll: null, flushT: null, flushing: false, status: 'saved', showArch: false, composing: false, selCm: null, filter: 'open', auth: false, split: false, standalone: false, ext: new Set(), rsel: null};
+  const root = () => $('#dx-root', D.host) || D.host;
   const MOD = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
   const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
   const initials = n => (String(n || '?').match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
@@ -96,7 +97,7 @@ const Docs = (() => {
   const setStatus = s => { D.status = s; const el = $('#dx-status', D.host); if (el) { el.textContent = {saved: 'Saved', saving: 'Saving…', offline: 'Not saved yet, retrying…', read: 'Read only'}[s] || ''; el.className = 'dx-status ' + s; } };
   function schedule() {
     setStatus('saving'); clearTimeout(D.flushT);
-    D.flushT = setTimeout(flush, 1800);
+    D.flushT = setTimeout(flush, D.R && activeAuthors().length ? 900 : 1800);
     if (!D.firstEdit) D.firstEdit = Date.now();
     if (Date.now() - D.firstEdit > 5000) { clearTimeout(D.flushT); flush(); }
   }
@@ -128,7 +129,7 @@ const Docs = (() => {
       if (a === R.me) { if (o.n > (R.ops[a] || []).length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.sent = R.ops[a].length; changed = true; } R.have[a] = Math.max(R.have[a] || 0, o.n); continue; }
       if (o.ops.length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.have[a] = o.n; changed = true; }
     }
-    R.title = r.title; R.arch = r.arch; R.comments = r.comments; R.snaps = r.snaps; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
+    R.title = r.title; R.arch = r.arch; R.gone = r.gone; R.canDelete = r.can_delete; R.comments = r.comments; R.snaps = r.snaps; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
     return changed;
   }
   async function pull() {
@@ -141,32 +142,46 @@ const Docs = (() => {
       if (r.sync_error) $('#dx-net', D.host)?.setAttribute('title', r.sync_error);
     } catch (err) { /* offline: try again later */ }
   }
+  // the faster someone else is writing, the faster we look (about every 4 s), otherwise every 12 s
   function startPoll() {
-    stopPoll();
-    D.poll = setInterval(() => { if (document.visibilityState === 'visible' && D.host && D.host.offsetParent) pull(); }, 12000);
-    D.onvis = () => { if (document.visibilityState === 'visible') pull(); };
+    stopPoll(); D.pollOn = true;
+    const tick = async () => {
+      if (!D.pollOn) return;
+      if (document.visibilityState === 'visible' && D.host && D.host.offsetParent !== null && D.R && !D.R.gone) await pull();
+      if (!D.pollOn) return;
+      D.poll = setTimeout(tick, document.visibilityState !== 'visible' ? 30000 : D.R && activeAuthors().length ? 4500 : 12000);
+    };
+    D.poll = setTimeout(tick, 3500);
+    D.onvis = () => { if (document.visibilityState === 'visible' && D.R && !D.R.gone) pull(); };
     document.addEventListener('visibilitychange', D.onvis);
   }
-  function stopPoll() { clearInterval(D.poll); D.poll = null; if (D.onvis) document.removeEventListener('visibilitychange', D.onvis); D.onvis = null; }
+  function stopPoll() { D.pollOn = false; clearTimeout(D.poll); D.poll = null; if (D.onvis) document.removeEventListener('visibilitychange', D.onvis); D.onvis = null; }
 
   /* ------------------------------------------------------------- list of documents */
   async function loadList() {
     try { const r = await api(base()); D.list = r.docs; D.can = r.can_write; }
     catch (err) { D.list = []; toast(err.message, 'error'); }
   }
+  function cardHtml(d) {
+    return `<button class="dx-card" data-dx-open="${esc(d.id)}">
+          <span class="dx-card-t">${esc(d.title)}</span>
+          <span class="dx-card-m">${num(d.words)} word${d.words === 1 ? '' : 's'}${d.updated ? ` · edited ${esc(ago(d.updated))}` : ''}</span>
+          <span class="dx-card-f"><span class="dx-who">${(d.authors.length ? d.authors : [d.by_name]).slice(0, 5).map(n => av(n, n, 20)).join('')}</span>
+            ${d.open ? `<span class="dx-badge" title="Open comments and suggestions">${ic('chat')}${d.open}</span>` : ''}</span></button>`;
+  }
   function listHtml() {
-    const all = D.list || [], shown = all.filter(d => D.showArch ? d.arch : !d.arch), nArch = all.filter(d => d.arch).length;
+    const all = D.list || [], live = all.filter(d => !d.gone), gone = all.filter(d => d.gone);
+    const shown = live.filter(d => D.showArch ? d.arch : !d.arch), nArch = live.filter(d => d.arch).length;
     return `<div class="dx-list">
       <div class="dx-lhead"><div><h3>Documents</h3><p class="muted small">Write together: everyone types at the same time and nothing is overwritten. Comment, suggest changes, cite the group's papers, export to Word.</p></div><span class="grow"></span>
         ${nArch ? `<button class="btn small" data-dx="toggle-arch">${D.showArch ? 'Back to documents' : `Archived (${nArch})`}</button>` : ''}
         ${D.can ? `<button class="btn primary" data-dx="new">${ic('plus')}New document</button>` : ''}</div>
-      ${shown.length ? `<div class="dx-cards">${shown.map(d => `<button class="dx-card" data-dx-open="${esc(d.id)}">
-          <span class="dx-card-t">${esc(d.title)}</span>
-          <span class="dx-card-m">${num(d.words)} word${d.words === 1 ? '' : 's'}${d.updated ? ` · edited ${esc(ago(d.updated))}` : ''}</span>
-          <span class="dx-card-f"><span class="dx-who">${(d.authors.length ? d.authors : [d.by_name]).slice(0, 5).map(n => av(n, n, 20)).join('')}</span>
-            ${d.open ? `<span class="dx-badge" title="Open comments and suggestions">${ic('chat')}${d.open}</span>` : ''}</span></button>`).join('')}</div>`
+      ${shown.length ? `<div class="dx-cards">${shown.map(cardHtml).join('')}</div>`
         : `<div class="lab-empty"><div class="big">${ic('file', 30)}</div><h3>${D.showArch ? 'Nothing archived' : 'No documents yet'}</h3>
             <p class="muted">${D.can ? 'Start a manuscript, a grant proposal, meeting minutes or a literature review. Everyone in the group can write in it, at the same time.' : 'The editors of this group have not written a document yet.'}</p></div>`}
+      ${gone.length && !D.showArch ? `<h4 class="dx-h dx-goneh">Deleted from the group, still on your computer</h4><p class="muted small">These documents are no longer shared or updated. Export what you need, then remove them from this computer.</p>
+        <div class="dx-cards">${gone.map(d => `<div class="dx-card gone"><button class="dx-gopen" data-dx-open="${esc(d.id)}"><span class="dx-card-t">${esc(d.title)}</span><span class="dx-card-m">${num(d.words)} words · deleted by ${esc(d.by_name)}</span></button>
+          <button class="btn small" data-dx-purge="${esc(d.id)}">${ic('trash')}Remove from this computer</button></div>`).join('')}</div>` : ''}
       ${D.can ? '' : '<p class="muted small">You are a reader of this group: you can read and export documents, not write.</p>'}
     </div>`;
   }
@@ -197,44 +212,59 @@ const Docs = (() => {
 
   /* ------------------------------------------------------------- the editor */
   async function openDoc(id, {keep = false} = {}) {
+    if (D.ext.has(D.sid + '/' + id) && !D.standalone) { toast('This document is open in another window. Write there, or close that window first.'); return; }
     stopPoll(); clearTimeout(D.flushT);
     try {
       const r = await api(`${base()}/${q(id)}`);
       D.id = id; D.can = r.can_write; D.mode = keep ? D.mode : 'write'; D.view = null; D.selCm = null;
-      D.R = {me: r.me, ops: {}, have: {}, sent: 0, max: 0, B: null, title: r.title, arch: r.arch, comments: [], snaps: [], papers: [], people: [], text0: ''};
+      D.R = {me: r.me, ops: {}, have: {}, sent: 0, max: 0, B: null, title: r.title, arch: r.arch, gone: r.gone, canDelete: r.can_delete, byName: r.by_name, comments: [], snaps: [], papers: [], people: [], text0: ''};
       for (const [a, o] of Object.entries(r.ops)) { D.R.ops[a] = o.ops; D.R.have[a] = o.n; }
       D.R.sent = (D.R.ops[D.R.me] || []).length; absorb({...r, ops: {}}); rebuild();
-      paint(); startPoll(); setTimeout(pull, 600);
+      if (D.standalone) document.title = r.title + ' – PaperShelf';
+      paint(); if (!r.gone) { startPoll(); setTimeout(pull, 600); }
     } catch (err) { toast(err.message, 'error'); D.id = null; await loadList(); paintList(); }
   }
   function closeDoc() {
-    flushNow().finally(() => { stopPoll(); D.id = null; D.R = null; D.view = null; loadList().then(paintList); });
+    flushNow().finally(() => { stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble(); loadList().then(paintList); });
   }
   async function flushNow() { clearTimeout(D.flushT); for (let i = 0; i < 3 && D.R && ((D.R.ops[D.R.me] || []).length > D.R.sent || D.flushing); i++) { if (!D.flushing) await flush(); else await new Promise(r => setTimeout(r, 300)); } }
 
   // writers get well-separated colours (the n-th writer: golden-angle steps around the colour wheel)
   const auHue = a => { const ids = [...new Set([...(D.R.people || []).map(p => p.id), ...Object.keys(D.R.ops)])].sort(); const i = Math.max(0, ids.indexOf(a)); return Math.round((i * 137.508 + 150) % 360); };
   function peopleName(a) { return (D.R.people.find(p => p.id === a) || {}).name || a; }
-  function activeAuthors() {
+  function activeAuthors(ms = 150000) {
     const R = D.R, out = [];
-    for (const [a, log] of Object.entries(R.ops)) { const last = log[log.length - 1]; if (a !== R.me && last && Date.now() - Date.parse(last.at) < 150000) out.push(a); }
+    for (const [a, log] of Object.entries(R.ops)) { const last = log[log.length - 1]; if (a !== R.me && last && Date.now() - Date.parse(last.at) < ms) out.push(a); }
     return out;
+  }
+  // where somebody wrote last: a visible index in the text
+  function lastSpot(a) {
+    const B = D.R.B, log = D.R.ops[a] || [], op = log[log.length - 1]; if (!op) return null;
+    if (op.k === 'i') { const n = Array.from(op.t).length; return visAfter(B, [op.c + n - 1, a]); }
+    return op.r.length ? visBefore(B, [op.r[0][0], op.r[0][1]]) : null;
+  }
+  function sectionAt(idx) {
+    const B = D.R.B, head = B.text.slice(0, B.off[Math.min(idx, B.vis.length)]).split('\n').reverse().find(l => /^#{1,6}\s/.test(l));
+    return head ? head.replace(/^#+\s*/, '').trim().slice(0, 40) : '';
   }
   function paint() {
     if (!D.host) return;
     const R = D.R, W = D.can;
-    D.host.innerHTML = `<div class="dx ${D.mode}">
+    root().innerHTML = `<div class="dx ${D.mode}">
       <div class="dx-bar">
-        <button class="btn small" data-dx="back" title="All documents">${ic('caret')}<span>Documents</span></button>
+        ${D.standalone ? '' : `<button class="btn small" data-dx="back" title="All documents">${ic('caret')}<span>Documents</span></button>`}
         <input class="dx-title" id="dx-title" value="${esc(R.title)}" maxlength="150" ${W ? '' : 'readonly'} aria-label="Title">
         <span class="dx-status ${D.status}" id="dx-status">${W ? 'Saved' : 'Read only'}</span>
         <span class="dx-now" id="dx-now"></span>
         <span class="grow"></span>
         <div class="seg dx-modes"><button data-dx-mode="write" class="${D.mode === 'write' ? 'on' : ''}" title="Type here">${W ? 'Write' : 'Read'}</button>
-          <button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="See who wrote what and where the comments are">Review</button>
+          <button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="Comment and suggest changes on the text, like in Google Docs">Review</button>
           <button data-dx-mode="preview" class="${D.mode === 'preview' ? 'on' : ''}" title="The formatted document with citations and references">Preview</button></div>
+        ${D.standalone ? '' : `<button class="btn small dx-ibtn ${D.split ? 'on' : ''}" data-dx="split" title="Show your library next to the document">${ic('books')}<span>Library</span></button><button class="btn small dx-ibtn" data-dx="window" title="Open this document in its own window, to keep the library in the main one">${ic('export')}<span>New window</span></button>`}
         <span class="dx-menu"><button class="btn small" data-dx="export-menu">${ic('download')}Export</button></span>
+        ${W || R.canDelete ? `<span class="dx-menu"><button class="btn small" data-dx="more-menu" title="More">⋯</button></span>` : ''}
       </div>
+      ${R.gone ? `<div class="dx-gonebar">${ic('alert')}<span><b>${esc(R.byName)}</b> deleted this document for the group. It is no longer shared or updated: this copy stays on your computer only.</span><span class="grow"></span><button class="btn small" data-dx-exp="docx">Export</button><button class="btn small danger" data-dx="purge">Remove from this computer</button></div>` : ''}
       ${W && D.mode === 'write' ? `<div class="dx-tools" role="toolbar" aria-label="Formatting">
         <button data-fmt="h1" title="Heading 1"><b>H1</b></button><button data-fmt="h2" title="Heading 2"><b>H2</b></button><button data-fmt="h3" title="Heading 3"><b>H3</b></button><span class="dx-sep"></span>
         <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><span class="dx-sep"></span>
@@ -249,7 +279,10 @@ const Docs = (() => {
   function paintNow() {
     const el = $('#dx-now', D.host); if (!el || !D.R) return;
     const act = activeAuthors();
-    el.innerHTML = act.length ? act.slice(0, 4).map(a => `<span class="dx-live" title="${esc(peopleName(a))} is writing">${av(a, peopleName(a), 22)}</span>`).join('') + `<span class="muted small">${act.length === 1 ? esc(peopleName(act[0])) + ' is here' : act.length + ' people are here'}</span>` : '';
+    el.innerHTML = act.slice(0, 3).map(a => {
+      const typing = Date.now() - Date.parse(D.R.ops[a][D.R.ops[a].length - 1].at) < 20000, sp = lastSpot(a), sec = sp == null ? '' : sectionAt(sp);
+      return `<span class="dx-live ${typing ? 'typing' : ''}" title="${esc(peopleName(a))}${typing ? ' is writing' : ' was here a moment ago'}">${av(a, peopleName(a), 22)}<span class="dx-live-t"><b>${esc(peopleName(a).split(' ')[0])}</b>${typing ? ' is writing' : ' is here'}${sec ? ` · ${esc(sec)}` : ''}</span></span>`;
+    }).join('') + (act.length > 3 ? `<span class="muted small">+${act.length - 3}</span>` : '');
   }
 
   // ---- the page itself: textarea (write), coloured source (review) or formatted text (preview)
@@ -264,26 +297,41 @@ const Docs = (() => {
     const refs = used.slice().sort((a, b) => a.ref.toLowerCase().localeCompare(b.ref.toLowerCase()));
     return `<article class="dx-prev"><h1>${esc(title)}</h1>${mdHtml(text)}${refs.length ? `<h2>References</h2><ol class="dx-refs">${refs.map(p => `<li>${esc(p.ref)}</li>`).join('')}</ol>` : ''}</article>`;
   }
-  function anchorsOf(B) {
-    const out = [];
+  // comment highlights, suggestions (old text struck out, new text inserted), flags where others wrote
+  function reviewItems(B) {
+    const n = B.vis.length, hi = [], sug = [], ins = new Map();
     for (const c of D.R.comments) {
-      if (c.parent || !c.anchor || ['resolved', 'accepted', 'rejected'].includes(c.state) && D.filter === 'open') continue;
-      const a = visBefore(B, c.anchor[0]), b = visAfter(B, c.anchor[1]);
-      if (a == null || b == null || b <= a) continue;
-      out.push({id: c.id, a, b});
+      if (c.parent) continue;
+      const open = c.state === 'open'; if (!open && !(D.filter === 'all' && c.state !== 'rejected')) continue;
+      const isSug = c.rep != null;
+      if (isSug && !open) continue;
+      if (c.ins) {   // an insertion: the new text appears after the character it was written next to
+        const pos = c.anchor ? visAfter(B, c.anchor[1]) : 0; if (pos == null) continue;
+        (ins.get(pos) || ins.set(pos, []).get(pos)).push({id: c.id, rep: c.rep}); continue;
+      }
+      if (!c.anchor) continue;
+      const a = visBefore(B, c.anchor[0]), b = visAfter(B, c.anchor[1]); if (a == null || b == null || b <= a) continue;
+      (isSug ? sug : hi).push({id: c.id, a, b});
+      if (isSug && c.rep) (ins.get(b) || ins.set(b, []).get(b)).push({id: c.id, rep: c.rep});
     }
-    return out;
+    const flags = new Map();
+    for (const a of activeAuthors(300000)) { const sp = lastSpot(a); if (sp != null) (flags.get(Math.min(sp, n)) || flags.set(Math.min(sp, n), []).get(Math.min(sp, n))).push(a); }
+    return {hi, sug, ins, flags};
   }
   function marksHtml(B) {
-    const anch = anchorsOf(B), n = B.vis.length, cuts = new Set([0, n]);
-    anch.forEach(x => { cuts.add(x.a); cuts.add(Math.min(x.b, n)); });
-    // author runs
-    for (let i = 1; i < n; i++) if (B.vis[i].a !== B.vis[i - 1].a) cuts.add(i);
+    const {hi, sug, ins, flags} = reviewItems(B), n = B.vis.length, cuts = new Set([0, n]);
+    [...hi, ...sug].forEach(x => { cuts.add(x.a); cuts.add(Math.min(x.b, n)); });
+    ins.forEach((_v, k) => cuts.add(Math.min(k, n))); flags.forEach((_v, k) => cuts.add(k));
+    if (D.auth) for (let i = 1; i < n; i++) if (B.vis[i].a !== B.vis[i - 1].a) cuts.add(i);
     const pts = [...cuts].sort((x, y) => x - y); let h = '';
-    for (let k = 0; k < pts.length - 1; k++) {
-      const a = pts[k], b = pts[k + 1]; if (b <= a) continue;
-      const au = B.vis[a].a, ids = anch.filter(x => x.a <= a && x.b >= b).map(x => x.id), t = esc(B.text.slice(B.off[a], B.off[b]));
-      h += `<span class="dx-au" style="--c:${auHue(au)}" title="${esc(peopleName(au))}">${ids.length ? `<span class="dx-cm ${ids.includes(D.selCm) ? 'sel' : ''}" data-cmref="${ids.join(' ')}">${t}</span>` : t}</span>`;
+    const extra = k => (ins.get(k) || []).map(x => `<ins class="dx-ins ${x.id === D.selCm ? 'sel' : ''}" data-cmref="${esc(x.id)}">${esc(x.rep)}</ins>`).join('')
+      + (flags.get(k) || []).map(a => `<span class="dx-flag ${Date.now() - Date.parse(D.R.ops[a][D.R.ops[a].length - 1].at) < 20000 ? '' : 'old'}" style="--c:${auHue(a)}" data-n="${esc(peopleName(a).split(' ')[0])}"></span>`).join('');
+    for (let k = 0; k < pts.length; k++) {
+      h += extra(pts[k]);
+      const a = pts[k], b = pts[k + 1]; if (b == null || b <= a) continue;
+      const cm = hi.filter(x => x.a <= a && x.b >= b).map(x => x.id), sg = sug.filter(x => x.a <= a && x.b >= b).map(x => x.id), all = [...sg, ...cm];
+      const cls = ['dx-t', cm.length ? 'dx-cm' : '', sg.length ? 'dx-del' : '', all.includes(D.selCm) ? 'sel' : '', D.auth ? 'dx-au' : ''].filter(Boolean).join(' ');
+      h += `<span class="${cls}" data-a="${a}" ${all.length ? `data-cmref="${all.map(esc).join(' ')}"` : ''} ${D.auth ? `style="--c:${auHue(B.vis[a].a)}" title="${esc(peopleName(B.vis[a].a))}"` : ''}>${esc(B.text.slice(B.off[a], B.off[b]))}</span>`;
     }
     return h || '<span class="muted">Empty document.</span>';
   }
@@ -306,7 +354,7 @@ const Docs = (() => {
       pg.innerHTML = `<textarea id="dx-text" class="dx-text" spellcheck="true" ${W ? '' : 'readonly'} placeholder="${W ? 'Start writing…  Use # for headings, **bold**, - for lists, [@Smith2020] to cite a paper.' : ''}" aria-label="Document text"></textarea>`;
       const ta = $('#dx-text', pg); ta.value = R.B.text; autosize(ta);
     } else if (D.mode === 'marks') {
-      pg.innerHTML = `${legendHtml()}<div class="dx-src">${marksHtml(R.B)}</div>`;
+      pg.innerHTML = `<div class="dx-revbar">${W ? '<span class="muted small">Select some text to comment on it or suggest a change.</span>' : ''}<span class="grow"></span><label class="dx-chk"><input type="checkbox" data-dx-auth ${D.auth ? 'checked' : ''}> Colour by writer</label></div>${D.auth ? legendHtml() : ''}<div class="dx-src" id="dx-src">${marksHtml(R.B)}</div>`;
     } else {
       pg.innerHTML = previewHtml(R.B, R.title);
     }
@@ -353,16 +401,17 @@ const Docs = (() => {
     const shown = top.filter(c => D.filter === 'all' || c.state === 'open');
     const nDone = top.length - top.filter(c => c.state === 'open').length;
     const card = c => {
-      const a = c.anchor ? visBefore(B, c.anchor[0]) : null, b = c.anchor ? visAfter(B, c.anchor[1]) : null, gone = c.anchor && (a == null || b == null || b <= a);
+      const a = c.anchor ? visBefore(B, c.anchor[0]) : null, b = c.anchor ? visAfter(B, c.anchor[1]) : null, gone = c.ins ? (c.anchor && b == null) : c.anchor && (a == null || b == null || b <= a);
       const now = !gone && c.anchor ? textOf(B, a, b) : '', sug = c.rep != null;
       return `<div class="dx-c ${c.state} ${D.selCm === c.id ? 'sel' : ''}" data-cm="${esc(c.id)}">
         <div class="dx-c-h">${av(c.by, c.name, 22)}<b>${esc(c.name)}</b><span class="muted small">${esc(ago(c.created))}</span>${sug ? '<span class="dx-tag">suggestion</span>' : ''}${c.state !== 'open' ? `<span class="dx-tag ${c.state}">${c.state}</span>` : ''}</div>
-        ${c.anchor ? `<button class="dx-quote ${gone ? 'gone' : ''}" data-dx-goto="${esc(c.id)}" title="${gone ? 'The text was deleted' : 'Show in the text'}">${gone ? `<i>${esc(c.quote || 'Text deleted')}</i>` : esc(truncate(now, 140))}</button>` : ''}
-        ${sug ? `<div class="dx-rep"><span class="muted small">Change to</span><div>${c.rep ? esc(truncate(c.rep, 400)) : '<i>(delete this text)</i>'}</div></div>` : ''}
+        ${sug ? `<button class="dx-sugline ${gone ? 'gone' : ''}" data-dx-goto="${esc(c.id)}" title="Show in the text">${c.ins ? `<span class="muted small">Insert</span> <ins>${esc(truncate(c.rep, 300))}</ins>`
+            : `<span class="muted small">${c.rep ? 'Replace' : 'Delete'}</span> <del>${esc(truncate(gone ? c.quote : now, 160))}</del>${c.rep ? ` <span class="muted small">with</span> <ins>${esc(truncate(c.rep, 300))}</ins>` : ''}`}</button>`
+          : c.anchor ? `<button class="dx-quote ${gone ? 'gone' : ''}" data-dx-goto="${esc(c.id)}" title="${gone ? 'The text was deleted' : 'Show in the text'}">${gone ? `<i>${esc(c.quote || 'Text deleted')}</i>` : esc(truncate(now, 140))}</button>` : ''}
         ${c.body ? `<div class="dx-c-b">${esc(c.body).replace(/\n/g, '<br>')}</div>` : ''}
         ${kids(c.id).map(k => `<div class="dx-reply"><div class="dx-c-h">${av(k.by, k.name, 18)}<b>${esc(k.name)}</b><span class="muted small">${esc(ago(k.created))}</span>${k.mine && W ? `<button class="dx-x" data-dx-cdel="${esc(k.id)}" title="Delete">✕</button>` : ''}</div><div class="dx-c-b">${esc(k.body).replace(/\n/g, '<br>')}</div></div>`).join('')}
         ${W ? `<div class="dx-c-a">
-          ${c.state === 'open' && sug && !gone ? `<button class="btn small primary" data-dx-accept="${esc(c.id)}">Accept</button><button class="btn small" data-dx-res="${esc(c.id)}|rejected">Reject</button>`
+          ${c.state === 'open' && sug && !gone ? `<button class="btn small primary" data-dx-accept="${esc(c.id)}">${ic('check')}Accept</button><button class="btn small" data-dx-res="${esc(c.id)}|rejected">Reject</button>`
             : c.state === 'open' ? `<button class="btn small" data-dx-res="${esc(c.id)}|resolved">${ic('check')}Resolve</button>` : `<button class="btn small" data-dx-res="${esc(c.id)}|open">Reopen</button>`}
           <button class="btn small" data-dx-reply="${esc(c.id)}">Reply</button>${c.mine ? `<button class="dx-x" data-dx-cdel="${esc(c.id)}" title="Delete">✕</button>` : ''}</div>` : ''}
       </div>`;
@@ -432,18 +481,25 @@ const Docs = (() => {
     ta.value = v.slice(0, s) + text + v.slice(e); const p = s + text.length; ta.setSelectionRange(p, p); ta.focus();
     editTo(ta.value); autosize(ta); paintSide();
   }
+  async function createComment({a, b, body = '', rep = null, ins = false}) {
+    const R = D.R, B = R.B; let anchor = null, quote = '';
+    if (ins) { if (a > 0) { anchor = [[B.vis[a - 1].c, B.vis[a - 1].a], [B.vis[a - 1].c, B.vis[a - 1].a]]; quote = B.vis[a - 1].ch; } }
+    else if (b > a) { anchor = anchorFor(B, a, b); quote = selText({a, b}).slice(0, 300); }
+    try {
+      const r = await api(`${base()}/${q(D.id)}/comments`, {method: 'POST', body: {body, anchor, quote, rep, ins}});
+      absorb(r); D.side = 'comments'; applyRemote(); paintSide(); return true;
+    } catch (err) { toast(err.message, 'error'); return false; }
+  }
   async function addComment(suggest) {
     if (!D.can) return;
-    const R = D.R, S = selection(), box = $('#dx-cnew', D.host), body = (box?.value || '').trim();
+    const R = D.R, S = D.rsel || selection(), box = $('#dx-cnew', D.host), body = (box?.value || '').trim();
     const sel = S && S.b > S.a && S.b <= R.B.vis.length ? S : null;
     if (suggest && !sel) { toast('Select the text you want to change first.'); return; }
     let rep = null;
     if (suggest) { rep = await askText('Suggest a change', 'New wording for the selected text (leave empty to suggest deleting it).', selText(sel)); if (rep === null) return; }
     else if (!body) { toast('Write your comment first.'); box?.focus(); return; }
-    try {
-      const r = await api(`${base()}/${q(D.id)}/comments`, {method: 'POST', body: {body, anchor: sel ? anchorFor(R.B, sel.a, sel.b) : null, quote: sel ? selText(sel).slice(0, 300) : '', rep}});
-      absorb(r); if (box) box.value = ''; D.side = 'comments'; applyRemote(); paintSide();
-    } catch (err) { toast(err.message, 'error'); }
+    if (!suggest && !sel) { toast('Select the text this comment is about first.'); return; }
+    if (await createComment({a: sel.a, b: sel.b, body, rep}) && box) box.value = '';
   }
   const selText = S => D.R.B.text.slice(D.R.B.off[S.a], D.R.B.off[S.b]);
   function askText(title, hint, value) {
@@ -458,23 +514,31 @@ const Docs = (() => {
     try { const r = await api(`${base()}/${q(D.id)}/comments${path}`, {method, body}); absorb(r); applyRemote(); paintSide(); return r; }
     catch (err) { toast(err.message, 'error'); return null; }
   }
+  // put a new text in the document (as one edit by me), wherever the person is looking
+  function applyNewText(next) {
+    editTo(next);
+    const ta = $('#dx-text', D.host); if (ta) { ta.value = D.R.B.text; autosize(ta); } else paintPage();
+  }
   async function acceptSuggestion(id) {
     const c = D.R.comments.find(x => x.id === id); if (!c || !D.can) return;
-    const B = D.R.B, a = visBefore(B, c.anchor[0]), b = visAfter(B, c.anchor[1]);
-    if (a == null || b == null || b <= a) { toast('The text of this suggestion was deleted.'); return; }
-    if (c.quote && selText({a, b}).slice(0, 300) !== c.quote && !await confirmBox('The text has changed', 'This part of the text was edited after the suggestion was made. Replace it anyway?', {ok: 'Replace'})) return;
-    const ta = $('#dx-text', D.host), old = B.text, next = old.slice(0, B.off[a]) + c.rep + old.slice(B.off[b]);
-    if (D.mode !== 'write') { D.mode = 'write'; paint(); }
-    const ta2 = $('#dx-text', D.host); ta2.value = next; editTo(next); autosize(ta2);
+    const B = D.R.B; let a, b;
+    if (c.ins) { a = b = c.anchor ? visAfter(B, c.anchor[1]) : 0; if (a == null) { toast('The text next to this insertion was deleted.'); return; } }
+    else {
+      a = visBefore(B, c.anchor[0]); b = visAfter(B, c.anchor[1]);
+      if (a == null || b == null || b <= a) { toast('The text of this suggestion was deleted.'); return; }
+      if (c.quote && selText({a, b}).slice(0, 300) !== c.quote && !await confirmBox('The text has changed', 'This part of the text was edited after the suggestion was made. Replace it anyway?', {ok: 'Replace'})) return;
+    }
+    applyNewText(B.text.slice(0, B.off[a]) + (c.rep || '') + B.text.slice(B.off[b]));
     await cmCall('POST', `/${q(id)}/resolve`, {state: 'accepted'});
   }
   function gotoComment(id) {
-    const c = D.R.comments.find(x => x.id === id); if (!c || !c.anchor) return;
-    const B = D.R.B, a = visBefore(B, c.anchor[0]), b = visAfter(B, c.anchor[1]); if (a == null || b == null || b <= a) return;
-    D.selCm = id;
+    const c = D.R.comments.find(x => x.id === id); if (!c || !c.anchor && !c.ins) return;
+    const B = D.R.B, a = c.anchor ? visBefore(B, c.anchor[0]) : 0, b = c.anchor ? visAfter(B, c.anchor[1]) : 0; if (!c.ins && (a == null || b == null || b <= a)) return;
+    D.selCm = id; if (D.mode === 'write') { D.mode = 'marks'; paint(); }
     if (D.mode === 'preview') { D.mode = 'marks'; paint(); }
-    if (D.mode === 'write') { const ta = $('#dx-text', D.host); ta.focus(); ta.setSelectionRange(B.off[a], B.off[b]); const line = B.text.slice(0, B.off[a]).split('\n').length; ta.blur(); ta.focus(); const lh = parseFloat(getComputedStyle(ta).lineHeight) || 24; window.scrollTo({top: ta.getBoundingClientRect().top + window.scrollY + (line - 3) * lh - 120, behavior: 'smooth'}); }
-    else { paintPage(); $('.dx-cm.sel', D.host)?.scrollIntoView({block: 'center', behavior: 'smooth'}); }
+    if (D.mode === 'write' && c.ins) { /* nothing to select */ }
+    else if (D.mode === 'write') { const ta = $('#dx-text', D.host); ta.focus(); ta.setSelectionRange(B.off[a], B.off[b]); const line = B.text.slice(0, B.off[a]).split('\n').length; ta.blur(); ta.focus(); const lh = parseFloat(getComputedStyle(ta).lineHeight) || 24; window.scrollTo({top: ta.getBoundingClientRect().top + window.scrollY + (line - 3) * lh - 120, behavior: 'smooth'}); }
+    else { paintPage(); ($('.dx-ins.sel', D.host) || $('.dx-t.sel', D.host))?.scrollIntoView({block: 'center', behavior: 'smooth'}); }
     paintSide();
   }
 
@@ -486,7 +550,93 @@ const Docs = (() => {
     const v = D.view; if (!v || !D.can) return;
     if (!await confirmBox('Restore this version?', `The document will go back to "${v.label}". It is saved as a new edit, so the current text stays in the history.`, {ok: 'Restore'})) return;
     const text = v.B.text; D.view = null; D.mode = 'write'; paint();
-    const ta = $('#dx-text', D.host); ta.value = text; editTo(text); autosize(ta); toast('Version restored.');
+    applyNewText(text); toast('Version restored.');
+  }
+
+  /* ------------------------------------------------------------- selecting text in Review: comment / suggest, like Google Docs */
+  function domPoint(node, off) {
+    const el = (node.nodeType === 3 ? node.parentElement : node)?.closest?.('.dx-t'); if (!el || node.nodeType !== 3) return null;
+    const B = D.R.B, abs = B.off[+el.dataset.a] + off; return offToIdx(B, abs);
+  }
+  function readSelection() {
+    const sel = window.getSelection(), src = $('#dx-src', D.host); if (!sel || !sel.rangeCount || !src || !src.contains(sel.anchorNode) || !src.contains(sel.focusNode)) return null;
+    const r = sel.getRangeAt(0), a = domPoint(r.startContainer, r.startOffset), b = domPoint(r.endContainer, r.endOffset);
+    if (a == null || b == null) return null;
+    return {a: Math.min(a, b), b: Math.max(a, b), rect: r.getBoundingClientRect()};
+  }
+  function hideBubble() { $('.dx-bubble')?.remove(); $('.dx-comp')?.remove(); }
+  function placeAt(el, rect) {
+    document.body.appendChild(el); const w = el.offsetWidth, h = el.offsetHeight;
+    let x = rect.left + rect.width / 2 - w / 2, y = rect.top - h - 8; if (y < 8) y = rect.bottom + 8;
+    el.style.left = Math.max(8, Math.min(x, innerWidth - w - 8)) + 'px'; el.style.top = Math.max(8, y) + 'px';
+  }
+  function showBubble() {
+    hideBubble(); if (!D.can || D.mode !== 'marks' || D.view) return;
+    const S = readSelection(); D.rsel = S; if (!S) return;
+    const el = document.createElement('div'); el.className = 'dx-bubble'; el.setAttribute('role', 'toolbar');
+    el.innerHTML = S.b > S.a ? `<button data-bub="comment">${ic('chat')}Comment</button><button data-bub="replace">${ic('pen')}Suggest edit</button><button data-bub="delete">${ic('trash')}Suggest deleting</button>`
+      : `<button data-bub="insert">${ic('plus')}Suggest inserting text here</button>`;
+    el.addEventListener('mousedown', e => e.preventDefault());       // keep the selection while clicking
+    el.addEventListener('click', e => { const k = e.target.closest('[data-bub]')?.dataset.bub; if (k) composer(k, S); });
+    placeAt(el, S.rect);
+  }
+  function composer(kind, S) {
+    hideBubble(); const B = D.R.B, old = S.b > S.a ? selText(S) : '';
+    const el = document.createElement('div'); el.className = 'dx-comp';
+    const title = {comment: 'Comment', replace: 'Suggest an edit', insert: 'Suggest inserting text', delete: 'Suggest deleting this text'}[kind];
+    el.innerHTML = `<div class="dx-comp-t">${esc(title)}</div>${old ? `<div class="dx-comp-q">${esc(truncate(old, 160))}</div>` : ''}
+      ${kind === 'delete' ? '' : `<textarea class="input" rows="${kind === 'comment' ? 3 : 4}" placeholder="${kind === 'comment' ? 'Write a comment…' : kind === 'insert' ? 'Text to insert' : 'New wording'}">${kind === 'replace' ? esc(old) : ''}</textarea>`}
+      ${kind === 'comment' || kind === 'delete' ? '' : '<input class="input dx-why" maxlength="300" placeholder="Why? (optional)">'}
+      <div class="dx-row"><button class="btn small primary" data-ok>${kind === 'comment' ? 'Comment' : 'Suggest'}</button><button class="btn small" data-no>Cancel</button></div>`;
+    placeAt(el, S.rect);
+    const ta = $('textarea', el); if (ta) { ta.focus(); if (kind === 'replace') ta.select(); }
+    $('[data-no]', el).onclick = () => el.remove();
+    const go = async () => {
+      const txt = ta ? ta.value : '', why = $('.dx-why', el)?.value.trim() || '';
+      if (kind === 'comment' && !txt.trim()) { ta.focus(); return; }
+      if (kind === 'insert' && !txt) { ta.focus(); return; }
+      if (kind === 'replace' && txt === old) { toast('Change the text first.'); return; }
+      const ok = await createComment(kind === 'comment' ? {a: S.a, b: S.b, body: txt} : kind === 'delete' ? {a: S.a, b: S.b, rep: ''} : kind === 'insert' ? {a: S.a, b: S.a, rep: txt, body: why, ins: true} : {a: S.a, b: S.b, rep: txt, body: why});
+      if (ok) { el.remove(); window.getSelection()?.removeAllRanges(); }
+    };
+    $('[data-ok]', el).onclick = go;
+    el.addEventListener('keydown', e => { if (e.key === 'Escape') el.remove(); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go(); });
+    if (kind === 'delete') go();
+  }
+  function moreMenu(btn) {
+    $('.dx-pop')?.remove(); const R = D.R;
+    const pop = document.createElement('div'); pop.className = 'dx-pop';
+    pop.innerHTML = `${D.can ? `<button data-dx="archive">${R.arch ? 'Move back to documents' : 'Archive'}</button>` : ''}${R.canDelete ? '<button class="danger" data-dx="delete">Delete document…</button>' : ''}`;
+    btn.parentElement.appendChild(pop); setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
+  }
+  async function deleteDoc() {
+    if (!await confirmBox('Delete this document for the group?', 'It stops being shared and disappears from your list. The other members keep their copy on their own computer until they remove it themselves, so nobody loses work suddenly. This cannot be undone.', {ok: 'Delete', danger: true})) return;
+    try { await flushNow(); const r = await api(`${base()}/${q(D.id)}`, {method: 'DELETE'}); D.list = r.docs; stopPoll(); D.id = null; D.R = null; paintList(); toast('Document deleted.'); } catch (err) { toast(err.message, 'error'); }
+  }
+  async function purgeDoc(id) {
+    if (!await confirmBox('Remove from this computer?', 'The text of this deleted document is erased from this computer. Export it first if you still need it.', {ok: 'Remove', danger: true})) return;
+    try { const r = await api(`${base()}/${q(id)}`, {method: 'DELETE'}); D.list = r.docs; stopPoll(); if (D.id === id) { D.id = null; D.R = null; } paintList(); toast('Removed from this computer.'); } catch (err) { toast(err.message, 'error'); }
+  }
+  async function archiveDoc() {
+    try { const r = await api(`${base()}/${q(D.id)}`, {method: 'PUT', body: {arch: !D.R.arch}}); D.list = r.docs; D.R.arch = !D.R.arch; toast(D.R.arch ? 'Archived.' : 'Back in your documents.'); } catch (err) { toast(err.message, 'error'); }
+  }
+
+  /* ------------------------------------------------------------- own window and side by side with the library */
+  async function openWindow() {
+    await flushNow();
+    const url = `/?doc=${q(D.sid)}/${q(D.id)}`, w = window.open(url, 'ps-doc-' + D.id, 'popup=yes,width=1040,height=920');
+    if (!w) { toast('Your browser blocked the new window. Allow pop-ups for PaperShelf and try again.', 'error'); return; }
+    D.ext.add(D.sid + '/' + D.id); stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble();
+    await loadList(); paintList(); toast('The document is open in its own window. Write there; this window is free for your library.');
+  }
+  function setSplit(on) {
+    D.split = on; D.host.classList.toggle('split', on); document.body.classList.toggle('dx-split-on', on);
+    const lib = $('#dx-lib', D.host);
+    if (on && lib && !$('iframe', lib)) {
+      lib.innerHTML = `<div class="dx-libbar"><b>${ic('books')} Your library</b><span class="muted small">Read papers and take notes while you write</span><span class="grow"></span><button class="btn small" data-dx="split">Close</button></div><iframe title="Your library" src="/?embed=1"></iframe>`;
+      $('iframe', lib).addEventListener('load', e => { try { e.target.contentWindow.setTab?.('library'); } catch (err) { /* ignore */ } });
+    }
+    if (D.R) paint();
   }
 
   /* ------------------------------------------------------------- export */
@@ -521,6 +671,11 @@ const Docs = (() => {
     });
     host.addEventListener('compositionstart', e => { if (e.target.id === 'dx-text') D.composing = true; });
     host.addEventListener('compositionend', e => { if (e.target.id === 'dx-text') { D.composing = false; editTo(e.target.value); autosize(e.target); if (D.late) { D.late = false; applyRemote(); } } });
+    host.addEventListener('mouseup', e => { if (D.mode === 'marks' && e.target.closest('#dx-src') && !e.target.closest('[data-cmref]')) setTimeout(showBubble, 10); });
+    host.addEventListener('keyup', e => { if (D.mode === 'marks' && e.shiftKey && e.target.closest?.('#dx-src, body')) setTimeout(showBubble, 10); });
+    document.addEventListener('mousedown', e => { if (!e.target.closest('.dx-bubble, .dx-comp') && !e.target.closest('#dx-src')) hideBubble(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') hideBubble(); });
+    host.addEventListener('change', e => { if (e.target.matches('[data-dx-auth]')) { D.auth = e.target.checked; paintPage(); } });
     host.addEventListener('select', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
@@ -551,6 +706,13 @@ const Docs = (() => {
       if (dx === 'new') return newDialog();
       if (dx === 'toggle-arch') { D.showArch = !D.showArch; return paintList(); }
       if (dx === 'back') return closeDoc();
+      if (dx === 'more-menu') { e.stopPropagation(); return moreMenu(t.closest('button')); }
+      if (dx === 'archive') return archiveDoc();
+      if (dx === 'delete') return deleteDoc();
+      if (dx === 'purge') return purgeDoc(D.id);
+      if (dx === 'window') return openWindow();
+      if (dx === 'split') return setSplit(!D.split);
+      const pg = t.closest('[data-dx-purge]')?.dataset.dxPurge; if (pg) return purgeDoc(pg);
       if (dx === 'export-menu') { e.stopPropagation(); return exportMenu(t.closest('button')); }
       if (dx === 'comment-add') return addComment(false);
       if (dx === 'suggest-add') return addComment(true);
@@ -578,19 +740,41 @@ const Docs = (() => {
 
   window.addEventListener('beforeunload', () => { if (D.R && (D.R.ops[D.R.me] || []).length > D.R.sent) { try { navigator.sendBeacon?.(`${base()}/${q(D.id)}/ops`, new Blob([JSON.stringify({from: D.R.sent, ops: D.R.ops[D.R.me].slice(D.R.sent)})], {type: 'application/json'})); } catch (e) { /* ignore */ } } });
 
-  /* ------------------------------------------------------------- mounting inside the Lab */
-  function paintList() { if (D.host) D.host.innerHTML = listHtml(); }
+  /* ------------------------------------------------------------- mounting inside the Lab (or in a window of its own) */
+  function paintList() { if (D.host) root().innerHTML = listHtml(); }
+  const skeleton = host => { if (!$('#dx-root', host)) host.innerHTML = '<div id="dx-root"></div><div id="dx-lib"></div>'; };
   let bound = null;
   async function mount(host, sid, canWrite) {
     if (D.sid !== sid) { stopPoll(); D.id = null; D.R = null; D.list = null; D.view = null; D.showArch = false; }
-    D.sid = sid; D.host = host; D.can = canWrite;
+    D.sid = sid; D.host = host; D.can = canWrite; skeleton(host);
+    host.classList.toggle('split', D.split);
+    document.body.classList.toggle('dx-split-on', D.split);
     if (bound !== host) { bind(host); bound = host; }
+    if (D.split && !$('iframe', $('#dx-lib', host))) setSplit(true);
     if (D.id && D.R) { paint(); startPoll(); return; }
-    host.innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
+    root().innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
     await loadList(); if (D.host === host && !D.id) paintList();
   }
   // true while someone is writing: the lab must not redraw the page under their fingers
   const busy = sid => !!(D.R && D.id && D.sid === sid && D.host && document.body.contains(D.host));
-  function leave() { stopPoll(); flushNow(); D.id = null; D.R = null; D.view = null; D.host = null; }
-  return {mount, busy, leave, pull, count: () => (D.list || []).filter(d => !d.arch).length};
+  function leave() { stopPoll(); flushNow(); D.id = null; D.R = null; D.view = null; D.host = null; hideBubble(); document.body.classList.remove('dx-split-on'); }
+
+  // a document in a window of its own: ?doc=<group>/<document>
+  const chan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('papershelf-docs') : null;
+  if (chan) chan.onmessage = e => {
+    const m = e.data || {}, key = m.sid + '/' + m.did;
+    if (m.t === 'open') D.ext.add(key); else if (m.t === 'close') { D.ext.delete(key); if (D.host && !D.id && D.sid === m.sid) loadList().then(paintList); }
+  };
+  async function standalone(sid, did) {
+    D.standalone = true; document.body.classList.add('doc-window');
+    const wrap = document.createElement('div'); wrap.id = 'docwin'; wrap.innerHTML = '<div class="docs-host"></div>'; document.body.appendChild(wrap);
+    const host = $('.docs-host', wrap); D.sid = sid; D.host = host; skeleton(host); bind(host); bound = host;
+    chan?.postMessage({t: 'open', sid, did}); window.addEventListener('pagehide', () => chan?.postMessage({t: 'close', sid, did}));
+    await loadList(); await openDoc(did);
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const qs = new URLSearchParams(location.search), d = qs.get('doc');
+    if (d && d.includes('/')) { const [sid, did] = d.split('/'); standalone(sid, did); }
+  });
+  return {mount, busy, leave, pull, count: () => (D.list || []).filter(d => !d.arch && !d.gone).length};
 })();
