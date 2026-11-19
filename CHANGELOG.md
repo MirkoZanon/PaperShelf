@@ -2,6 +2,21 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.21 – 2026-11-19
+
+- **One Add button** – the top bar has a single place to add: type or paste a DOI, link or title and press
+  **Add**, or open the arrow next to it for PDF files, many papers at once, manual entry, a new label,
+  a new group and your groups. The second Add button below is gone.
+- **The PaperShelf menu lists the four places** – Library, Discover, Researchers and Lab, each with a
+  line of explanation (the one you are in is highlighted), then Groups, Export and Reading stats.
+- **A Groups page** – create a group, join one or open a group file, and for each of your groups go
+  straight to its **Library**, its **Ideas & chat**, its **Plans & tasks**, invite people or manage it.
+  Open it from the PaperShelf menu or from the Add arrow.
+- **Line icons everywhere** – the remaining coloured emoji in buttons, menus, headings, dialogs and the
+  Help are drawn with the same thin line icons. What people write (notes, posts, titles) is untouched.
+- The switch, the Labels button, the view tools and the search box now sit on one line, same height.
+  **Esc** closes an open menu.
+
 ## 2.20 – 2026-11-19
 
 - **A cleaner Library header** – the **All papers | Reading list** switch is now the title, on the left;

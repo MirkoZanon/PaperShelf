@@ -305,8 +305,6 @@ async function setGroupColor(gid, color) {
   catch (err) { toast(err.message, 'error'); }
 }
 
-const ICONS = {"books": "<path d=\"M4.5 4.5h3.2v15H4.5zM9.6 4.5h3.2v15H9.6zM14.6 5.6l3.1-.8 3.8 14.5-3.1.8z\"/><path d=\"M4.5 8h3.2M9.6 8h3.2M4.5 16h3.2M9.6 16h3.2\"/>", "book": "<path d=\"M12 6.5C10.2 5 7.6 4.5 4 4.8v13.4c3.6-.3 6.2.2 8 1.7 1.8-1.5 4.4-2 8-1.7V4.8c-3.6-.3-6.2.2-8 1.7zM12 6.5v13.4\"/>", "list": "<path d=\"M5 7h14M5 12h14M5 17h14\"/>", "map": "<circle cx=\"6.5\" cy=\"7\" r=\"2.3\"/><circle cx=\"17.5\" cy=\"6.5\" r=\"2.3\"/><circle cx=\"12\" cy=\"17.5\" r=\"2.3\"/><path d=\"M8.5 8.4l2.4 7M15.8 8.5l-2.6 7M8.9 7h6.3\"/>", "table": "<rect x=\"4\" y=\"5\" width=\"16\" height=\"14\" rx=\"2.2\"/><path d=\"M4 10h16M10 10v9\"/>", "plus": "<path d=\"M12 5.5v13M5.5 12h13\"/>", "download": "<path d=\"M12 4.5v10.5M7.8 11l4.2 4.2 4.2-4.2M5.5 19.5h13\"/>", "file": "<path d=\"M7 3.8h6.8L18 8v11.4a.8.8 0 0 1-.8.8H7a.8.8 0 0 1-.8-.8V4.6A.8.8 0 0 1 7 3.8z\"/><path d=\"M13.6 3.9v4.4H18\"/>", "note": "<path d=\"M5.5 5h13v14h-13z\"/><path d=\"M8.8 9.2h6.4M8.8 12.5h6.4M8.8 15.8h3.6\"/>", "star": "<path d=\"M12 4.3l2.3 4.9 5.3.7-3.9 3.7 1 5.3-4.7-2.6-4.7 2.6 1-5.3-3.9-3.7 5.3-.7z\"/>", "check": "<circle cx=\"12\" cy=\"12\" r=\"8.2\"/><path d=\"M8.3 12.3l2.6 2.6 4.9-5.2\"/>", "circle": "<circle cx=\"12\" cy=\"12\" r=\"8.2\"/>", "half": "<circle cx=\"12\" cy=\"12\" r=\"8.2\"/><path d=\"M12 3.8a8.2 8.2 0 0 1 0 16.4z\" fill=\"currentColor\" stroke=\"none\"/>", "alert": "<path d=\"M12 4.5l8.3 14.5H3.7z\"/><path d=\"M12 10.2v4M12 16.6v.1\"/>", "tag": "<path d=\"M4.5 4.5h7.6l7.4 7.4-7.6 7.6-7.4-7.4z\"/><circle cx=\"8.6\" cy=\"8.6\" r=\"1.1\"/>", "nofile": "<path d=\"M7 3.8h6.8L18 8v11.4a.8.8 0 0 1-.8.8H7a.8.8 0 0 1-.8-.8V4.6A.8.8 0 0 1 7 3.8z\"/><path d=\"M5 19l14-14\"/>", "users": "<circle cx=\"9\" cy=\"8.5\" r=\"3.2\"/><path d=\"M3.3 19c.6-3.3 2.9-5 5.7-5s5.1 1.7 5.7 5\"/><path d=\"M15.8 5.8a3 3 0 0 1 0 5.6M17.8 14.4c1.6.6 2.7 2.2 3 4.6\"/>"};
-const ic = (n, cls = 'i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
 function renderSidebar() {
   const P = state.papers, R = areaPapers(), reading = state.area === 'reading';
   // the reading list's sidebar has only labels and keywords: what you are reading is already on top of the list
@@ -894,16 +892,14 @@ async function addManual() {
     upsertPaper(d.paper); renderAll(); openDetail(d.paper.id); setTimeout(() => { const t = $('#detail-body textarea[data-f=title]'); t?.focus(); t?.select(); }, 60);
   } catch (err) { toast(err.message, 'error'); }
 }
-function openAddMenu() {
-  const menu = $('#vh-add-menu'); if (menu.classList.contains('open')) { menu.classList.remove('open'); return; }
-  const it = (k, t, s) => `<button type="button" data-va="${k}">${t}<small>${s}</small></button>`;
-  menu.innerHTML = `${it('paper', 'Paper by DOI, link or title…', 'Or drop PDF files in the same window')}
-    ${it('pdf', 'PDF files from this computer…', 'PaperShelf reads them and fills in the details')}
-    ${it('many', 'Add many papers at once…', 'One link, DOI or title per line')}
-    ${it('manual', 'Type the details myself', 'For something without DOI or link')}<hr>
-    ${it('label', '＋ New label', state.view.type === 'group' ? 'Inside the label you are viewing' : 'To sort your papers')}
-    ${it('share', '👥 New group or join one…', 'Share papers and notes with other people')}`;
-  menu.classList.add('open');
+function fillAddMenu() {
+  const it = (k, i, t, s) => `<button type="button" data-va="${k}"><span class="mi">${ic(i)}</span><span><b>${t}</b><small>${s}</small></span></button>`;
+  $('#more-menu').innerHTML = `${it('pdf', 'file', 'PDF files from this computer…', 'Or drop them anywhere in the window – PaperShelf reads them')}
+    ${it('many', 'list', 'Add many papers at once…', 'One link, DOI or title per line')}
+    ${it('manual', 'pen', 'Type the details myself', 'For something without a DOI or link')}<hr>
+    ${it('label', 'tag', 'New label', state.view.type === 'group' ? 'Inside the label you are viewing' : 'To sort your papers')}
+    ${it('share', 'group', 'New group or join one…', 'Share papers and notes with other people')}
+    ${it('groups', 'users', 'My groups…', 'Their libraries, lab and chats')}`;
 }
 function openBulkAdd(prefill = '') {
   const m = modal(`<h3>Add many papers</h3><p class="muted">One per line: links, DOIs, arXiv IDs or titles.</p>
@@ -1382,16 +1378,23 @@ async function brandMenu() {
   const upd = Updates.info && Updates.info.available;
   let installed = true;
   try { installed = !!(await api('/api/app-status')).installed; } catch (e) { /* ignore */ }
-  const item = (act, label, small = '') => `<button type="button" data-bm="${act}">${label}${small ? `<small>${small}</small>` : ''}</button>`;
-  // only what isn't already one click away in the top bar (⟳, What's new, ?, ⚙︎)
+  const item = (act, icon, label, small = '') => `<button type="button" data-bm="${act}"><span class="mi">${ic(icon)}</span><span><b>${label}</b>${small ? `<small>${small}</small>` : ''}</span></button>`;
+  const here = state.tab === 'people' ? 'people' : state.tab === 'lab' ? 'lab' : isDiscover() ? 'discover' : 'library';
+  const tool = (act, icon, label, small) => item(act, icon, label, small).replace('<button ', `<button class="${here === act ? 'on' : ''}" `);
   menu.innerHTML = `<div class="bm-head"><img src="/static/icons/icon-64.png" alt=""><div><b>PaperShelf ${esc(state.version || '')}</b><small>${state.papers.length} papers · ${state.groups.length} labels · ${(state.shares || []).length} groups</small></div></div>
-    ${upd ? item('install-update', `⬆ Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') + '<div class="bm-sep"></div>' : ''}
-    ${item('shares', '👥 Groups', 'Create a group, join one, invite people')}
-    ${item('export', '⤓ Export references or notes', 'All papers, a view, or chosen labels')}
-    ${item('stats', '📊 Reading stats')}
+    ${upd ? item('install-update', 'upload', `Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') + '<div class="bm-sep"></div>' : ''}
+    <div class="bm-title">The four places of PaperShelf</div>
+    ${tool('library', 'books', 'Library', 'Your papers: a reading list and all papers, with labels, a citation map and review tables')}
+    ${tool('discover', 'compass', 'Discover', 'Papers related to yours, or found by topic')}
+    ${tool('people', 'user', 'Researchers', 'Profiles of the people you follow: publications, citations, h-index')}
+    ${tool('lab', 'flask', 'Lab', 'The research space of your groups: ideas, plans, tasks')}
     <div class="bm-sep"></div>
-    ${installed ? '' : item('app', '⬇ Install PaperShelf as an app', 'Own icon in the Dock / taskbar')}
-    ${item('quit', '⏻ Quit PaperShelf', 'Stops it on this computer')}`;
+    ${item('groups', 'group', 'Groups', 'Create or join a group, open its library, lab and chats')}
+    ${item('export', 'export', 'Export references or notes', 'All papers, a view, or chosen labels')}
+    ${item('stats', 'chart', 'Reading stats')}
+    <div class="bm-sep"></div>
+    ${installed ? '' : item('app', 'download', 'Install PaperShelf as an app', 'Own icon in the Dock / taskbar')}
+    ${item('quit', 'power', 'Quit PaperShelf', 'Stops it on this computer')}`;
   menu.classList.add('open');
   menu.onclick = async e => {
     const b = e.target.closest('[data-bm]'); if (!b) return;
@@ -1400,12 +1403,16 @@ async function brandMenu() {
     if (a === 'update') syncNow();
     if (a === 'install-update' || a === 'check') Updates.open();
     if (a === 'topic') { setTab('discover'); setTimeout(() => (document.querySelector('#t-q') || document.querySelector('[data-topic]'))?.focus?.(), 300); }
-    if (a === 'bulk') { if (state.tab !== 'library') setTab(state.libScope === 'library' ? 'library' : 'reading'); document.querySelector('#more-menu [data-menu=bulk]')?.click(); }
+    if (a === 'bulk') { if (state.tab !== 'library') setTab(state.libScope === 'library' ? 'library' : 'reading'); openBulkAdd(); }
     if (a === 'export') openExport();
     if (a === 'feed') Feed.open();
     if (a === 'stats') Stats.open();
     if (a === 'checklib') { const t = toast('Checking your library…', 'info', 0); Smart.runChecks({force: true}).catch(err => toast(err.message, 'error')).finally(() => t.close()); }
-    if (a === 'shares') Shares.startMenu();
+    if (a === 'shares' || a === 'groups') Shares.page();
+    if (a === 'library') setTab(state.libScope === 'library' ? 'library' : 'reading');
+    if (a === 'discover') setTab('discover');
+    if (a === 'people') setTab('people');
+    if (a === 'lab') setTab('lab');
     if (a === 'app') { openSettings('general'); }
     if (a === 'settings') openSettings();
     if (a === 'guide') Help.open('start');
@@ -1690,30 +1697,19 @@ function bind() {
   });
   $('#brand-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); brandMenu(); });
   document.addEventListener('click', e => { if (!e.target.closest('#brand-menu')) $('#brand-menu').classList.remove('open'); });
-  $('#vh-add').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); openAddMenu(); });
-  document.addEventListener('click', () => $('#vh-add-menu')?.classList.remove('open'));
-  $('#vh-add-menu').addEventListener('click', e => {
-    const b = e.target.closest('[data-va]'); if (!b) return; $('#vh-add-menu').classList.remove('open');
-    const a = b.dataset.va;
-    if (a === 'paper') openAddPaper();
-    if (a === 'pdf') { $('#import-input').value = ''; $('#import-input').click(); }
-    if (a === 'many') openBulkAdd();
-    if (a === 'manual') addManual();
-    if (a === 'label') createGroup(state.view.type === 'group' ? state.view.id : null);
-    if (a === 'share') Shares.startMenu();
-  });
-  $('#more-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.toggle('open'); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.menu.open').forEach(m => m.classList.remove('open')); });
+  $('#more-btn').addEventListener('click', e => { e.stopPropagation(); fillAddMenu(); $('#more-menu').classList.toggle('open'); });
   document.addEventListener('click', () => $('#more-menu').classList.remove('open'));
-  $('#more-menu').addEventListener('click', async e => {
-    const b = e.target.closest('[data-menu]'); if (!b) return;
+  $('#more-menu').addEventListener('click', e => {
+    const b = e.target.closest('[data-va]'); if (!b) return;
     $('#more-menu').classList.remove('open');
-    if (b.dataset.menu === 'bulk') openBulkAdd();
-    if (b.dataset.menu === 'import') { $('#import-input').value = ''; $('#import-input').click(); }
-    if (b.dataset.menu === 'manual') {
-      try { const d = await api('/api/papers', {method: 'POST', body: {manual: {title: 'Untitled paper'}, group_id: currentGroupId()}});
-        upsertPaper(d.paper); renderAll(); openDetail(d.paper.id); setTimeout(() => { const t = $('#detail-body textarea[data-f=title]'); t?.focus(); t?.select(); }, 60);
-      } catch (err) { toast(err.message, 'error'); }
-    }
+    const k = b.dataset.va;
+    if (k === 'pdf') { $('#import-input').value = ''; $('#import-input').click(); }
+    if (k === 'many') openBulkAdd();
+    if (k === 'manual') addManual();
+    if (k === 'label') createGroup(state.view.type === 'group' ? state.view.id : null);
+    if (k === 'share') Shares.startMenu();
+    if (k === 'groups') Shares.page();
   });
   $('#import-input').addEventListener('change', e => importPdfs(e.target.files));
   $('#attach-input').addEventListener('change', e => { if (e.target.files[0] && attachFor) uploadAttach(attachFor, e.target.files[0]); });

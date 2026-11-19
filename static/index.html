@@ -29,12 +29,8 @@
       <input id="add-input" class="input" placeholder="Add a paper: DOI, link or title…  ( n )">
       <button class="btn primary" id="add-btn" type="submit">Add</button>
       <div class="menu-wrap">
-        <button class="btn icon" type="button" id="more-btn" title="More ways to add">⋯</button>
-        <div class="menu" id="more-menu">
-          <button type="button" data-menu="bulk">Add many at once…<small>One link / DOI / title per line</small></button>
-          <button type="button" data-menu="import">Import PDF files…<small>Or drag PDFs onto the window</small></button>
-          <button type="button" data-menu="manual">Add manually<small>Type the details yourself</small></button>
-        </div>
+        <button class="btn icon" type="button" id="more-btn" title="More ways to add: PDF files, many papers, a label, a group…" aria-label="More ways to add"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+        <div class="menu" id="more-menu"></div>
       </div>
     </form>
     </div>
@@ -86,7 +82,6 @@
         <div class="filters" id="filters"></div>
       </div>
       <div class="head-right">
-        <div class="menu-wrap vh-add-wrap"><button class="btn primary" id="vh-add" type="button" title="Add a paper, import PDFs, create a label or a group ( n )"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13M5.5 12h13"/></svg><span>Add</span></button><div class="menu" id="vh-add-menu"></div></div>
         <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M15 15l5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><input id="search" type="search" placeholder="Search titles, notes, PDFs…" title="Searches titles, authors, journals, keywords, abstracts, notes – and the text inside your PDFs"><kbd>/</kbd></label>
       </div>
     </div>
@@ -132,6 +127,7 @@
 <div id="toasts"></div>
 <div id="drop-overlay">Drop PDF files to add them to your library</div>
 
+<script src="/static/iconize.js"></script>
 <script src="/static/app.js"></script>
 <script src="/static/graph.js"></script>
 <script src="/static/discover.js"></script>

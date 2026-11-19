@@ -132,6 +132,52 @@ const Shares = (() => {
   }
 
   /* ------------------------------------------------------------ dialogs */
+  /* ------------------------------------------------------------ the Groups page */
+  function page() {
+    const L = state.shares || [];
+    const card = x => {
+      const member = x.role === 'member';
+      const ppl = (x.members || []).length;
+      return `<div class="gp-card" data-gid="${esc(x.id)}">
+        <div class="gp-top"><div class="gp-name">${labelIcon(x.color, 'group')}<b>${esc(x.name)}</b> ${roleTag(x)}</div>
+          <span class="muted small">${x.papers} paper${x.papers === 1 ? '' : 's'}${ppl ? ` · ${ppl} editor${ppl === 1 ? '' : 's'}` : ''}${x.notes ? ` · ${x.notes} note${x.notes === 1 ? '' : 's'}` : ''}</span></div>
+        ${x.description ? `<div class="muted small gp-desc">${esc(x.description)}</div>` : ''}
+        <div class="gp-acts">
+          <button class="btn small" data-gp="library">${ic('books')}Library</button>
+          <button class="btn small" data-gp="ideas">${ic('chat')}Ideas &amp; chat</button>
+          <button class="btn small" data-gp="plans">${ic('check')}Plans &amp; tasks</button>
+          <span class="grow"></span>
+          ${member ? `<button class="btn small" data-gp="invite">${ic('plus')}Invite</button>` : ''}
+          <button class="btn small" data-gp="manage">${ic('gear')}Manage</button>
+        </div></div>`;
+    };
+    const m = modal(`<h3>${ic('group')} Groups <span class="grow"></span><button class="btn small" data-help="sharing">${ic('help')}How groups work</button></h3>
+      <p class="muted small">A group is a set of papers, notes and a research space (ideas, plans, tasks) that you share with other people – a lab, a journal club, a co-author. Only titles, authors, journal and DOI travel; never PDFs unless each member chooses so.</p>
+      <div class="gp-new">
+        <button class="gp-opt" data-gp="new"><span class="mi">${ic('plus')}</span><span><b>Create a group</b><small>From a label, from selected papers, or empty</small></span></button>
+        <button class="gp-opt" data-gp="join"><span class="mi">${ic('users')}</span><span><b>Join a group</b><small>You received an invitation code</small></span></button>
+        <button class="gp-opt" data-gp="file"><span class="mi">${ic('file')}</span><span><b>Open a group file</b><small>A .papershelf file received by e-mail</small></span></button>
+      </div>
+      ${connected() ? '' : `<p class="warn-box small">Creating groups, and adding papers or notes in them, needs GitHub connected once – ⚙︎ Settings → <button class="linklike" data-open-groups-settings>Groups</button> (3 minutes). Joining as a reader needs nothing.</p>`}
+      <div class="section-label">Your groups</div>
+      ${L.length ? `<div class="gp-list">${L.map(card).join('')}</div>` : '<div class="muted gp-empty">No groups yet. Create one, or join one with the code you received.</div>'}
+      <div class="modal-actions"><button class="btn" data-close>Close</button></div>`, {wide: true});
+    m.el.addEventListener('click', e => {
+      if (e.target.closest('[data-open-groups-settings]')) { m.close(); openSettings('sharing'); return; }
+      const b = e.target.closest('[data-gp]'); if (!b) return;
+      const id = b.closest('[data-gid]')?.dataset.gid, k = b.dataset.gp;
+      m.close();
+      if (k === 'new') newDialog({paperIds: [...state.selected]});
+      if (k === 'join') joinDialog();
+      if (k === 'file') pickFile();
+      if (k === 'library') { setTab('library'); setView({type: 'share', id}); }
+      if (k === 'ideas') Lab.openGroup(id, {sub: 'ideas'});
+      if (k === 'plans') Lab.openGroup(id, {sub: 'plans'});
+      if (k === 'manage') manageDialog(id);
+      if (k === 'invite') inviteDialog(id);
+    });
+  }
+
   function startMenu() {
     const m = modal(`<h3>👥 Groups <span class="grow"></span><button class="btn small" data-help="sharing">📘 How groups work</button></h3>
       <p class="muted small">Share papers and notes with other people – a lab, a journal club, a co-author. Only titles, authors, journal and DOI travel, plus the notes you make public; never PDFs, private notes or the rest of your library.</p>
@@ -462,6 +508,6 @@ const Shares = (() => {
   }
   init();
 
-  return {renderSidebar, viewSub, bulkOptions, bulk, detailField, addPapers, removePapers, syncNow, newDialog, joinDialog,
+  return {page, renderSidebar, viewSub, bulkOptions, bulk, detailField, addPapers, removePapers, syncNow, newDialog, joinDialog,
     manageDialog, inviteDialog, peopleDialog, startMenu, settingsHtml, settingsBind, settingsValues, invitation};
 })();
