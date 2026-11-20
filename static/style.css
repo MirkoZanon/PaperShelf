@@ -2311,3 +2311,31 @@ body.look-glass .h-nav a.on { background: var(--g-chip); color: var(--accent); }
 .hm-ri .i { width: 16px; height: 16px; opacity: .8; }
 .hm-row { gap: 10px; }
 .hm-card.hm-disc { padding-top: 16px; padding-bottom: 16px; }
+
+/* 2.28.2 document bar: one row, one height, glass panel */
+.dx-bar { align-items: center; gap: 8px; padding: 8px 10px; }
+body.look-glass .dx-bar { background: var(--g-hero); border: 1px solid var(--border-soft); border-radius: 16px; box-shadow: var(--g-shadow); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.dx-bar .seg { margin: 0; align-self: center; }
+.dx-bar .seg button { padding: 0 13px; height: 28px; font-size: 13px; display: inline-flex; align-items: center; }
+.dx-bar .btn.small, .dx-bar .btn.small.dx-ibtn { height: 34px; display: inline-flex; align-items: center; gap: 4px; }
+.dx-bar .dx-modes { height: 34px; box-sizing: border-box; align-items: center; }
+.dx-bar .dx-title { height: 34px; box-sizing: border-box; }
+.dx-bar .dx-menu { display: inline-flex; }
+
+/* 2.28.2 Researchers = Home style: hero panel, cards with a tinted title band, soft tiles */
+body.look-glass #people-main { padding: 16px 22px 80px; }
+body.look-glass .hero { background: var(--g-hero); border: 1px solid var(--border-soft); border-radius: 20px; box-shadow: var(--g-shadow); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+body.look-glass .hero .avatar { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+body.look-glass .p-card { background: var(--g-card); border: 1px solid var(--border-soft); border-radius: 16px; box-shadow: var(--g-shadow); padding: 0 16px 14px; overflow: hidden;
+  -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+body.look-glass .p-card > h3 { margin: 0 -16px 12px; padding: 10px 16px; font-size: 12.5px; color: var(--text);
+  background: color-mix(in srgb, var(--accent) 11%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, transparent); }
+body.look-glass .stile { background: color-mix(in srgb, var(--accent) 7%, var(--g-card)); border: 1px solid var(--border-soft); border-radius: 12px; }
+body.look-glass .stile.this-year { background: var(--g-chip); }
+body.look-glass .ptabs { margin: 14px 0 12px; }
+body.look-glass .p-search { margin: 24px auto 0; }
+body.look-glass #people-main .btn.small { border-radius: 10px; }
+body.look-glass .p-card > .dash-head, body.look-glass .p-card > .sum-head { margin: 0 -16px 12px; padding: 10px 16px; align-items: center;
+  background: color-mix(in srgb, var(--accent) 11%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 16%, transparent); }
+body.look-glass .p-card > .dash-head h3, body.look-glass .p-card > .sum-head h3 { margin: 0; padding: 0; background: none; border: 0; }
+@media (prefers-color-scheme: dark) { body.look-glass .stile { background: rgba(255,255,255,.06); } body.look-glass .stile.this-year { background: var(--g-chip); } }

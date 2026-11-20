@@ -2,9 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
-## 2.28 – 2026-11-20
+## 2.28.1 – 2026-11-20
 
+- Researchers profiles now use the Home style too (hero panel, cards with tinted title bands, soft tiles).
+- In a document, the Edit / Suggest / Review / Preview switch, Library, New window and Export are now one aligned row of the same height, in a glass bar.
 - Home cards: each title (Read, Write, Needs you, Groups, Tools) now sits on a tinted band, and the items below use small plain icons, so titles and items no longer look alike.
+
+## 2.28 – 2026-11-20
 
 - **One look everywhere** – the glass style of Home (tinted panels, soft cards, rounded corners) now covers the Library,
   Write, Lab and Researchers too, in light and dark and with every colour.
