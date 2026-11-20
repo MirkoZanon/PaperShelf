@@ -445,12 +445,12 @@ const Shares = (() => {
       </ol>`);
   }
   function settingsHtml(s) {
-    return `<div class="set-intro share"><b>👥 Groups</b> – share papers and notes with other people: a lab, a journal club, a co-author. Only titles, authors, journal, DOI and the notes you make public travel – never PDFs, private notes or the rest of your library. <button class="help-q" data-help="sharing" title="Explain this">?</button></div>
+    return `<div class="set-intro share"><b>Groups</b> share papers, notes and documents with other people. Never your private notes or the rest of your library; PDFs only if you choose. <button class="help-q" data-help="sharing" title="Explain this">?</button></div>
       <div id="share-conn">${connHtml(s)}</div>
       <div class="section-label">Your name in groups</div>
       <input class="input wide" id="set-dispname" maxlength="60" value="${esc(s.display_name || '')}" placeholder="e.g. Mirko Z., MZ or a nickname">
-      <p class="muted small">Shown next to your public notes and in the groups you create. Empty = your GitHub username.</p>
-      <label class="opt"><input type="checkbox" id="set-share-auto" ${s.share_auto !== '' ? 'checked' : ''}><span>Update groups automatically<small>When PaperShelf starts and every 15 minutes; your changes are published right away.</small></span></label>`;
+      <p class="muted small">Shown to group members. Empty = your GitHub username.</p>
+      <label class="opt"><input type="checkbox" id="set-share-auto" ${s.share_auto !== '' ? 'checked' : ''}><span>Update groups automatically<small>At start-up and every 15 minutes.</small></span></label>`;
   }
   function settingsBind(m) {
     const panel = $('[data-panel=sharing]', m.el);

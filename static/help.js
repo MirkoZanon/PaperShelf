@@ -8,443 +8,204 @@ const Help = (() => {
   const kbd = k => `<kbd>${k}</kbd>`;
   const isMac = () => /Mac/i.test(navigator.platform || navigator.userAgent);
 
+  /* The Guide: ten short pages. Old topic names still work (see ALIAS). */
   const SECTIONS = [
-    {id: 'start', icon: '👋', title: 'Getting started', html: () => `
-      <p>PaperShelf keeps your scientific papers in one place: it fills in the details for you, finds legal free PDFs,
-        lets you read and highlight them, organise them with labels and export reference lists.</p>
-      <p>It runs <b>on your computer</b>. The browser is only its window: your library is not online and works offline too.</p>
-      <h4>Your first five minutes</h4>
-      ${step(1, `Paste a <b>DOI</b> or a <b>link</b> to an article (journal, arXiv, PubMed…) in the <b>＋ Add a paper</b> box at the top (top left) and press ${kbd('Enter')} – or just type <b>a few words of the title</b> (or authors and year): a list of matching papers appears, pick one. Title, authors, journal, year, abstract and keywords are filled in automatically.`)}
-      ${step(2, `Create a <b>label</b> with ＋ next to <b>Labels</b> in the sidebar and drag papers onto it. A paper can have many labels. <a href="#" data-help="organising">More</a>`)}
-      ${step(3, `Open a paper and click <b>⬇ Find &amp; download PDF</b>. If it isn't free, use <b>🔐 Open article &amp; log in with my university</b>. <a href="#" data-help="university">More</a>`)}
-      ${step(4, `Click <b>📖 Read &amp; highlight</b> to read the PDF and highlight passages.`)}
-      ${step(5, `Click <b>⤓ Export references</b> to get your reference list in APA, Nature, Cell… or to move papers to Zotero.`)}
-      ${tip('At the top right: 🔔 notifications (your groups and What\'s new), <b>⟳</b> update everything (sync, groups, new versions), <b>?</b> this guide, ⚙︎ settings. The <b>PaperShelf logo</b> at the top left has the rest: groups, export, reading stats, quit.')}
-      <p class="muted">The look (glass or flat) and the <b>colour</b> of buttons, tabs and selection (green, teal, blue, violet, rose, amber or graphite) are in ⚙︎ Settings → General.</p>
-      <h4>Starting and stopping</h4>
-      <p><b>The first time</b>, start PaperShelf with <code>start.command</code> (Mac) or <code>start.bat</code> (Windows) in the app folder: it sets itself up (about a minute).</p>
-      <p><b>Then install it as an app</b> (recommended): ⚙︎ Settings → General → <b>⬇ Install PaperShelf as an app</b>. Chrome, Edge or Brave make PaperShelf a real app with its own icon: in the Dock or taskbar it shows a dot while open, clicking it brings back the open window instead of opening a new one, and right-click → <i>Quit</i> closes it. Keep it in the Dock (right-click → Options → Keep in Dock) or pin it to the taskbar, and remove the old icon. If PaperShelf isn't running when you open the app, it shows a <b>Start PaperShelf</b> button; with <i>Start PaperShelf in the background when I log in</i> it is always ready.</p>
-      <p><b>Or make a simple icon</b>: ⚙︎ Settings → General → <b>🖥 Create PaperShelf icon</b> (it starts PaperShelf but isn't a real app window).</p>
-      <ul><li><b>Mac</b>: PaperShelf appears in your Applications folder and on the Desktop. Drag it onto the <b>Dock</b> to keep it there; Spotlight (⌘ Space) finds it too.</li>
-        <li><b>Windows</b>: on the Desktop and in the Start menu; right-click it → <i>Pin to taskbar</i>.</li></ul>
-      <p>Started from the icon, PaperShelf runs quietly in the background and opens in its <b>own window</b> named PaperShelf (if Chrome, Edge or Brave is installed – otherwise in your browser). Clicking the icon again just brings the window back. To stop it: ⚙︎ Settings → <b>⏻ Quit</b>. Started with <code>start.command</code>, it stops when you close its Terminal window.</p>
-      ${tip('Everything is saved immediately. Closing the window, the browser or the computer loses nothing.')}
-      <h4>Recommended (optional) settings</h4>
-      <ul><li><b>E-mail for Unpaywall</b> – finds more free PDFs.</li><li><b>OpenAlex key</b> – more daily lookups for citation map, suggestions and researcher profiles.</li>
-        <li><b>💻 My computers</b> – the same library on several computers. <a href="#" data-help="sync">How</a></li>
-        <li><b>👥 Groups</b> – share papers and notes with other people. <a href="#" data-help="sharing">How</a></li>
-        <li><b>🧪 Lab</b> – the research space of a group: ideas, experiments, discussions, plans and tasks. <a href="#" data-help="lab">How</a></li></ul>
-      <p>The keys are explained in <a href="#" data-help="keys">Optional keys</a>.</p>`},
+    {id: 'start', icon: '👋', title: 'Quick start', html: () => `
+      <p>PaperShelf is your private library of scientific papers. It runs <b>on this computer</b>: nothing is online unless you turn on sync or groups.</p>
+      <h4>In five steps</h4>
+      ${step(1, `Paste a <b>DOI</b>, a link or a few words of the title in <b>Add a paper</b> and press ${kbd('Enter')}. The details are filled in for you.`)}
+      ${step(2, 'Sort papers with <b>labels</b>: <b>＋</b> next to <i>Labels</i>, then drag papers onto one.')}
+      ${step(3, 'Open a paper → <b>Find &amp; download PDF</b> (free copies), or <b>Open article &amp; log in with my university</b>.')}
+      ${step(4, '<b>Read &amp; highlight</b> the PDF inside PaperShelf.')}
+      ${step(5, '<b>Export references</b> in your journal\'s style, or move everything to Zotero.')}
+      <h4>Where things are</h4>
+      <table class="h-table"><tr><td><b>Logo</b></td><td>Home: search or add from one box, continue reading, and every tool.</td></tr>
+        <tr><td><b>Library</b></td><td>Your papers: reading list, all papers, and <i>Discover</i> for new ones.</td></tr>
+        <tr><td><b>Write</b></td><td>Documents you write alone or with a group.</td></tr>
+        <tr><td><b>Lab</b></td><td>Ideas, plans and tasks of your groups.</td></tr>
+        <tr><td><b>Researchers</b></td><td>Profiles and publication lists of scientists.</td></tr>
+        <tr><td><b>Top right</b></td><td>🔔 news · ⟳ update everything · ? this guide · ⚙︎ settings.</td></tr></table>
+      ${tip('Everything is saved at once. Closing the window or the computer loses nothing.')}
+      <h4>Start and stop</h4>
+      <p>First time: open <code>start.command</code> (Mac) or <code>start.bat</code> (Windows). Then <b>⚙︎ Settings → General → App, window &amp; shortcuts</b> installs PaperShelf as an app with its own icon. To stop it: <b>Settings → ⏻ Quit</b>.</p>
+      <p class="muted">Look and colour (the logo follows it) are in <b>Settings → General</b>.</p>`},
 
-    {id: 'adding', icon: '➕', title: 'Adding papers', html: () => `
-      <p>The box at the top understands:</p>
-      <ul><li>DOIs (<code>10.1038/s41586-020-2649-2</code>) and doi.org links</li><li>links to journal pages, arXiv, bioRxiv, PubMed</li>
-        <li>direct links to PDF files</li><li>titles, or a whole reference copied from a paper</li></ul>
-      <h4>Other ways</h4>
-      <ul><li><b>Many at once</b>: paste several lines, or ⋯ → <i>Add many at once</i>.</li>
-        <li><b>PDF files you already have</b>: drag them onto the window (or ⋯ → <i>Import PDF files</i>). The DOI inside each file is used to fill in the details.</li>
-        <li><b>From the browser</b>: in ⚙︎ Settings drag the buttons <i>＋ Save to PaperShelf</i> and <i>⬇ Save + PDF</i> to your bookmarks bar; on any article page click one.</li>
-        <li><b>By hand</b>: ⋯ → <i>Add manually</i>.</li></ul>
-      ${tip('If a label is open when you add a paper, the paper gets that label.')}
-      <h4>If the details are wrong or missing</h4>
-      <p>Open the paper and edit any field directly, or click <b>↻ Update metadata</b> and paste the DOI. Duplicates (same DOI or arXiv ID) are recognised: adding a paper twice just opens the existing one.</p>`},
-
-    {id: 'organising', icon: '🏷', title: 'Labels, keywords & search', html: () => `
+    {id: 'adding', icon: '🏷', title: 'Add & organise papers', html: () => `
+      <h4>Add</h4>
+      <ul><li><b>One paper</b>: DOI, article link (journal, arXiv, PubMed), PDF link, title, or a whole reference.</li>
+        <li><b>Many</b>: paste several lines, or <b>⋯ → Add many at once</b>.</li>
+        <li><b>PDF files</b>: drop them anywhere on the window; the DOI inside fills in the details.</li>
+        <li><b>From the browser</b>: drag the two buttons from <b>Settings → General → Browser buttons</b> to your bookmarks bar.</li>
+        <li>Wrong details? Edit any field, or <b>↻ Update metadata</b>. The same DOI is never added twice.</li></ul>
       <h4>Labels</h4>
-      <p>Labels work like tags: a paper can have <b>any number of labels</b>, and clicking a label lists every paper that has it (click it again to see all papers). They are <b>your own</b> topics and projects; they can be nested (sub-labels) and are used by the map, Discover and the statistics.</p>
-      <p>Add anything from the green <b>＋ Add</b> button at the top of the list, wherever you are – a paper by DOI, link or title, PDF files, many at once, a label or a group – or just <b>drop PDF files anywhere in the window</b>: PaperShelf reads each PDF (DOI, title, abstract) and fills in the details.</p>
-      <p>Below them, <b>Groups</b> 👥 are what you share with other people (a lab, a journal club): their papers reach everybody's library. They are kept apart so that “journal club” doesn't mix with your topics. <a href="#" data-help="sharing">More</a></p>
-      <ul><li>Create a personal label with ＋; hover it for 🎨 (colour), ＋ (sub-label), ✎ (rename), 🗑 (delete). Drag a label onto another to nest it.</li>
-        <li>Click <b>Labels</b>, <b>Groups</b> or <b>Keywords</b> in the sidebar to fold them away (click again to show them).</li>
-        <li><b>Right-click a paper</b> (or several selected ones) for a quick menu: <b>🏷 Labels</b> lists all your labels – click to tick or untick them (the menu stays open to tick more) – plus groups, status, PDF, notes, star, copy citation and delete.</li>
-        <li><b>The sidebar</b> with your labels and groups stays open on a wide window (the <b>＋</b> next to <i>Labels</i> creates a label). Click <b>Labels</b> next to the page title (or the 📌 pin at the top of the sidebar) to let it hide: move the mouse to the left edge and it slides in; while dragging papers, drop them on a label there. The Library and Researchers remember it separately.</li>
-        <li><b>Colours</b>: 🎨 gives a label one of 24 colours, shown in the sidebar and on the papers' label chips. Groups can have a colour too – only on your computer.</li>
-        <li><b>Dragging a paper onto a label adds it</b> – it never removes its other labels. Select several papers (${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click) to drag or label them together.</li>
-        <li><b>The paper list</b> is kept clean: title, authors, labels, status and the buttons 📝 (notes) and <b>PDF</b>. Tick <b>Details</b> above the list to see the keywords too. Click a paper to open its details (click anywhere outside them to close); select several with ${kbd(isMac() ? '⌘' : 'Ctrl')}-click or ${kbd('Shift')}-click – the selection boxes appear as soon as something is selected (⚙︎ Settings → General → <i>Always show selection boxes</i> to keep them).</li>
-        <li><b>📄 PDF</b> (green) opens the PDF in the reader. <b>⬇ PDF</b> fetches it: PaperShelf looks for a free legal copy and opens it; if there is none, it opens the article page – log in with your university there and download it: it is attached automatically.</li>
-        <li>“include sub-labels” shows the papers of all sub-labels too. Deleting a label never deletes papers.</li></ul>
-      <h4>Library: reading list or all papers</h4>
-      <p>The top tabs are <b>Library</b>, <b>Write</b>, <b>Lab</b> and <b>Researchers</b>; click the <b>PaperShelf logo</b> for <b>Home</b>, your desk: search or add a paper from one box, continue reading, your documents, what needs you in your groups, and every tool – map, review table, stats, export, storage. <b>Write</b> lists the documents of all your groups in one place. <b>Discover</b> is now part of the Library. In the Library, the switch above the list chooses what you see – the same papers, the same labels:</p>
-      <ul><li><b>📖 Reading list</b> – only what you are reading and want to read. <i>Reading now</i> comes first, highlighted; then <i>To read</i>. Every paper you add is <i>To read</i>. Opening a PDF from the list (<b>PDF</b> button) moves the paper to <i>Reading now</i>; hover a paper and click <b>✓ Read</b> when you are done: it leaves the list and stays in the Library. It is just the list: its sidebar has only <b>labels</b> and <b>keywords</b> to filter it. Click a selected label again – or the <b>×</b> next to the title, or the <b>Reading list</b> button – to see the whole list again.</li>
-        <li><b>📚 All papers</b> – all your papers, read ones included, with the <b>Map</b>, the review <b>Table</b>, statistics and exports. A selected label stays selected when you switch. Its menu: <i>All papers</i>; <i>Read</i>, <i>Starred</i>, <i>To read</i>, <i>Reading now</i>, <i>Without labels</i> and <i>Without PDF</i> under <b>More</b>.</li></ul>
-      <h4>Grouped by label</h4>
-      <p>Above the list, the menu <b>No grouping</b> can show the papers in groups instead – for the reading list and for all papers separately, the list stays the default:</p>
-      <ul><li><b>Group by label</b>: a section for each label, with its sub-labels nested inside it, then one for each group; a paper with several labels appears in each of them (its other labels show as chips; the header says how many are also elsewhere). Papers without labels come last.</li>
-        <li><b>Group by label combination</b>: each paper only once, under the exact set of its labels and groups (e.g. <i>Imaging + Thesis › Methods + Club</i>), biggest groups first – the clearest view when labels overlap a lot.</li></ul>
-      <p>Each group is a card in its label's colour (a sub-label without a colour takes its parent's; a combination shows all its colours on the left edge). Click a group's title to fold it, <b>drag the title</b> to move the group up or down (onto another group of the same level – sub-labels move inside their label; <i>reset order</i> goes back to the usual order); <i>fold all</i> / <i>unfold all</i> at the top. With a label selected in the sidebar, the groups are its sub-labels. Groups with papers you are reading come first (with a 📖 badge) unless you moved them yourself, and inside every group the papers you are reading come first. Papers being read are marked in green, or in the colour of their label.</p>
-      <p>A label stays selected when you switch page. Choose where PaperShelf opens in ⚙︎ Settings → General → <i>Open PaperShelf on</i>.</p>
-      <h4>Keywords</h4>
-      <p>Filled in automatically, editable in each paper. The sidebar shows the most frequent keywords of the papers in view (bigger = more frequent); <b>Show all</b> and the filter box find the others, and ▾ folds the section away. Click a keyword to filter; <i>Make label from keyword</i> turns the filter into a label.</p>
-      <p>With many papers, keywords tend to multiply (“fMRI”, “functional MRI”, “fmri”…). Click <b>✎</b> next to <i>Keywords</i> to <b>merge</b> variants into one, <b>rename</b> or <b>delete</b> keywords in the whole library at once.</p>
-      <h4>Status, stars, notes</h4>
-      <p>Mark papers <i>To read / Reading / Read</i>, star the important ones, write notes in the details panel.</p>
-      <h4>Search and shortcuts</h4>
-      <p>The search box (🔍 above the list, on the right) looks in titles, authors, journals, keywords, abstracts and notes – <b>and inside your PDFs</b>: PaperShelf indexes the text of every PDF on this computer in the background, so a word written anywhere in a paper is found too. Matches inside a PDF show the page and the sentence; click it to open the PDF at that page. Several words must all appear in the paper; use "quotes" for an exact phrase. Scanned PDFs without a text layer can't be searched. Shortcuts: ${kbd('/')} search · ${kbd('n')} add · ${kbd('Esc')} close · ${kbd('Delete')} delete selected.</p>`},
+      <ul><li>A paper can have <b>any number of labels</b>; they can be nested. Click a label to list its papers. Deleting a label never deletes papers.</li>
+        <li>Drag papers onto a label (select several with ${kbd(isMac() ? '⌘' : 'Ctrl')}- or ${kbd('Shift')}-click), or <b>right-click</b> a paper for the label menu.</li>
+        <li>Hover a label for colour, sub-label, rename and delete. <b>Groups</b> below labels are shared with other people (see <a href="#" data-help="sharing">Groups</a>).</li></ul>
+      <h4>Library views</h4>
+      <ul><li><b>Reading list</b>: what you read or want to read. Opening a PDF moves a paper to <i>Reading now</i>; <b>✓ Read</b> takes it off the list but keeps it in the Library.</li>
+        <li><b>All papers</b>: everything, with the Map and the review Table. <b>Discover</b>: suggestions.</li>
+        <li><b>No grouping</b> above the list can group papers by label or by label combination.</li></ul>
+      <h4>Keywords, search, status</h4>
+      <ul><li><b>Keywords</b> are filled in automatically; click one to filter. <b>✎</b> next to <i>Keywords</i> merges or renames variants across the whole library.</li>
+        <li><b>Search</b> (${kbd('/')}) looks in titles, authors, notes <b>and inside your PDFs</b>. Several words must all appear; "quotes" for a phrase.</li>
+        <li>Mark papers <i>To read / Reading / Read</i>, star the important ones. Shortcuts: ${kbd('n')} add · ${kbd('Esc')} close · ${kbd('Delete')} delete.</li></ul>
+      <details class="help"><summary>Smart helpers</summary>
+        <ul><li><b>Retractions and published versions</b> are checked when you press ⟳ (only DOIs are sent). Flagged papers appear under <b>⚠ Needs attention</b>. Turn it off in Settings → General.</li>
+          <li><b>What's new</b> (🔔): recent papers of researchers you follow and topics you watch.</li>
+          <li><b>Reminders</b> for papers waiting in the reading list too long; <b>label suggestions</b> in a paper's details; <b>Reading stats</b> on Home → Tools.</li></ul></details>
+      <details class="help"><summary>Review table</summary>
+        <p>In the Library open a label and choose <b>▦ Table</b>: one row per paper with columns you define (aim, method, result…). Export as CSV or Markdown. Tables of labels are private; in a group the table is shared.</p></details>`},
 
-    {id: 'pdfs', icon: '📄', title: 'Getting PDFs', html: () => `
-      <p><b>⬇ Find &amp; download PDF</b> looks for a legal, free copy in this order: arXiv · the link found when the paper was added · Unpaywall · OpenAlex · Semantic Scholar · CORE (university repositories) · Europe PMC / PubMed Central · the publisher's page.</p>
-      <p>PDFs are saved in your PDF folder (⚙︎ Settings) with tidy names like <code>Rossi_2020_Orientation_tuning_in_mouse.pdf</code>. Select several papers and use <b>⬇ Find PDFs</b> to fetch them all. <b>Settings → Storage…</b> shows how much room your PDFs use and how full the disk is, and lists PDFs you could clear (not opened for 3 months, and PaperShelf can download them again); they go to the Trash after you confirm.</p>
-      <h4>No free PDF?</h4>
-      <ul><li>Use <b>🔐 Open article &amp; log in with my university</b> – see <a href="#" data-help="university">University access</a>.</li>
-        <li>Downloaded it yourself? <b>📎 Attach PDF</b>, or drop the file on the paper's panel.</li>
-        <li>Write to the author: most are happy to send their paper.</li></ul>
-      <h4>Delete a PDF you no longer need</h4>
-      <p>Hover the paper in the list and click the small <b>✕</b> on its <b>📄 PDF</b> button – or use <b>🗑 Delete PDF</b> in the paper's details, in the PDF reader's top bar, or in the right-click menu. Several papers: select them and click <b>🗑 Delete PDFs</b>. The file goes to the Trash (you can still restore it from there); the paper stays in your library with its notes, highlights and labels, and you can download the PDF again any time.</p>
-      ${tip('An e-mail for Unpaywall and a free CORE key (⚙︎ Settings) noticeably increase how many free PDFs are found.')}
-      <p class="muted">PaperShelf only uses legal sources; it never uses “shadow libraries”.</p>`},
+    {id: 'pdfs', icon: '📄', title: 'PDFs & reading', html: () => `
+      <h4>Get a PDF</h4>
+      <p><b>Find &amp; download PDF</b> tries only legal sources: arXiv, Unpaywall, OpenAlex, Semantic Scholar, CORE, Europe PMC and the publisher. Select several papers for <b>Find PDFs</b>. Your own file? <b>Attach PDF</b>, or drop it on the paper.</p>
+      <h4>Paywalled papers (university access)</h4>
+      ${step(1, 'Open the paper → <b>Open article &amp; log in with my university</b>.')}
+      ${step(2, 'On the journal page choose <b>Access through your institution</b> and sign in – on your university\'s page. PaperShelf never sees your password.')}
+      ${step(3, 'Click the journal\'s <b>Download PDF</b>. PaperShelf spots the file in <b>Downloads</b>, reads its DOI and attaches it.')}
+      ${warn('Mac, first time: if asked whether Terminal may access Downloads, click <b>Allow</b> (System Settings → Privacy &amp; Security → Files and Folders).')}
+      <p>Optional: add your library's address (EZproxy / OpenAthens) in <b>Settings → PDFs &amp; sources</b> for a one-click <b>Via …</b> button. On campus or VPN, <i>Find &amp; download</i> often works directly. PDFs from subscriptions are for your own use.</p>
+      <h4>Read &amp; highlight</h4>
+      <ul><li>Select text and pick a colour; <i>🖍 + note</i> adds a comment. The right-hand list jumps to each highlight.</li>
+        <li><b>📝 Notes</b> opens the paper's notes beside the PDF. <b>Save into PDF</b> writes highlights into the file for Preview, Acrobat or Zotero.</li>
+        <li>The reader remembers your page. Time spent reading is counted for your stats, only on this computer.</li></ul>
+      <h4>Free up space</h4>
+      <p><b>Settings → Storage…</b> shows what PDFs take and suggests ones you can clear (idle for 3 months and re-downloadable). Deleted PDFs go to the Trash; the paper, notes and highlights stay.</p>`},
 
-    {id: 'university', icon: '🔐', title: 'University access (paywalled papers)', html: () => `
-      <p>For papers your university subscribes to. You log in yourself on your university's page, as usual – PaperShelf never sees your credentials.</p>
-      ${step(1, 'Open the paper in PaperShelf and click <b>🔐 Open article &amp; log in with my university</b>. The article opens on the journal\'s website.')}
-      ${step(2, 'On that page click <b>Access through your institution</b> (also called “Institutional login”, “Log in via your university”, “Shibboleth”, “OpenAthens”), choose your university and sign in.')}
-      ${step(3, 'Click the journal\'s <b>Download PDF</b> button.')}
-      ${step(4, 'Done: PaperShelf notices the new file in your <b>Downloads</b> folder, reads its DOI and attaches it to the paper (you get a 📎 message).')}
-      ${warn(`On a Mac, the first time, macOS asks whether “Terminal” may access the Downloads folder: click <b>Allow</b>. If you clicked “Don't allow”: System Settings → Privacy &amp; Security → Files and Folders → Terminal → turn on “Downloads folder”.`)}
-      <h4>Optional: your library's access address</h4>
-      <p>Many universities have an access address (EZproxy / OpenAthens), e.g. <code>https://ezproxy.your-uni.edu/login?url=</code>. Add it in ⚙︎ Settings → <i>University / library access</i>: a <b>🏛 Via …</b> button appears and opens articles already through your library. Find the address on your library website (“off-campus access”, “EZproxy”, “bookmarklet”) and press <b>Test</b>.</p>
-      <h4>Good to know</h4>
-      <ul><li>On campus or with the university VPN, “Find &amp; download PDF” often works directly.</li>
-        <li>“Always attach PDFs I download” (Settings) attaches any matching PDF you download, not only after clicking the button.</li>
-        <li>If a downloaded PDF has no DOI inside, PaperShelf asks you which paper it belongs to.</li>
-        <li>PDFs obtained through your university are for your personal use – don't share them.</li></ul>`},
-
-    {id: 'reader', icon: '📖', title: 'Reading & highlighting', html: () => `
-      <ul><li><b>📖 Read &amp; highlight</b> opens the PDF inside PaperShelf (works offline).</li>
-        <li>Select text → click a colour to highlight it; <i>🖍 + note</i> adds a comment.</li>
-        <li>Click a highlight to change colour, add a note or delete it. The list on the right jumps to each highlight.</li>
-        <li><b>📝 Notes</b> (top bar, or the tab on the right) shows the paper's notes <b>beside the PDF</b>: read them, write new ones – 🔒 private or 🌐 public in one of its groups – edit or comment, without closing the PDF. It stays on the tab you used last; if you close the PDF with an unsaved note, PaperShelf asks first.</li>
-        <li><b>Add to paper notes</b> copies all highlights into a note of the paper; <b>Copy all</b> copies them to the clipboard.</li>
-        <li>When you write a note on a highlight, <i>Also add it to the paper's notes</i> copies it (with the highlighted sentence and page) into the paper's notes: <b>🔒 private</b>, or <b>🌐 public</b> in a group the paper belongs to, so the group sees it.</li>
-        <li><b>💾 Save into PDF</b> writes the highlights into the file itself, so they appear in Preview, Acrobat or Zotero (repeat it after new highlights – nothing is duplicated).</li>
-        <li><b>Resume reading</b>: the reader remembers the page where you stopped and opens there next time (“from the start” goes back to page 1). The list shows a small progress bar – <i>p. 7/20</i> – under papers you are reading.</li></ul>
-      ${tip('Time spent with a PDF open in the reader is counted for 📊 Reading stats – only on this computer, never sent anywhere.')}`},
-
-    {id: 'smart', icon: '✨', title: "What's new, library check & reading tools", html: () => `
-      <h4>✨ What's new</h4>
-      <p>The bell at the top opens your <b>notifications</b>: what the others did in your groups (see <a href="#" data-help="sharing">Groups</a>) and <b>What's new</b>. What's new shows <b>recent papers by the researchers you follow</b> (everyone you added in the <b>Researchers</b> tab, except yourself) and on <b>topics you watch</b> (add them in the What's new window, e.g. “sleep spindles”). New papers are looked up in OpenAlex when you press ⟳ or “Check now”. <b>＋ Reading list</b> adds one; <b>✕</b> removes it from the list for good.</p>
-      <h4>🩺 Library check</h4>
-      <ul><li><b>Retractions and corrections</b>: when you press ⟳, papers are checked about once a week against Crossref (notices published by the journals and the <b>Retraction Watch</b> database) and OpenAlex. A retracted paper gets a red <span class="al-badge lvl-retracted">⚠ Retracted</span> badge, a corrected one a <span class="al-badge lvl-corrected">✎ Corrected</span> badge; the details panel links to the notice.</li>
-        <li><b>Published preprints</b>: for arXiv, bioRxiv, medRxiv… papers, PaperShelf looks for the journal version (the DOI the authors added on arXiv, the preprint server's link, or an exact title + first-author match). <span class="pub-badge">📰 Published</span> → open the paper → <b>Use the published version</b>: title, journal, DOI and pages become those of the article; labels, notes, highlights and the PDF stay.</li>
-        <li>All of them are listed under <b>⚠ Needs attention</b> in the sidebar. It runs by itself with ⟳; turn it off in ⚙︎ Settings → General.</li></ul>
-      ${tip('Only DOIs and arXiv IDs are sent to these public services – nothing about you.')}
-      <h4>⏳ Reading-list reminders</h4>
-      <p>Papers waiting in the reading list for more than 2 months are pointed out at the top of the list. For each: <b>Keep</b> (remind me later), <b>✓ Read</b>, or <b>To Library</b> – it leaves the reading list without counting as read. Change or switch off the delay in ⚙︎ Settings → General.</p>
-      <h4>📊 Reading stats</h4>
-      <p>Logo menu → <b>Reading stats</b>: papers read per month, minutes of reading per week, your streak, the papers you spent most time on. Computed only on this computer.</p>
-      <h4>🏷 Label suggestions</h4>
-      <p>In a paper's details, under its labels, PaperShelf suggests labels whose papers are similar (same words in title, abstract and keywords; citations between them). Click one to add it. Computed on your computer.</p>
-      <h4>📚 Key references you don't have</h4>
-      <p>In a label, a link under the title tells you how many works are cited by several of its papers but are not in your library; it opens <b>Discover</b> with them.</p>
-      <h4>▦ Review table</h4>
-      <p>In the Library, open a label and choose <b>▦ Table</b>: one row per paper, with columns you choose (aim, method, data, main result, limitations… add, rename, move or delete them). It's saved as you type; <b>📝 notes</b> shows the paper's notes and highlights to copy from. Export it as <b>CSV</b> (Excel, Numbers) or <b>Markdown</b>. Tables of your own labels are private and travel with your sync (💻 My computers). In a <b>group</b> the table is shared with its members, and everyone adds their own signed entries to the cells – see <a href="#" data-help="sharing">Groups</a>.</p>`},
-
-    {id: 'export', icon: '⤓', title: 'Citations, export & Zotero', html: () => `
-      <h4>Citation styles</h4>
-      <p>APA 7, Nature, Science, Cell Press (Cell, Neuron, Current Biology, Cell Reports, iScience), Royal Society (Proc B), J Neurosci, eLife, PNAS, PLOS/Vancouver. Choose the default in ⚙︎ Settings or in any paper's “Reference” box. <b>❝ Copy citation</b> copies one reference with italics.</p>
-      <h4>Export</h4>
-      <p><b>⤓ Export references</b>: the selected papers, the current label or everything, as</p>
-      <ul><li><b>.txt</b> – reference list to paste · <b>.rtf</b> – for Word/Pages with italics and hanging indent</li>
-        <li><b>.ris</b> – for Zotero, EndNote, Mendeley (keeps keywords and notes, links the PDFs, can add your labels as tags)</li>
-        <li><b>.bib</b> – LaTeX/Overleaf · <b>.json</b> (CSL) · <b>.csv</b> – spreadsheet</li></ul>
-      <h4>Moving papers to Zotero</h4>
+    {id: 'export', icon: '⤓', title: 'Citations & export', html: () => `
+      <p>Pick the default style in <b>Settings → General</b>, or per paper in its <i>Reference</i> box: APA 7, Nature, Science, Cell Press, Royal Society, J Neurosci, eLife, PNAS, PLOS/Vancouver. <b>Copy citation</b> copies one reference.</p>
+      <h4>Export references</h4>
+      <p><b>⤓ Export</b> works on the selection, the current label or everything: <b>.txt</b>, <b>.rtf</b> (Word/Pages), <b>.ris</b> (Zotero, EndNote, Mendeley), <b>.bib</b> (LaTeX), <b>.json</b>, <b>.csv</b>.</p>
+      <h4>To Zotero</h4>
       ${step(1, 'Export as <b>RIS</b> (tick “Add my labels as tags”).')}
-      ${step(2, 'In Zotero: <b>File → Import…</b> → choose the file → Next.')}
-      ${step(3, 'The papers arrive in a new collection with their PDFs linked and your labels as tags.')}
-      ${tip('Numbered styles (Nature, Cell, Science…) are numbered in the exported list; in a manuscript Zotero handles the in-text numbering.')}`},
+      ${step(2, 'Zotero → <b>File → Import…</b> → choose the file. Papers arrive in a new collection with PDFs linked.')}
+      <h4>Notes</h4>
+      <p>Select papers → <b>📝 Export notes</b>: each reference followed by its notes, as Markdown, text or a web page.</p>`},
 
     {id: 'map', icon: '🕸', title: 'Map & Discover', html: () => `
       <h4>Map</h4>
-      <p>Click <b>🕸 Map</b> above the list: the papers of the current view become a network. Arrows go from the citing paper to the cited one; grey dashed dots are papers you don't have that several of yours cite – click them to add them.</p>
-      <p>Scroll to zoom, drag to move, click a paper to open it. Colour by label, status or year.</p>
-      <h4>Kinds of links</h4>
-      <ul><li><b>Citations</b> – who cites whom (data from OpenAlex).</li>
-        <li><b>Keywords</b> – the most common keywords become ◆ nodes and each paper is linked to its keywords, so papers on the same topics cluster together. Or choose <i>Papers linked by shared keywords</i> (thicker line = more keywords in common). Click a keyword ◆ to show only its papers.</li>
-        <li><b>Labels</b> – your personal labels become ◆ nodes (a dashed line joins a sub-label to its parent) and each paper is linked to its labels: papers with several labels sit between them. Click a label ◆ to open it. Groups are not used here.</li>
-        <li><b>Notes</b> – papers linked by <b>what you wrote about them</b>: your notes (private and public), the notes on highlights, the highlighted sentences and the entries in group tables. PaperShelf finds the words and two-word phrases that matter (leaving out common words, in English and Italian), weighs how specific they are, and links papers whose notes talk about the same ideas – thicker line = closer. Hover a line to see the <b>shared ideas</b>. Or choose <i>Shared ideas as nodes</i>: each ◆ is an idea that recurs in your notes; click it to select its papers. It is all computed on this computer – nothing is sent anywhere.</li>
-        <li><b>✦ Mix</b> – one strength for each pair of papers, from all four together: citing each other or the same papers, shared keywords, shared labels, similar notes. In <b>⚖ Weights</b> choose how much each counts (0 = ignore) and the minimum strength. Hover a line to see why two papers are linked and how much each part contributes.</li></ul>
-      <h4>Search by topic (in Discover)</h4>
-      <p>At the top of <b>Discover</b> (in the Library: <b>All papers | Reading list | Discover</b>, or <b>Discover papers</b> on Home), describe what you're looking for – a few words, a question, or even a whole abstract – and click <b>Search</b>. <b>By meaning</b> (OpenAlex semantic search) compares your text with the titles and abstracts of 250+ million works, so it also finds papers that talk about the same idea in other words; <b>By words</b> is the classic search. Filter by year, type or free-to-read, and add any result with one click. From the Add box, the suggestions list offers <i>🔎 Search by topic</i> too. Only your search text is sent to OpenAlex.</p>
+      <p><b>Map</b> (above the list) turns the papers in view into a network: scroll to zoom, drag to move, click a paper to open it. Dashed grey dots are papers you don't have that several of yours cite – click to add.</p>
+      <ul><li><b>Links</b>: citations · shared keywords · your labels · <b>notes</b> (papers whose notes share ideas, computed on this computer) · <b>Mix</b> (all together, with adjustable <b>Weights</b>).</li></ul>
       <h4>Discover</h4>
-      <p><b>Discover</b> (in the Library) suggests papers for the whole library – or for a label you choose in the sidebar: works often cited by your papers, recent papers that cite yours, and related works. One click adds them.</p>
-      <h4>Citation data</h4>
-      <p>Both use citation data from OpenAlex, a free scholarly database (needs internet). New papers get it automatically; for older ones click <b>Get citation data</b>.</p>
-      ${tip('If you see “OpenAlex’s free daily allowance is used up”, add a free OpenAlex key – see <a href="#" data-help="keys">Optional keys</a>.')}`},
+      <p>The third switch in the Library suggests papers for your whole library, or for one label: works your papers cite often, recent papers that cite yours, related works. One click adds them.</p>
+      <p><b>Search by topic</b> (top of Discover, or on Home): describe what you need in a few words or an abstract. <i>By meaning</i> finds papers using other words; <i>By words</i> is the classic search. Only your search text is sent to OpenAlex.</p>
+      <p class="muted">Citation data comes from OpenAlex (needs internet). If its free daily allowance runs out, add a free key in <b>Settings → PDFs &amp; sources</b>.</p>`},
 
-    {id: 'researchers', icon: '👤', title: 'Researchers', html: () => `
-      <p>The <b>Researchers</b> tab builds a profile of a scientist from official sources and lists all their publications.</p>
-      ${step(1, 'Type an <b>ORCID iD</b> (most precise) or a name, and pick the right person (check institution and topics: names are often shared).')}
-      ${step(2, '<b>Overview</b>: summary (publications, first / co-first / last / co-last authorship, this year), metrics and charts (OpenAlex), positions, education, funding, awards (ORCID).')}
-      ${step(3, '<b>Publications</b>: one table with year, type, the researcher\'s role, journal impact factor at publication and today, citations.')}
-      <h4>h-index outlook</h4>
-      <p>The <i>Overview</i> opens with <b>At a glance</b>: <b>impact</b> (citations, h-index, i10-index, 2-year mean citedness) and <b>authorship</b> (publications, first, co-first, last, co-last, this year). Every tile is clickable: an authorship tile opens the publication list filtered on it, <i>citations</i> jumps to the charts, and <b>h-index → how to raise it</b> opens the outlook below. With Google Scholar data imported, the switch at the top chooses OpenAlex or Scholar numbers (the other one is shown small).</p>
-      <p><b>📈 How to raise the h-index</b>: for h+1, h+2 and h+3, how many more citations are needed in total and on which papers (the ones closest to counting – the cheapest way). The h-index is h when h papers have at least h citations each, so reaching h+1 means that the h+1 most cited papers all need h+1 citations. The chart shows the papers by citations (bars) against the line <i>citations = rank</i>: h is where the bars cross it. Next to it, the papers closest to 10 citations (i10-index). Corrections, peer reviews, supplementary files and preprints already published are not counted; the result can differ slightly from the h-index OpenAlex or Scholar report, because they count their own list of works.</p>
-      <h4>How the list is built</h4>
-      <ul><li>ORCID, OpenAlex (and Google Scholar if imported) are merged and <b>duplicates removed</b> (same DOI, or same title and year).</li>
-        <li>Each item gets a type: journal article, preprint, conference paper, abstract/poster, book, thesis, data/software, other. Datasets and files in repositories (figshare, Zenodo, Dryad, OSF, OpenNeuro…), supplementary files, peer-review reports and corrections are recognised from the DOI, the link and the title. Wrong? Change the type in the table – PaperShelf remembers it.</li>
-        <li><b>Role</b>: first, co-first, last, co-last or sole author; empty for middle positions. Co-first and co-last are found in two steps:
-          <ol><li>the equal-contribution flags recorded in <b>PubMed</b>;</li>
-          <li>for papers where the researcher is in a middle position, PaperShelf <b>reads the paper itself</b> – the Europe PMC full text, the legal open-access PDF, or the article page on the publisher's site – looking for notes such as “† These authors contributed equally” or “M.R. and P.N. contributed equally”. Only a block of equal contributors starting with the first author (co-first) or ending with the last author (co-last) counts.</li></ol>
-          This runs by itself in the background when you open a researcher (progress next to <i>Authorship</i> in At a glance; you can stop it). Hover a role to see where it was found. Papers that can only be read behind a paywall can't be checked.</li>
-        <li><b>IF</b>: see <a href="#" data-help="journal-metrics">Journal metrics &amp; impact factor</a>. The first time, click <i>Load journal metrics</i>.</li>
-        <li>Not theirs? Hide it with ✕ (OpenAlex sometimes confuses people with the same name – items “not in ORCID” deserve a check).</li></ul>
-      <h4>Filters</h4>
-      <p>Type chips, search, role (e.g. “first, co-first, last or co-last”), years, <i>only ${new Date().getFullYear()}</i>, <i>separate years</i> (headings per year).</p>
-      <h4>Sorting</h4>
-      <p>Click any column title – Year, Publication, Type, Role, IF pub., IF now, Cit. – to sort by it; click again to reverse (▲ ascending, ▼ descending). Papers without a value always go last. The menu next to the filters does the same.</p>
-      <h4>Export (publication list / CV)</h4>
-      <p><b>⤓ Export list</b> saves a web page, Word/Pages (.rtf), text, spreadsheet, RIS or BibTeX. You choose:</p>
-      <ul><li>which publications and types (supplementary files and other minor items are left out by default), or <b>only the current year</b>;</li>
-        <li>journal <b>impact factor</b> at publication and current;</li>
-        <li><b>numbering</b> 1, 2, 3… from the oldest;</li>
-        <li><b>highlighting</b> of first, co-first, last and co-last authorship (name bold and underlined, with a label);</li>
-        <li>a <b>summary table</b> (totals by type and role, all years / journal articles / this year);</li>
-        <li>sections by type, by year or both, newest or oldest first, citation style.</li></ul>
-      <p>Title and file name include the update date.</p>
-      <h4>Google Scholar data</h4>
-      <p>Google doesn't allow programs to search Scholar, so you bring in the <b>public</b> profile page you are viewing:</p>
-      ${step(1, `Drag this button to your bookmarks bar: <a class="bookmarklet" href="${esc(People.scholarBookmarklet())}" onclick="return false">🎓 Import Scholar profile</a>`)}
-      ${step(2, 'Open the researcher\'s profile on scholar.google.com; click “Show more” at the bottom until all papers are listed.')}
-      ${step(3, 'Click the button and choose the profile to add the data to. Citations, h-index, i10, citations per year, photo and publications are added and compared with OpenAlex.')}`},
+    {id: 'researchers', icon: '👤', title: 'Researchers & journal metrics', html: () => `
+      <p>Type an <b>ORCID iD</b> (best) or a name, pick the right person, and PaperShelf builds a profile from ORCID and OpenAlex: metrics, positions, and a table of all publications.</p>
+      <ul><li><b>At a glance</b> tiles are clickable. <b>h-index → how to raise it</b> shows how many citations, and on which papers, reach h+1.</li>
+        <li><b>Role</b> (first, co-first, last, co-last) is read from PubMed and, when needed, from the paper itself. Hover a role to see where it was found.</li>
+        <li>Duplicates are merged. Not theirs? Hide it with ✕; wrong type? change it in the table.</li>
+        <li>Filter by type, role and year; click a column title to sort.</li>
+        <li><b>⤓ Export list</b> makes a CV-style list (web page, Word, text, RIS, BibTeX) with numbering, highlighted authorship and a summary table.</li></ul>
+      <h4>Google Scholar data (optional)</h4>
+      <p>Google doesn't allow programs to search Scholar, so you import the <b>public</b> page you are viewing: drag <a class="bookmarklet" href="${esc(People.scholarBookmarklet())}" onclick="return false">🎓 Import Scholar profile</a> to your bookmarks bar, open the profile, click “Show more” until all papers show, then click the button.</p>
+      <h4>Impact factor</h4>
+      <p>The official Journal Impact Factor is sold by Clarivate, so PaperShelf shows free equivalents: <b>quartile and SJR</b> and <b>citations per document (2 years)</b> from SCImago, for the year of publication and today.</p>
+      <ul><li>Click <b>Load journal metrics</b> once in a researcher's Publications. Missing years are loaded automatically.</li>
+        <li>If scimagojr.com refuses programs, <b>Get the missing years…</b> downloads the tables through your browser and PaperShelf picks them up from Downloads.</li>
+        <li>Blank cell: not a journal paper. <i>not indexed</i>: type the value yourself. Values in small print come from the closest earlier year.</li></ul>`},
 
-    {id: 'journal-metrics', icon: '📊', title: 'Journal metrics & impact factor', html: () => `
-      <p>The official <b>Journal Impact Factor</b> belongs to Clarivate (Journal Citation Reports) and is only available with a subscription, so PaperShelf can't download it. It shows open, citable equivalents instead – for the year a paper was published and for today:</p>
-      <ul><li><b>Quartile (Q1–Q4) and SJR</b> – SCImago Journal Rank, based on Scopus.</li>
-        <li><b>Citations per document, 2 years</b> – the same formula as the impact factor, on Scopus data; usually close to it.</li>
-        <li><b>2-year mean citedness</b> – the same idea on OpenAlex data (current).</li></ul>
-      ${step(1, 'In a researcher\'s <b>Publications</b> click <b>Load journal metrics</b> (once). The SCImago tables for the years needed are downloaded (3–6 MB per year) and kept on your computer; later, missing years are loaded automatically.')}
-      ${step(2, 'The <b>IF pub.</b> and <b>IF now</b> columns fill in, with the quartile. Values marked * are SCImago citations per document; click a value for all the numbers.')}
-      <h4>Years without a table</h4>
-      <p>SCImago publishes each year's table around June of the following year, and not every year may be available on your computer. When the table for a year is missing, PaperShelf uses the <b>closest previous year</b> that has data for that journal and shows that reference year in small under the value (e.g. a 2026 paper with <i>2025</i> data). If there is no earlier data, the cell stays empty.</p>
-      <h4>If the download is refused</h4>
-      <p>scimagojr.com sometimes refuses downloads made by programs, but not those made by your browser. PaperShelf then shows a yellow note with <b>Get the missing years…</b>:</p>
-      ${step(1, 'The window lists exactly the years this researcher needs (the latest one and each publication year). Click <b>Download all missing years</b> – or one year at a time.')}
-      ${step(2, 'Your browser downloads the tables (allow several downloads if it asks). As soon as a table lands in Downloads, PaperShelf <b>moves it into its own folder</b> <code>~/PaperShelf/journal-metrics</code> and uses it: each year turns ✓ and the IF columns fill in.')}
-      <p>All the tables live in that folder (⚙︎ Settings → Data sources → <i>Open tables folder</i>) and serve every researcher: years already there are never asked again. You can also drop SCImago files into it yourself – they are picked up within a minute.</p>
-      <h4>Why some cells are empty</h4>
-      <ul><li><b>Not a journal publication</b> (preprint, dataset, supplementary file, peer-review report, thesis): no impact factor – the cell is left blank.</li>
-        <li><b>“not indexed”</b>: the journal isn't in SCImago (often a new journal). Click the cell to type its impact factor yourself.</li>
-        <li><b>The current year</b>: SCImago publishes a year's table only the following June, so this year's papers use the latest table available (shown in small, e.g. <i>2025</i>).</li></ul>
-      <h4>Why not fully automatic?</h4>
-      <p>The official Journal Impact Factor is sold by Clarivate and can't be downloaded freely. SCImago offers its yearly tables for free on its website; when the site doesn't answer programs, the one-click browser download is the legal way to get them.</p>
-      ${step(3, 'Know the official impact factor (many journals show it on their homepage, or via your university\'s JCR access)? Type it in that window: it is stored only on your computer.')}
-`},
+    {id: 'sharing', icon: '👥', title: 'Groups, Lab & Write', html: () => `
+      <p>A <b>group</b> shares papers with other people: a lab, a journal club, a co-author. Shared: titles, authors, year, journal, DOI, your <b>public</b> notes, tables and documents. <b>Never shared</b>: private notes, highlights, the rest of your library – and PDFs, unless you choose a shared folder.</p>
+      <h4>Roles</h4>
+      <ul><li><b>Editor</b>: adds papers, writes, invites. Needs a free GitHub account, connected once.</li>
+        <li><b>Reader</b>: sees everything, changes nothing. Needs only the code.</li></ul>
+      <h4>Create and join</h4>
+      ${step(1, 'Connect GitHub once: <b>Settings → Groups</b> (token: <a href="#" data-help="sync">see Sync</a>).')}
+      ${step(2, 'Sidebar → <b>Groups ＋ → Create a group</b> (from a label, the selected papers, or empty). Drag papers onto it later.')}
+      ${step(3, '<b>＋ Invite someone</b> → choose editor or reader → <b>✉ Write the e-mail</b>. It opens your own mail app; PaperShelf sends nothing and keeps no addresses.')}
+      ${step(4, 'To join: install PaperShelf, then <b>Groups ＋ → Join a group</b> and paste the code. Send the code only to people you invite.')}
+      <p>No GitHub? <b>Save as a file</b> in the group's ⚙︎ and send the <code>.papershelf</code> file; open it with <i>Groups ＋ → Open a group file</i>.</p>
+      <details class="help"><summary>PDFs in a group (optional)</summary>
+        <p>Nothing travels online. In the group's ⚙︎ → <b>PDF files</b> pick a folder you already share (Dropbox, OneDrive, a network drive, a USB stick). You decide what goes in: one paper, all, or automatically. Missing PDFs found there are copied to your PDF folder. Share only what you may (your own papers, open access, preprints).</p></details>
+      <details class="help"><summary>Notes: private and public</summary>
+        <ul><li>Every paper has a small chat of notes (📝). <b>🔒 Private</b> is the default; <b>🌐 Public</b> is visible to a group the paper belongs to.</li>
+          <li>You can edit, delete, or switch your own notes between public and private. Nobody can change anyone else's note; you can <b>hide</b> it on your computer.</li>
+          <li>Markdown works: <code>**bold**</code>, <code>*italic*</code>, <code>==highlight==</code>, <code>- list</code>, <code>- [ ] to do</code>. ${kbd('⌘/Ctrl')}+${kbd('Enter')} saves.</li></ul></details>
+      <details class="help"><summary>The group table</summary>
+        <p><b>▦ Table</b> in a group: same columns for everybody. Click a cell to read its entries like a chat and add your own – <b>Public</b> (signed) or <b>Private</b>. Editors can change the columns. Exports to CSV or Markdown.</p></details>
 
-    {id: 'sync', icon: '💻', title: 'My computers: the same library everywhere', html: () => `
-      <p>Keep the same library on all <b>your</b> computers (Mac and/or Windows): papers, labels, private notes, highlights, reading status – and PDFs if you choose. It travels through a <b>private</b> GitHub repository that only you can see. Nobody else is involved: to share with other people, see <a href="#" data-help="sharing">Groups</a>.</p>
-      <h4>The first time (about 5 minutes)</h4>
-      ${step(1, 'A free <b>GitHub account</b>: <a href="https://github.com/signup" target="_blank" rel="noopener">github.com/signup</a> (skip if you have one).')}
-      ${step(2, 'A <b>private repository</b> called <code>papershelf-library</code> – the box where your library is kept. <a href="#" data-help="gh-repo">How to create it</a>')}
-      ${step(3, 'A <b>token</b> – a password just for PaperShelf, allowed to use that repository. <a href="#" data-help="gh-token">How to create it</a>')}
-      ${step(4, `${isMac() ? '<b>Git</b> must be installed: if PaperShelf says it is missing, open the Terminal app, type <code>xcode-select --install</code>, press Enter and accept.' : '<b>Git</b> must be installed: if PaperShelf says it is missing, install it from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a> with the default options and restart PaperShelf.'}`)}
-      ${step(5, 'In PaperShelf: ⚙︎ Settings → <b>💻 My computers</b> → paste the token and the repository address → <b>Test</b> → <b>Save</b>. The first sync starts by itself.')}
-      <h4>On each other computer</h4>
-      ${step(6, 'Install PaperShelf, then do step 5 with the <b>same repository</b> (the same token, or a new one). After the first sync your library is there.')}
+      <h4>Write</h4>
+      <p>The <b>Write</b> tab lists the documents of all your groups. <b>New document</b> → pick the group (or <i>Only me</i>) and write. Changes of several people are combined, never overwritten; you see others appear within seconds.</p>
+      <ul><li><b>Markdown</b> toolbar, <b>Preview</b>, and <b>Review</b> (who wrote what, comments).</li>
+        <li><b>Suggest</b> mode (like Google Docs): switch from <i>Edit</i> to <i>Suggest</i> and type normally; deletions stay struck out, insertions turn green, each change is a card to <b>Accept</b> or <b>Reject</b>. In Review you can also select text to comment or suggest.</li>
+        <li><b>Citations</b>: type <code>[@</code> for a list of papers, best matches first (matching is local). The reference list is written for you.</li>
+        <li><b>Tables</b> and <b>pictures</b> (paste, drop or <b>Picture</b>; max 12 per document, 2 MB total).</li>
+        <li><b>Show pasted text</b> in Review hatches pasted passages. It is a transparency aid, not an AI detector.</li>
+        <li><b>History</b>: save named versions or restore an earlier one. <b>Export</b>: Word, Markdown, text, or PDF (print → Save as PDF).</li>
+        <li>Updates take about 5–10 seconds. Everyone in the group needs the same PaperShelf version.</li></ul>
+
+      <h4>Lab</h4>
+      <p>Pick a group on the left, or the Overview (your open tasks everywhere).</p>
+      <ul><li><b>Posts</b>: idea, experiment, question, result, decision, protocol or note. Comment, 👍 support, 📌 pin, address to people with <b>📨 For</b> or ＠. Decisions are listed separately.</li>
+        <li><b>Plans &amp; tasks</b>: a plan groups tasks with a goal, deadline and people in charge; start from an experiment or paper template. The board has <i>To do / Doing / Done</i>. Open a task for its checklist, notes, people and deadline – it saves as you type.</li>
+        <li><b>Archive</b> tidies finished plans and tasks away without deleting. <b>⤓ Report</b> exports the whole lab as Markdown.</li></ul>
+      <p class="muted">🔔 tells you when others post, comment or give you a task. Everything travels in the members' private GitHub gists (every 15 minutes, or ⟳) and goes nowhere else.</p>`},
+
+    {id: 'sync', icon: '💻', title: 'Sync between computers', html: () => `
+      <p>Keep the same library on all <b>your</b> computers (Mac and Windows) through a <b>private</b> GitHub repository only you can see. One computer? You don't need this. Sharing with others is <a href="#" data-help="sharing">Groups</a>.</p>
+      <h4>First time (about 5 minutes)</h4>
+      ${step(1, 'A free <b>GitHub account</b>: <a href="https://github.com/signup" target="_blank" rel="noopener">github.com/signup</a>.')}
+      ${step(2, `A <b>private repository</b> named <code>papershelf-library</code>: <a href="https://github.com/new?name=papershelf-library&visibility=private&description=My%20PaperShelf%20library%20(private)" target="_blank" rel="noopener"><b>create it</b></a> (opens filled in), keep <b>Private</b>, leave README and licence <b>off</b>, click <b>Create repository</b>.`)}
+      ${step(3, `A <b>token</b>, a password just for PaperShelf: <a href="https://github.com/settings/personal-access-tokens/new?name=PaperShelf&description=PaperShelf%3A%20sync%20my%20library%20and%20groups&expires_in=366&contents=write&gists=write" target="_blank" rel="noopener"><b>create it</b></a> (opens filled in). Under <i>Repository access</i> choose <i>Only select repositories → papershelf-library</i>, then <b>Generate token</b> and copy it (shown once; it starts with <code>github_pat_</code>).`)}
+      ${step(4, `${isMac() ? '<b>Git</b> must be installed. If PaperShelf says it is missing: open Terminal, type <code>xcode-select --install</code>, accept.' : '<b>Git</b> must be installed. If PaperShelf says it is missing, install it from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a> (default options) and restart PaperShelf.'}`)}
+      ${step(5, '<b>Settings → My computers</b>: paste the token and the repository address → <b>Test</b> → <b>Save</b>.')}
+      <p>On every other computer: install PaperShelf and do step 5 with the same repository.</p>
       <div class="h-live" id="h-sync-live"><button class="btn small" id="h-sync-test">Test my current settings</button> <span id="h-sync-res" class="muted small"></span></div>
       <h4>Every day</h4>
-      <ul><li>Press <b>⟳</b> (top right), or tick <i>Sync automatically</i> (at start and every 20 minutes).</li>
-        <li>If the same paper is changed on two computers between syncs, the latest change wins. Deletions reach every computer.</li>
-        <li><b>PDFs</b>: off by default (the library alone is a few MB; “Find PDFs” gets the free ones again). On: PDFs travel too – GitHub works best under ~1 GB (≈400 papers) and refuses files over 100 MB. Keep the repository <b>private</b>.</li></ul>
+      <ul><li>Press <b>⟳</b>, or tick <i>Sync automatically</i> (at start and every 20 minutes). If two computers change the same paper, the latest change wins.</li>
+        <li><b>PDFs</b> are off by default. On: GitHub works best under ~1 GB (≈400 papers) and refuses files over 100 MB.</li></ul>
+      <details class="help"><summary>Token for Groups only</summary>
+        <p>If you don't sync, <a href="https://github.com/settings/personal-access-tokens/new?name=PaperShelf%20groups&description=PaperShelf%3A%20groups&expires_in=366&gists=write" target="_blank" rel="noopener"><b>create a token with only the Gists permission</b></a> and paste it in <b>Settings → Groups → Connect</b>. An older token without Gists: GitHub → Settings → Developer settings → Fine-grained tokens → <b>Edit</b> → Account permissions → <b>Gists: Read and write</b>. Tokens expire after a year; make a new one the same way.</p></details>
       <h4>Problems</h4>
       <table class="h-table"><tr><th>Message</th><th>What to do</th></tr>
-        <tr><td>Git is not installed</td><td>Step 4, then press ⟳ again.</td></tr>
-        <tr><td>GitHub refused access</td><td>The token is wrong, expired, or doesn't include this repository. Make a new one (<a href="#" data-help="gh-token">how</a>) and paste it in Settings.</td></tr>
-        <tr><td>Repository not found</td><td>Copy the address again from the repository page; check that the token includes this repository.</td></tr>
+        <tr><td>Git is not installed</td><td>Step 4, then press ⟳.</td></tr>
+        <tr><td>GitHub refused access</td><td>Token wrong, expired, or without this repository: make a new one.</td></tr>
+        <tr><td>Repository not found</td><td>Copy the address again from the repository page.</td></tr>
         <tr><td>⟳ is red</td><td>Hover it to read the last error.</td></tr></table>`},
 
-    {id: 'gh-repo', icon: '📦', title: 'How to create the private repository', html: () => `
-      <p>A repository is a folder on GitHub. PaperShelf keeps your library there so that your other computers can fetch it. It is <b>private</b>: only you can see it.</p>
-      ${step(1, `Click <a href="https://github.com/new?name=papershelf-library&visibility=private&description=My%20PaperShelf%20library%20(private)" target="_blank" rel="noopener"><b>Create the repository on GitHub</b></a> (log in if asked). The page opens already filled in: name <code>papershelf-library</code>, <b>Private</b>.`)}
-      ${step(2, 'Check that <b>Private</b> is selected. Leave “Add a README”, “.gitignore” and “license” <b>empty / off</b>.')}
-      ${step(3, 'Click the green <b>Create repository</b> button.')}
-      ${step(4, 'Copy the address from your browser bar – it looks like <code>https://github.com/your-name/papershelf-library</code> – and paste it in ⚙︎ Settings → 💻 My computers.')}
-      ${tip('The repository stays empty until the first sync: that is normal.')}`},
-
-    {id: 'gh-token', icon: '🔑', title: 'How to create the GitHub token', html: () => `
-      <p>A token is a password just for PaperShelf: it lets PaperShelf use <b>only</b> what you allow, and you can delete it at any time on GitHub. You need one for <b>💻 My computers</b> and/or <b>👥 Groups</b> – the same token can do both.</p>
-      <h4>For My computers (and Groups)</h4>
-      ${step(1, `Click <a href="https://github.com/settings/personal-access-tokens/new?name=PaperShelf&description=PaperShelf%3A%20sync%20my%20library%20and%20groups&expires_in=366&contents=write&gists=write" target="_blank" rel="noopener"><b>Create the token on GitHub</b></a> (log in if asked). The page opens filled in: name <i>PaperShelf</i>, expiry 1 year, permissions <i>Contents: Read and write</i> and <i>Gists: Read and write</i>.`)}
-      ${step(2, 'Under <b>Repository access</b> choose <b>Only select repositories</b> and pick <code>papershelf-library</code> (create it first: <a href="#" data-help="gh-repo">how</a>).')}
-      ${step(3, 'Scroll down and click <b>Generate token</b>, then <b>Copy</b>. It starts with <code>github_pat_</code> and is shown only once – if you lose it, just make a new one.')}
-      ${step(4, 'Paste it in ⚙︎ Settings → 💻 My computers (and, for groups, click <b>Connect</b> in 👥 Groups: the saved token is used).')}
-      <h4>Only for Groups</h4>
-      <p>If you don't sync your computers: <a href="https://github.com/settings/personal-access-tokens/new?name=PaperShelf%20groups&description=PaperShelf%3A%20groups&expires_in=366&gists=write" target="_blank" rel="noopener"><b>create a token with only the Gists permission</b></a> → <b>Generate token</b> → copy → paste in ⚙︎ Settings → 👥 Groups → <b>Connect</b>. No repository needed.</p>
-      <h4>An older token without Gists?</h4>
-      <p>GitHub → your photo → Settings → Developer settings → Personal access tokens → <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener">Fine-grained tokens</a> → your PaperShelf token → <b>Edit</b> → Account permissions → <b>Gists: Read and write</b> → <b>Update</b>. Same token, nothing to paste again.</p>
-      ${tip('The token expires after a year: GitHub e-mails you before. Then create a new one the same way and paste it in Settings.')}`},
-
-    {id: 'sharing', icon: '👥', title: 'Groups: sharing with other people', html: () => `
-      <p>A <b>group</b> is a set of papers you share with other people – a lab, a journal club, a co-author. Only the <b>bibliographic details</b> travel (title, authors, year, journal, DOI) the <b>public notes</b> and the <b>group table</b> written in the group; never PDFs, private notes, highlights or the rest of your library. Papers that arrive are added to your library; if someone removes one from the group, your copy only leaves the group.</p>
-      <h4>PDF files in a group (optional)</h4>
-      <p>PDFs never travel through the group itself, and nothing goes online from PaperShelf. If you want to pass PDFs on, open the group (⚙︎) → <b>PDF files</b> and choose a <b>folder</b> that you and the others already share – Dropbox, OneDrive, Google Drive, iCloud, a network drive, a USB stick. Each person chooses the path on their own computer. Then <b>you decide</b> what goes in: one paper at a time (in the paper's <i>Groups</i> line: “Share the PDF with …”), or all your PDFs of the group, or automatically at every update. When you update, the PDFs the others put in the folder are copied to your own PDF folder for the papers you miss. Files are named with a code (never the title), nothing is overwritten, and you can take your copy back out at any time. Mind the publisher's licence: share only what you may share (your own papers, open access, preprints).</p>
-      <p>Between <b>your own</b> computers use <b>💻 My computers</b> instead (Settings), which keeps the whole library and, if you want, the PDFs in sync.</p>
-      <h4>Two roles</h4>
-      <ul><li><b>Editor</b> – adds and removes papers, writes public notes and entries in the group table, invites people. Needs a free GitHub account connected once.</li>
-        <li><b>Reader</b> – sees the papers, the public notes and the table, changes nothing. Needs nothing: just the code.</li></ul>
-      <p>The person who invites chooses the role. A reader can become an editor later: an editor adds their GitHub username in the group's ⚙︎ (People & options → Invite someone → Edit).</p>
-
-      <h4>Create a group and invite people</h4>
-      ${step(1, 'Connect GitHub once: ⚙︎ Settings → <b>👥 Groups</b> – account, token, <b>Connect</b> (3 minutes; <a href="#" data-help="gh-token">how to create the token</a>).')}
-      ${step(2, 'Sidebar → <b>Groups ＋</b> → <i>Create a group</i>: from one of your labels, from the selected papers, or empty. Later, <b>drag papers onto it</b>.')}
-      ${step(3, 'Click <b>＋ Invite someone</b> (above the group\'s papers): their name, e-mail (optional), and whether they can <b>edit</b> (type their GitHub username) or <b>only read</b>.')}
-      ${step(4, '<b>✉ Write the e-mail</b> opens your own e-mail app with a short, ready-made invitation: the code, how to join and where to download PaperShelf. Or copy it and send it any way you like. PaperShelf itself sends no e-mails and keeps no addresses.')}
-
-      <h4>Join a group</h4>
-      ${step(1, 'No PaperShelf yet? Download it from <a href="https://github.com/MirkoZanon/PaperShelf" target="_blank" rel="noopener">github.com/MirkoZanon/PaperShelf</a> (Code → Download ZIP), unzip, double-click <code>start.command</code> (Mac) or <code>start.bat</code> (Windows).')}
-      ${step(2, 'Sidebar → <b>Groups ＋</b> → <i>Join a group</i> → paste the code from the invitation.')}
-      ${step(3, 'Invited as <b>editor</b>? Connect GitHub once (⚙︎ Settings → 👥 Groups) with the account whose username the inviter typed. If you joined before connecting, you become editor by yourself at the next update.')}
-
-      <h4>Who takes part</h4>
-      <p>Above the papers of a group you see its <b>editors</b>, with the name each chose (⚙︎ Settings → 👥 Groups → <i>Your name in groups</i>); <i>invited</i> means they haven't joined yet. Readers aren't listed: they don't publish anything. The code lets anyone who has it read the group, so send it only to the people you invite.</p>
-      <h4>🔔 Notifications</h4>
-      <p>When another member adds a <b>public note</b>, an <b>entry in the group table</b> or a <b>paper</b>, the bell at the top shows a number and a short message appears: <i>“Anna added a note on …”</i>. Click the bell to see the list – click an item to open that note, that cell of the table or that paper. You get them when the groups update (every 15 minutes, or with ⟳). Notifications are kept only on this computer; your own changes don't notify you, and nothing is sent to anybody.</p>
-      <h4>The group table</h4>
-      <p>Open the group and choose <b>▦ Table</b>: one row per paper, the same columns for everybody. <b>Click a cell</b> to open its window: all its entries, like a chat, and a box at the bottom to write a new one. Before saving choose <b>🌐 Public</b> (the group sees it, signed with your name) or <b>🔒 Private</b> (only you, it stays on this computer), then <b>Add entry</b> (or ⌘/Ctrl+Enter). Click one of <b>your</b> entries to change it (✎ Edit, 🗑 Delete, <i>🌐 Make public</i> or <i>🔒 Make private</i> – also while editing, with the Public / Private buttons); entries of the others can only be read – answer them with a new entry. Nobody overwrites anybody else. <b>Close</b>, ✕ or Esc close the window (it asks first if you have unsaved text).</p>
-      <p>Any editor can add, rename, move or delete columns, for everybody. Readers see the table and can add private entries only. The table updates with the group (⟳ in the table gets the latest entries at once) and exports to CSV or Markdown with the names.</p>
-      <h4>Without GitHub</h4>
-      <p>In a group's ⚙︎ → <i>Save as a file</i>, and send the <code>.papershelf</code> file by e-mail. It opens with <i>Groups ＋ → Open a group file</i>.</p>
-      <h4>How it works</h4>
-      <p>Each editor's PaperShelf keeps its copy of the group in a <b>secret gist</b> on their GitHub account (a small online file that isn't listed anywhere), reads the copies of the other editors and merges them – in any order, through any chain of people, without losing or reviving papers. Updates run at start, every 15 minutes and right after a change; ⟳ forces one. Joining editors are recognised by GitHub's signature, so nobody can join in someone else's name.</p>`},
-
-    {id: 'lab', icon: '🧪', title: 'Lab: ideas, plans & tasks of a group', html: () => `
-      <p>The <b>🧪 Lab</b> tab at the top is the shared space of your <a href="#" data-help="sharing">groups</a> for the research itself – beyond the notes on single papers. Pick a group on the left (or the 🏠 Overview).</p>
-      <h4>💡 Ideas & discussion</h4>
-      <ul><li>Click <b>＋ New post</b> and choose what it is: 💡 <b>Idea</b>, 🧪 <b>Experiment</b>, ❓ <b>Question</b>, 📊 <b>Result</b>, ✅ <b>Decision</b>, 📋 <b>Protocol</b> or 📝 <b>Note</b>. Give it a title and a text (Markdown works: <b>**bold**</b>, lists, quotes), <b>tags</b> and links to papers of the group (📄 Link papers).</li>
-        <li>Everybody can <b>💬 comment</b>, <b>👍 support</b> a post (one vote each) and <b>📌 pin</b> it at the top. Posts and comments are signed; only the author can edit or delete them.</li>
-        <li>Filter by type, click a <b>#tag</b>, search, or sort by <i>latest activity</i> or <i>most supported</i>. On the right: pinned posts, decisions, the most supported ideas and all the tags.</li>
-        <li>Record what the group agreed as a <b>Decision</b>: decisions are listed on the right, in the Overview and in the report.</li>
-        <li><b>Address a post or a comment to someone</b>: in a new post choose the people under <i>📨 For</i>; under a comment click <b>＠</b> and pick them. They get a notification, the post is marked <b>📨 For you</b> for them and appears in their Overview; the filter <i>📨 For you</i> shows everything addressed to you.</li></ul>
-      <h4>📄 Documents</h4>
-      <ul><li>Write together in a <b>shared document</b>: a manuscript, a grant proposal, a literature review or the minutes of a meeting. Open the <b>Documents</b> tab of a group and click <b>New document</b> (you can start from a paper outline).</li>
-        <li><b>Nobody overwrites anybody.</b> Everybody can type at the same time, even in the same paragraph: each person's changes are kept and combined, in the same way for everyone. You see the others' work appear within seconds.</li>
-        <li>Write with simple <b>Markdown</b>: <code># Heading</code>, <code>**bold**</code>, <code>*italic*</code>, <code>- list</code>; the toolbar inserts it for you. <b>Preview</b> shows the formatted document; <b>Review</b> shows <b>who wrote what</b> (a colour for each person) and where the comments are.</li>
-        <li><b>Suggest mode, like in Google Docs.</b> Switch the top bar from <b>Edit</b> to <b>Suggest</b> and keep typing in the document itself: nothing is changed for real – what you delete stays in the text struck out in red, what you type appears in green, and each change becomes a suggestion card on the right that anyone can <b>Accept</b> or <b>Reject</b>. (Browser undo is off in this mode; reject your own suggestion instead.)</li>
-        <li><b>Tables and pictures.</b> <b>Table</b> in the toolbar adds a table to fill in (<code>| a | b |</code> rows, shown as a real table in Preview, Word and PDF). <b>Picture</b> – or pasting or dropping an image into the text – shrinks it on your computer and stores it inside the document, so the whole group sees it (up to 12 pictures, 2 MB per document; see the <b>Pictures</b> tab to reuse or remove them). Word, PDF and Markdown exports include them.</li>
-        <li><b>Citations that fit.</b> Type <code>[@</code> and a list of papers appears – the ones that best match the paragraph you are in come first, and typing a few letters of an author or title narrows it. In the <b>Cite</b> tab, <b>Suggest</b> does the same for the paragraph under the cursor and also offers papers of your own library that are not in the group yet (<i>Add to group and cite</i>: the group then sees that paper's title, authors and DOI, never the PDF). The matching is done on your computer; nothing is sent anywhere.</li>
-        <li><b>Where did this text come from?</b> In <b>Review</b>, <b>Show pasted text</b> hatches the passages that were pasted or dropped instead of typed and tells how much of the text that is. It is a transparency aid, not an AI detector: no program can tell reliably whether a text was written by an AI.</li>
-        <li><b>Comment and suggest from Review.</b> Switch to <b>Review</b> and select some text: a small bar offers <b>Comment</b>, <b>Suggest edit</b> and <b>Suggest deleting</b>; click between two words to <b>suggest inserting</b> text. Suggestions show in the text itself (old text struck out in red, new text in green) and as cards on the right, where anyone can <b>Accept</b> (the text changes) or <b>Reject</b>. Comments stay attached to their text even when the text around it moves; resolve a comment when it is dealt with.</li>
-        <li><b>See who is writing.</b> The top bar shows who is writing right now and in which section; in Review a coloured flag with their name marks the place of their last edit. While someone else is active the document is refreshed every ~4 seconds, otherwise every 12. It is <i>nearly</i> real time (expect about 5–10 seconds), not instant: PaperShelf has no server of its own, and everything travels through the group's private gists.</li>
-        <li><b>Your library next to the document.</b> <b>Library</b> in the top bar shows your whole library beside the text (read papers, take notes), and <b>New window</b> opens the document in a window of its own, so you can put it on a second screen. A document is written in one place at a time: while it is open in its own window, the main window won't open it.</li>
-        <li><b>Delete a document</b> (the <b>⋯</b> menu, only for the person who created it): it stops being shared. The others keep their copy, read-only, under <i>Deleted from the group, still on your computer</i> until they click <b>Remove from this computer</b>, so nobody loses work by surprise. <b>Archive</b> just tidies a document away.</li>
-        <li><b>Cite the group's papers</b>: in the <i>Cite</i> panel click a paper to insert <code>[@Smith2020]</code>. In Preview and in every export the citations become (Smith, 2020) and the <b>list of references</b> is written for you.</li>
-        <li><b>History</b>: save a <b>named version</b> (<i>Submitted draft</i>), or click any step of the editing history to see the document as it was, and <b>restore</b> it (it becomes a new edit: nothing is lost).</li>
-        <li><b>Export</b> to Word (.docx), Markdown, plain text, or PDF (print the page and choose <i>Save as PDF</i>).</li>
-        <li>Readers of the group can read and export; editors can write. The text travels with the rest of the group's data (in the members' private GitHub gists) and goes nowhere else. Very long documents (over about two million typed characters in total) have to be continued in a new document. <b>Everyone in the group needs this version of PaperShelf</b> to see the documents.</li></ul>
-      <h4>✅ Plans & tasks</h4>
-      <ul><li>A <b>plan</b> is a project or a milestone that <b>groups tasks</b> (<i>Pilot study, by 18 Dec</i>): a goal, a deadline, <b>who is responsible</b> (one or more people, who get a notification) and a progress bar. Plans are listed on the left: click one to see its tasks.</li>
-        <li><b>Start a plan from a template</b>: in <i>New plan</i>, under <i>Start with</i>, choose <i>The steps of an experiment</i> (design, approvals, setup, pilot, data collection, analysis, write-up) or <i>of a paper</i>. The tasks and their checklists are created for you; change or delete what does not fit.</li>
-        <li><b>Add a task quickly</b>: type it in <i>Add a task</i> at the bottom of the <b>To do</b> column and press ${kbd('Enter')}. The cursor stays there, so you can write a whole list of steps one after the other. ${kbd('Shift')}+${kbd('Enter')} adds the task and opens it.</li>
-        <li><b>Click a task to open it.</b> On the left is the work itself: the title, a description, the <b>checklist</b> and the <b>notes</b>. On the right are its settings: status, <b>people</b>, <b>deadline</b>, priority, plan and an optional paper. Everything is saved as you change it; there is no Save button.</li>
-        <li>The <b>checklist</b> is the list of small steps to tick (<i>Calibrate the laser</i>, <i>Check the camera</i>…). Type an item and press ${kbd('Enter')}; <b>paste a list</b> of several lines to add them all at once; click an item to reword it. The first items also appear on the card in the board, where you can tick them without opening the task. Two people can tick different items at the same time.</li>
-        <li>The board has three columns, <b>To do, Doing, Done</b>: drag the cards, or change the status at the top of the task. <i>Only my tasks</i> shows yours. In each column the tasks are ordered <b>by deadline, then priority</b> (overdue first, no date last) or, if you prefer, <i>in the order you drag them</i>.</li>
-        <li><b>Make a task</b> on a post turns an idea into work: the task links back to the post.</li>
-        <li>Any editor can change plans and tasks; each field keeps the newest change, so two people moving different things never overwrite each other.</li></ul>
-      <h4>💬 Notes on a task or a plan</h4>
-      <ul><li>Every task has its <b>Notes</b>, under the checklist: write a consideration, an update (<i>the virus arrives in 4 weeks</i>) or a question. A plan has notes too: click <b>Notes</b> next to its name, for what concerns the whole project (<i>the facility is closed from 22 December</i>).</li>
-        <li>Notes are signed and dated; only the author can edit or delete one. Click <b>＠</b> to address a note to someone.</li>
-        <li>The people of the task, the people responsible for the plan and whoever the note is addressed to get a <b>notification</b>; the other members see it in the 🔔. The card of a task shows how many notes it has.</li></ul>
-      <h4>🗄 Archive</h4>
-      <ul><li>When something is finished (or set aside) and you no longer want it in front of you, <b>archive</b> it: nothing is deleted, it just leaves the board, the counts and the Overview.</li>
-        <li><b>A plan</b>: click <b>Archive</b> next to its name. Its tasks go with it. <b>Finished tasks</b>: click <b>Archive</b> at the top of the <i>Done</i> column to move them all at once. <b>One task</b>: open it and click <b>Archive</b> at the bottom right.</li>
-        <li>Everything archived is under <b>Archive</b>, at the bottom of the list of plans, with its checklists and notes. Click a plan or a task to open it; <b>Restore</b> brings it back to the board.</li>
-        <li>The progress of a plan keeps counting its finished tasks after you archive them. The archive is shared with the group, and listed at the end of the report.</li></ul>
-      <h4>🏠 Overview</h4>
-      <p>Your <b>open tasks in every group</b>, with deadline, checklist and notes (overdue ones in red; tick the circle when one is done), the <b>plans you lead</b>, what was written <b>for you</b>, and for each group the open, overdue and done tasks, the posts of the week, the latest posts and the decisions.</p>
-      <h4>Notifications and report</h4>
-      <p>The 🔔 tells you when someone posts, comments on a post, adds a note on a task or a plan, writes to you or gives you a task – the ones for you also pop up as a message and show a red number on the <b>🧪 Lab</b> tab. They arrive when the groups update (every 15 minutes, or ⟳). <b>⤓ Report</b> downloads the whole lab as a Markdown file – decisions, plans with their tasks, checklists and notes, posts with comments – for a lab meeting, the minutes or your lab notebook.</p>
-      ${tip('The Lab travels with the group (same secret gists, updates every 15 minutes or with ⟳). Readers see it but can\'t write. Nothing goes anywhere else.')}`},
-
-    {id: 'notes', icon: '📝', title: 'Notes – private and public', html: () => `
-      <p>Every paper has its own small <b>chat of notes</b>. The 📝 button on each row of the list shows how many notes a paper has, without opening it: <span class="note-btn priv" style="display:inline-flex">📝<b>2</b></span> private only, <span class="note-btn pub" style="display:inline-flex">📝<b>3</b></span> with public notes, <span class="note-btn both" style="display:inline-flex">📝<b>5</b></span> both. Click it (or <i>Open notes</i> in the paper's details) to read and write.</p>
-      <h4>Two kinds of notes</h4>
-      <ul><li><b>🔒 Private</b> – the default. Only in your library (and in your own private sync, if you use it). Nobody else ever sees them.</li>
-        <li><b>🌐 Public</b> – only for papers in a <a href="#" data-help="sharing">group</a>. Choose <i>Public in the group “…”</i> under the text box: everybody in the group sees the note, with your name, at their next update (every 15 minutes, or ⟳).</li></ul>
-      <h4>Who can change what</h4>
-      <ul><li>You can <b>edit</b> ✎ or <b>delete</b> 🗑 your own notes at any time. Editing or deleting a public note changes it for everybody.</li>
-        <li><b>Change who can read a note</b>: hover one of your notes and click <b>🌐 Make public</b> or <b>🔒 Make private</b>, or edit it ✎ and choose in <i>Who can read it</i> (also to move it to another group). It keeps its date. A note made private is removed from the group for everybody at their next update.</li>
-        <li>Nobody can change someone else's note: each person's own copy decides about their notes, so a changed copy elsewhere is ignored.</li>
-        <li>You can <b>hide</b> 🙈 someone else's note on your computer only; the others still see it. Hidden notes can be shown again (“Show hidden”).</li>
-        <li><b>Readers</b> of a group see its public notes but can't write them; <b>editors</b> can.</li></ul>
-      <h4>Your name</h4>
-      <p>The first time you write a public note or create a group, PaperShelf asks the name to show next to it: your name, initials or a nickname. Change it in ⚙︎ Settings → 👥 Groups → <i>Your name in groups</i>. Groups also remember who created them (⚙︎ of the group).</p>
-      <h4>Styles and colours</h4>
-      <p>Use the buttons above the text box, or type Markdown: <code>**bold**</code>, <code>*italic*</code>, <code>~~strike~~</code>, <code>==highlight==</code>, <code>{red}coloured{/}</code> (red, orange, green, blue, purple, grey), <code>## heading</code>, <code>- list</code>, <code>- [ ] to do</code>, <code>&gt; quote</code>, <code>\`code\`</code>, <code>[text](https://…)</code>. 👁 Preview shows the result; ${kbd('⌘/Ctrl')} + ${kbd('Enter')} saves.</p>
-      <h4>Exporting notes</h4>
-      <p>Select one or more papers → <b>📝 Export notes</b> (or ⤓ Export in the notes window, or <i>Export notes with their references…</i> in Export references). You get one file with each paper's reference in your chosen style followed by its notes, who wrote them and when – as Markdown, plain text or a web page.</p>
-      ${tip('Highlights from the PDF reader can be copied into a private note: open the paper → Highlights → <i>copy them into a private note</i>.')}`},
-
-    {id: 'updates', icon: '⬆️', title: 'Installing & updating the app', html: () => `
+    {id: 'updates', icon: '⬆️', title: 'Install & update', html: () => `
       <h4>Two separate folders</h4>
-      <ul><li><b>The app</b>: the folder with <code>start.command</code> – here: <code>${esc(state.appDir || '')}</code></li>
-        <li><b>Your library</b>: <code>${esc(state.dataDir || '~/PaperShelf')}</code> (database, PDFs, profiles, settings)</li></ul>
-      ${warn('Never put the app folder inside the library folder (or the other way round). Updating the app never touches your library.')}
-      <h4>Automatic updates (default)</h4>
-      <p>Every time PaperShelf starts it checks the project page on GitHub. If a new version exists it is installed <b>before the app opens</b> (a few seconds, a backup of the old version is kept), and a message tells you what's new. Nothing else to do. Turn it off in ⚙︎ Settings → <i>Updates</i> if you prefer to choose yourself.</p>
-      <h4>Updating with the button</h4>
-      ${step(1, 'If automatic installation is off, or a version is published while PaperShelf is open, a <b>⬆ Update</b> button appears at the top right (or open ⚙︎ Settings → <i>Updates</i> → <i>Check for updates…</i>). The round <b>⟳</b> button at the top checks too – together with your library sync and shared labels – and opens the update window when a new version exists.')}
-      ${step(2, 'Read what’s new and click <b>Install update and restart</b>. PaperShelf downloads the new version from GitHub, keeps a backup of the current one and restarts by itself; the page reloads after a few seconds.')}
-      ${step(3, 'That’s it – your papers, PDFs, labels, notes and researcher profiles are exactly as before.')}
-      <p>The check is an anonymous request to GitHub (like opening the project page): nothing about you or your library is sent. Both the check and the automatic installation can be turned off in the Updates window.</p>
-      <h4>If something goes wrong</h4>
-      <ul><li><b>No internet / GitHub blocked</b>: download the zip from the project's <i>Releases</i> page yourself and use <b>Install from a zip file…</b> in the Updates window.</li>
-        <li><b>Going back</b>: every update leaves a zip of the previous version in <code>${esc(state.dataDir || '~/PaperShelf')}/backups</code> (button <i>Backups</i>). Close PaperShelf, unzip it, and start that copy.</li>
-        <li><b>It didn't restart</b>: close the PaperShelf window and open <code>start.command</code> / <code>start.bat</code> again.</li></ul>
-      <h4>Updating by hand</h4>
-      ${step(1, 'Close the PaperShelf window (Terminal / command window).')}
-      ${step(2, 'Replace the old <b>app</b> folder (the one with <code>app.py</code>) with the new one, unzipped in the same place.')}
-      ${step(3, 'Start it with <code>start.command</code> / <code>start.bat</code>. New libraries are installed automatically.')}
-      <h4>Git copies</h4>
-      <p>If you downloaded the app with <code>git clone</code>, the start file runs <code>git pull</code> at every start, and the Update button uses <code>git pull</code> too.</p>
-      <h4>Back-up</h4>
-      <p>Back up the library folder (Time Machine on Mac, File History on Windows). GitHub sync is also a copy of your library.</p>`},
+      <ul><li><b>The app</b>: <code>${esc(state.appDir || '')}</code></li>
+        <li><b>Your library</b>: <code>${esc(state.dataDir || '~/PaperShelf')}</code> (database, PDFs, settings). Back this folder up (Time Machine, File History).</li></ul>
+      ${warn('Never put one folder inside the other. Updating the app never touches your library.')}
+      <h4>Updates</h4>
+      <p>By default PaperShelf checks GitHub at start-up (an anonymous request) and installs a new version before it opens, keeping a backup. Switch this off in <b>Settings → General → Updates</b>; then a <b>⬆ Update</b> button appears and you choose when. <b>⟳</b> checks too.</p>
+      <details class="help"><summary>If something goes wrong</summary>
+        <ul><li><b>No internet</b>: download the zip from the project's Releases page and use <b>Install from a zip file…</b> in the update window.</li>
+          <li><b>Going back</b>: every update leaves a zip of the previous version in <code>${esc(state.dataDir || '~/PaperShelf')}/backups</code>. Close PaperShelf, unzip, start that copy.</li>
+          <li><b>By hand</b>: replace the app folder with the new one and start it again. With <code>git clone</code>, the start file runs <code>git pull</code> by itself.</li></ul></details>`},
 
-    {id: 'keys', icon: '🔑', title: 'Optional keys & e-mail', html: () => `
-      <p>PaperShelf works without any of these; they make some features work better. All are stored only on this computer.</p>
-      <table class="h-table"><tr><th></th><th>What for</th><th>How to get it</th></tr>
-        <tr><td><b>E-mail for Unpaywall</b></td><td>Unpaywall, the largest index of legal free PDFs, requires an e-mail with each request. Sent only to Unpaywall.</td><td>Any address you use.</td></tr>
-        <tr><td><b>OpenAlex key</b></td><td>Citation map, Discover and researcher profiles use OpenAlex; without a key there is a small free daily allowance, a key gives 10× more.</td><td>Create a free account on <a href="https://openalex.org" target="_blank" rel="noopener">openalex.org</a> → <a href="https://openalex.org/settings/api" target="_blank" rel="noopener">settings/api</a> → copy the key.</td></tr>
-        <tr><td><b>CORE key</b></td><td>Searches university repositories for the authors' own legal copies of papers.</td><td>Register at <a href="https://core.ac.uk/services/api" target="_blank" rel="noopener">core.ac.uk/services/api</a>; the key arrives by e-mail.</td></tr>
-        <tr><td><b>GitHub token</b></td><td>Sync between computers.</td><td>See <a href="#" data-help="sync">Sync</a>.</td></tr></table>
-      <p>Paste them in <b>⚙︎ Settings</b> and click Save.</p>`},
-
-    {id: 'privacy', icon: '🛡', title: 'Privacy & legal', html: () => `
-      <ul><li>PaperShelf runs on your computer and answers only to it; requests from other websites or computers are refused.</li>
-        <li>Library, private notes, highlights, profiles and settings are stored only in your library folder – and in your own private GitHub repository if you turn on sync. Public notes go only to the people in the group you wrote them in.</li>
-        <li>Online services receive only what a lookup needs (a DOI, a title, a name or ORCID iD you search, the topics you choose to watch in What's new). Reading position, reading time and stats stay on your computer. Your e-mail is never sent, except to Unpaywall if you enter it. E-mail search of researchers is disabled.</li>
-        <li>University logins happen on your university's or the publisher's page; PaperShelf never sees credentials.</li>
-        <li>Only official interfaces and legal open-access sources are used. Google Scholar is never queried automatically – only the page you choose to import.</li>
-        <li>PDFs obtained through subscriptions are for personal use: keep a synced repository private and don't share them.</li>
-        <li>Researcher profiles contain public professional data, kept locally. Ask before publishing someone else's publication page.</li></ul>`},
-
-    {id: 'troubleshooting', icon: '🧰', title: 'Troubleshooting & FAQ', html: () => `
+    {id: 'privacy', icon: '🛡', title: 'Privacy, keys & help', html: () => `
+      <h4>Privacy</h4>
+      <ul><li>PaperShelf answers only to your computer. Library, private notes, highlights, profiles and settings stay in your library folder – and in your own private GitHub repository if you sync.</li>
+        <li>Online services get only what a lookup needs: a DOI, a title, the name or ORCID iD you search, topics you watch. Your e-mail goes only to Unpaywall, and only if you enter it.</li>
+        <li>University logins happen on your university's page. Only official interfaces and legal open-access sources are used; Google Scholar only through a page you import yourself.</li>
+        <li>Researcher profiles are public professional data, kept locally.</li></ul>
+      <h4>Optional keys (Settings → PDFs &amp; sources)</h4>
+      <table class="h-table"><tr><th></th><th>Helps with</th><th>Get it</th></tr>
+        <tr><td><b>E-mail</b></td><td>Unpaywall: more free PDFs</td><td>Any address you use.</td></tr>
+        <tr><td><b>OpenAlex key</b></td><td>10× more citation lookups</td><td>Free at <a href="https://openalex.org/settings/api" target="_blank" rel="noopener">openalex.org/settings/api</a>.</td></tr>
+        <tr><td><b>CORE key</b></td><td>University repositories</td><td>Free at <a href="https://core.ac.uk/services/api" target="_blank" rel="noopener">core.ac.uk/services/api</a>.</td></tr></table>
+      <h4>Common problems</h4>
       <dl class="h-faq">
-        <dt>The Mac says <code>start.command</code> “can't be opened” / is from an unidentified developer</dt>
-        <dd>Right-click it → <b>Open</b> → <b>Open</b>. Needed only the first time.</dd>
-        <dt>“Python 3 is not installed”</dt>
-        <dd>Install it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> (on Windows tick “Add python.exe to PATH”), then start again.</dd>
-        <dt>The page says PaperShelf is not running</dt>
-        <dd>The Terminal / command window was closed: start <code>start.command</code> / <code>start.bat</code> again and reload the page.</dd>
-        <dt>“Could not reach …” / no internet</dt>
-        <dd>Adding new papers, PDFs, citation data, profiles and sync need internet; everything else works offline.</dd>
-        <dt>No free PDF found</dt>
-        <dd>Use <a href="#" data-help="university">University access</a>, or attach a PDF you downloaded.</dd>
-        <dt>A PDF I downloaded wasn't attached</dt>
-        <dd>Check the Downloads permission (see <a href="#" data-help="university">University access</a>) and that the folder in Settings is your Downloads folder. PDFs without a DOI inside are attached after you confirm which paper they belong to.</dd>
-        <dt>Wrong title/authors</dt>
-        <dd>Edit the fields, or <b>↻ Update metadata</b> with the DOI.</dd>
-        <dt>“OpenAlex's free daily allowance is used up”</dt>
-        <dd>Add a free OpenAlex key (<a href="#" data-help="keys">Optional keys</a>) or try again tomorrow.</dd>
-        <dt>Sync errors</dt>
-        <dd>See the table in <a href="#" data-help="sync">Sync</a>, and run the <a href="#" data-help="status">System check</a>.</dd>
-        <dt>Where are my files? How do I back up?</dt>
-        <dd>Library: <code>${esc(state.dataDir || '~/PaperShelf')}</code> (database <code>library.db</code> and folder <code>PDFs</code>). Back up that folder.</dd>
-        <dt>How do I uninstall?</dt>
-        <dd>Delete the app folder. Delete the library folder only if you no longer want your library.</dd>
-      </dl>`},
+        <dt>Mac: <code>start.command</code> “can't be opened”</dt><dd>Right-click → <b>Open</b> → <b>Open</b> (first time only).</dd>
+        <dt>“Python 3 is not installed”</dt><dd>Install it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener">python.org</a> (Windows: tick “Add python.exe to PATH”).</dd>
+        <dt>“PaperShelf is not running”</dt><dd>Start <code>start.command</code> / <code>start.bat</code> again and reload.</dd>
+        <dt>“Could not reach …”</dt><dd>Adding papers, PDFs, citation data, profiles and sync need internet; the rest works offline.</dd>
+        <dt>A downloaded PDF wasn't attached</dt><dd>Check the Downloads permission and the downloads folder in Settings. PDFs without a DOI ask which paper they belong to.</dd>
+        <dt>Uninstall</dt><dd>Delete the app folder; delete the library folder only if you no longer want your library.</dd></dl>
+      <p>Still stuck? Run the <a href="#" data-help="status">System check</a>.</p>`},
 
     {id: 'status', icon: '🩺', title: 'System check', html: () => `
       <p>What works and what needs attention on this computer.</p>
       <div id="h-diag" class="muted">Checking…</div>`},
   ];
+
+  /* old topic names -> the page that now holds them */
+  const ALIAS = {organising: 'adding', smart: 'adding', university: 'pdfs', reader: 'pdfs', 'journal-metrics': 'researchers', lab: 'sharing', notes: 'sharing',
+    'gh-repo': 'sync', 'gh-token': 'sync', keys: 'privacy', troubleshooting: 'privacy'};
 
   let current = 'start';
   const root = () => $('#help');
@@ -477,6 +238,7 @@ const Help = (() => {
   }
 
   function open(id) {
+    id = ALIAS[id] || id;
     current = SECTIONS.some(s => s.id === id) ? id : 'start';
     root().classList.add('open'); render();
   }
@@ -501,7 +263,7 @@ const Help = (() => {
       ${step(2, 'Organise papers with <b>labels</b> (they work like tags).')}
       ${step(3, '<b>Find PDFs</b> (free ones automatically, others through your university), read and highlight them.')}
       ${step(4, '<b>Export</b> reference lists in your journal\'s style, or move them to Zotero.')}
-      <p class="muted small">Help is always one click away: the <b>?</b> button at the top, and the <b>?</b> next to anything that needs explaining.</p>
+      <p class="muted small">Help is one click away: the <b>?</b> at the top.</p>
       <div class="modal-actions"><button class="btn" data-help="start">Read the guide</button><button class="btn primary" data-close>Start</button></div>`, {wide: true});
     $$('[data-help]', m.el).forEach(b => b.addEventListener('click', () => m.close()));
   }

@@ -258,6 +258,10 @@ function applyLook(look, accent) {
   document.body.classList.toggle('look-glass', (look || 'glass') !== 'flat');
   const a = accent ?? state.settings?.accent;
   if (a && a !== 'green') document.body.dataset.accent = a; else delete document.body.dataset.accent;
+  try {   // the tab icon follows the accent colour too
+    const col = (ACCENTS.find(x => x[0] === (a || 'green')) || ACCENTS[0])[1], fav = document.getElementById('fav-svg');
+    if (fav) fav.href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><rect width="28" height="28" rx="7.5" fill="${col}"/><g transform="translate(2 2)" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 4.5h3.2v15H4.5zM9.6 4.5h3.2v15H9.6zM14.6 5.6l3.1-.8 3.8 14.5-3.1.8z"/><path d="M4.5 8h3.2M9.6 8h3.2M4.5 16h3.2M9.6 16h3.2"/></g></svg>`);
+  } catch { /* ignore */ }
   try { localStorage.setItem('papershelf-look', JSON.stringify({look: look || 'glass', accent: a || 'green'})); } catch { /* ignore */ }
 }
 const treeOrder = (pid = null) => childrenOf(pid).flatMap(g => [g, ...treeOrder(g.id)]);   // labels as in the sidebar
@@ -1011,9 +1015,9 @@ function openExport() {
 function openSettings(startTab) {
   const s = state.settings; const o = location.origin;
   const bm = pdf => `javascript:(function(){window.open('${o}/quickadd?url='+encodeURIComponent(location.href)${pdf ? "+'&pdf=1'" : ''},'_blank');})();`;
-  const TABS = [['general', 'General'], ['pdfs', 'PDFs & access'], ['sync', '💻 My computers'], ['sharing', '👥 Groups'], ['data', 'Data sources'], ['updates', 'Updates']];
+  const TABS = [['general', 'General'], ['pdfs', 'PDFs & sources'], ['sync', 'My computers'], ['sharing', 'Groups']];
   let tab = 'general'; try { tab = localStorage.getItem('papershelf-settings-tab') || 'general'; } catch (e) { /* ignore */ }
-  if (tab === 'github') tab = 'sync';
+  if (tab === 'github') tab = 'sync'; if (tab === 'data') tab = 'pdfs'; if (tab === 'updates') tab = 'general';
   if (typeof startTab === 'string') tab = startTab;
   if (!TABS.some(t => t[0] === tab)) tab = 'general';
   const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="status" title="Check that everything works: Git, GitHub, sources…">🩺 System check</button> <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit</button></h3>
@@ -1021,56 +1025,66 @@ function openSettings(startTab) {
     <div class="stab-panels">
 
     <div class="stab-panel" data-panel="general">
-    <div class="section-label">Open PaperShelf on</div>
-    <select class="input wide" id="set-start">${[['home', '🏠 Home – your desk'], ['reading', '📚 Library – reading list'], ['library', '📚 Library – all papers'], ['write', '✍️ Write – documents'], ['lab', '🧪 Lab – groups'], ['people', '👥 Researchers']].map(([v, l]) => `<option value="${v}" ${(s.start_page || 'home') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    <div class="section-label">Look</div>
-    <div class="seg look-seg"><button type="button" data-look="glass" class="${s.look !== 'flat' ? 'on' : ''}">✦ Glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
-    <div class="section-label">Colour <span class="muted small">– buttons, tabs and what is selected</span></div>
-    <div class="acc-row">${ACCENTS.map(([k, c, l]) => `<button type="button" class="acc-sw ${(s.accent || 'green') === k ? 'on' : ''}" data-accent="${k}" style="--c:${c}" title="${l}" aria-label="${l}"></button>`).join('')}</div>
-    <div class="section-label">PaperShelf as an app <button class="help-q" data-help="updates" title="Explain this">?</button></div>
+    <div class="section-label">Start on</div>
+    <select class="input wide" id="set-start">${[['home', 'Home'], ['reading', 'Library – reading list'], ['library', 'Library – all papers'], ['write', 'Write'], ['lab', 'Lab'], ['people', 'Researchers']].map(([v, l]) => `<option value="${v}" ${(s.start_page || 'home') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <div class="section-label">Look & colour</div>
+    <div class="seg look-seg"><button type="button" data-look="glass" class="${s.look !== 'flat' ? 'on' : ''}">Glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
+        <div class="acc-row">${ACCENTS.map(([k, c, l]) => `<button type="button" class="acc-sw ${(s.accent || 'green') === k ? 'on' : ''}" data-accent="${k}" style="--c:${c}" title="${l}" aria-label="${l}"></button>`).join('')}</div>
+    <details class="more"><summary>App, window & shortcuts</summary>
     <div id="ia-section"><p class="muted small">…</p></div>
-    <details class="more"><summary>Other ways to start it</summary>
-      <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>With Chrome, Edge or Brave: a window without the address bar. Otherwise your normal browser.</small></span></label>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">🖥 Create a simple PaperShelf icon</button><span class="muted small" id="set-shortcut-res">${state.platform === 'win32' ? 'Desktop and Start menu' : state.platform === 'darwin' ? 'Applications folder and Desktop' : 'Applications menu'}</span></div>
+      <label class="opt"><input type="checkbox" id="set-ownwin" ${s.own_window !== '' ? 'checked' : ''}><span>Open in its own window<small>Chrome, Edge or Brave only.</small></span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn small" id="set-shortcut">Create a desktop icon</button><span class="muted small" id="set-shortcut-res">${state.platform === 'win32' ? 'Desktop and Start menu' : state.platform === 'darwin' ? 'Applications folder and Desktop' : 'Applications menu'}</span></div>
     </details>
     <div class="section-label">Reading</div>
-    <label class="opt-row">Remind me of papers waiting in the reading list for more than
+    <label class="opt-row">Remind me of papers waiting in the reading list for
       <select class="input" id="set-stale">${[['', 'never'], ['30', '1 month'], ['60', '2 months'], ['90', '3 months'], ['180', '6 months']].map(([v, l]) => `<option value="${v}" ${(s.stale_days || '') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-    <label class="opt"><input type="checkbox" id="set-libcheck" ${s.lib_check !== '' ? 'checked' : ''}><span>Watch my papers for retractions and published versions <button class="help-q" data-help="smart" title="Explain this">?</button><small>When you press ⟳. Only the papers' DOIs are sent, nothing about you.</small></span></label>
-    <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes in the list<small>Off: they appear when you select (${state.platform === 'darwin' ? '⌘' : 'Ctrl'}-click or Shift-click).</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-libcheck" ${s.lib_check !== '' ? 'checked' : ''}><span>Warn me about retracted papers <button class="help-q" data-help="smart" title="Explain this">?</button><small>On ⟳. Only DOIs are sent.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes</span></label>
     <div class="section-label">Citations & files</div>
     <div class="set-grid"><span class="muted small">Citation style</span><select class="input" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
       <span class="muted small">PDF folder</span><div style="display:flex;gap:6px"><input class="input" id="set-dir" style="flex:1" value="${esc(s.pdf_dir)}"><button class="btn" id="open-dir">Open</button><button class="btn" id="open-storage" title="See how much room the PDFs take and clear some">Storage…</button></div></div>
-    <details class="more"><summary>Browser buttons – save an article from any web page</summary>
-      <p class="muted small" style="margin-bottom:4px">Show the bookmarks bar (⇧⌘B on Mac, Ctrl+Shift+B on Windows), then <b>drag</b> these buttons onto it. On an article page, click one to save it here. <button class="help-q" data-help="adding" title="Explain this">?</button></p>
+    <details class="more"><summary>Browser buttons</summary>
+      <p class="muted small" style="margin-bottom:4px">Drag these onto your bookmarks bar; on any article page, click one to save it here.</p>
       <a class="bookmarklet" href="${esc(bm(false))}" onclick="return false">＋ Save to PaperShelf</a>
       <a class="bookmarklet" href="${esc(bm(true))}" onclick="return false">⬇ Save + PDF</a></details>
-    <p class="muted small set-privacy">🛡 Your library, notes and settings stay on this computer (<code>${esc(state.dataDir)}</code>) – and in your own private GitHub repository if you sync. <button class="linklike" data-help="privacy">Privacy details</button></p>
+    <div class="section-label">Updates – PaperShelf ${esc(state.version || '')} <button class="help-q" data-help="updates" title="Explain this">?</button></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">${Updates.info && Updates.info.available ? `<b>${esc(Updates.info.latest)} is available.</b>` : 'Up to date, or not checked yet.'}</span><button class="btn small" id="set-updates">Check for updates…</button></div>
+    <label class="opt" style="margin-top:10px"><input type="checkbox" id="set-upd-check" ${s.update_check !== '' ? 'checked' : ''}><span>Check for updates automatically<small>Anonymous request to GitHub.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-upd-auto" ${s.update_auto !== '' ? 'checked' : ''}><span>Install them automatically<small>At start-up; a backup is kept. Off: you choose when.</small></span></label>
+    <p class="muted small set-privacy">Your library, notes and settings stay on this computer (<code>${esc(state.dataDir)}</code>) – and in your own private GitHub repository if you sync. <button class="linklike" data-help="privacy">Privacy details</button></p>
     </div>
 
     <div class="stab-panel" data-panel="pdfs">
-    <div class="section-label">E-mail for Unpaywall (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
-    <input class="input wide" id="set-email" type="email" value="${esc(s.email)}" placeholder="leave empty to skip Unpaywall">
-    <p class="muted small">Unpaywall, the largest index of legal free PDFs, asks for an e-mail with each request. It goes only to Unpaywall, only when you look for a PDF.</p>
-    <div class="section-label">CORE API key (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
-    <input class="input wide" id="set-core" type="password" autocomplete="off" placeholder="${s.has_core_key ? '•••••••• key saved – paste a new one to replace it' : 'Free key from core.ac.uk/services/api'}">
-    <p class="muted small">University repositories worldwide (authors' legal copies). With a free key, “Find PDF” searches them too.</p>
-    <div class="section-label">University / library access <button class="help-q" data-help="university" title="Explain this">?</button></div>
-    <p class="muted small">For paywalled papers: PaperShelf opens the article through your library's page, you log in there as usual and download the PDF – it is attached to the right paper by itself. Your password is never stored.</p>
+    <div class="section-label">University access <button class="help-q" data-help="university" title="Explain this">?</button></div>
+        <p class="muted small">Paywalled papers open through your library; you log in there as usual. Your password is never stored.</p>
     <div id="proxy-rows">${(s.proxies || []).map(proxyRow).join('')}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small" id="proxy-add">＋ Add a library</button>
       <select class="input" id="proxy-preset" style="padding:4px 8px"><option value="">Templates…</option><option value="https://ezproxy.YOUR-UNIVERSITY.edu/login?url=">EZproxy (…/login?url=)</option><option value="https://YOUR-UNIVERSITY.idm.oclc.org/login?url=">EZproxy hosted by OCLC</option><option value="https://go.openathens.net/redirector/YOUR-UNIVERSITY.edu?url={url}">OpenAthens redirector</option></select></div>
     <details class="help"><summary>Where do I find my library's address?</summary>
-      <p>Look on your library website for “off-campus access”, “EZproxy”, “OpenAthens” or a “library bookmarklet”, or search the web for <i>“your university name” EZproxy</i>. The address ends where the article link goes, for example <code>https://ezproxy.uni.edu/login?url=</code>. You can also write <code>{url}</code> or <code>{doi}</code> where the article link or DOI should go.</p>
-      <p>Click <b>Test</b>: it opens a subscription-only <i>Science</i> article through your library. If after logging in you can read the full text, it works. On campus or on the university VPN, “Find &amp; download PDF” usually works directly too.</p></details>
-    <label class="opt"><input type="checkbox" id="set-auto-import" ${s.auto_import === '1' ? 'checked' : ''}><span>Always attach PDFs I download<small>Any new PDF in the folder below whose DOI matches a paper in your library is attached automatically (not only after “Get via library”).</small></span></label>
-    <label class="opt"><input type="checkbox" id="set-remove-dl" ${s.remove_downloads === '1' ? 'checked' : ''}><span>Move the downloaded file to the Trash once attached<small>A copy is kept in your PDF folder.</small></span></label>
+      <p>Search your library site for “off-campus access”, “EZproxy” or “OpenAthens”. The address looks like <code>https://ezproxy.uni.edu/login?url=</code>; <code>{url}</code> and <code>{doi}</code> are allowed. Click <b>Test</b> to check it.</p></details>
+    <details class="more"><summary>Optional keys – more free PDFs and data</summary>
+    <div class="section-label">E-mail for Unpaywall</div>
+    <input class="input wide" id="set-email" type="email" value="${esc(s.email)}" placeholder="leave empty to skip Unpaywall">
+    <p class="muted small">Needed by Unpaywall (legal free PDFs). Sent only to Unpaywall, only when you look for a PDF.</p>
+    <div class="section-label">CORE key</div>
+    <input class="input wide" id="set-core" type="password" autocomplete="off" placeholder="${s.has_core_key ? '•••••••• key saved – paste a new one to replace it' : 'Free key from core.ac.uk/services/api'}">
+    <p class="muted small">Lets “Find PDF” search university repositories.</p>
+    <div class="section-label">OpenAlex key <button class="help-q" data-help="keys" title="Explain this">?</button></div>
+    <input class="input wide" id="set-oakey" type="password" autocomplete="off" placeholder="${s.has_openalex_key ? '•••••••• key saved – paste a new one to replace it' : 'Free key from openalex.org/settings/api'}">
+    <p class="muted small">Without a key there is a small free daily allowance; a free key gives ten times more.</p>
+    <div class="section-label">Journal rankings (SCImago) <button class="help-q" data-help="journal-metrics" title="Explain this">?</button></div>
+    <p class="muted small">Impact-factor columns and quartiles. Downloaded automatically; if scimagojr.com refuses, download the tables there and import them here.</p>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="btn small" id="sjr-file-btn">Import tables…</button><button class="btn small" id="sjr-dir-btn" title="SCImago tables downloaded by your browser are moved here and used automatically">Open tables folder</button><input type="file" id="sjr-file" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-loaded"></span></div>
+    </details>
+    <div class="section-label">Downloaded PDFs</div>
+    <label class="opt"><input type="checkbox" id="set-auto-import" ${s.auto_import === '1' ? 'checked' : ''}><span>Always attach PDFs I download<small>New PDFs in the downloads folder are matched by DOI.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-remove-dl" ${s.remove_downloads === '1' ? 'checked' : ''}><span>Move the download to the Trash once attached</span></label>
     <div style="display:flex;gap:6px;align-items:center"><span class="muted small" style="white-space:nowrap">Downloads folder</span><input class="input" id="set-watch" style="flex:1" value="${esc(s.watch_dir)}"></div>
-    ${state.platform === 'darwin' ? '<p class="muted small">The first time, macOS may ask to let PaperShelf access the Downloads folder: click Allow.</p>' : ''}
+    ${state.platform === 'darwin' ? '<p class="muted small">macOS may ask to allow access to Downloads: click Allow.</p>' : ''}
     </div>
 
     <div class="stab-panel" data-panel="sync">
-    <div class="set-intro sync"><b>💻 The same library on all your computers</b> (Mac and Windows) – papers, labels, private notes, highlights, reading status and, if you like, PDFs. It goes through a <b>private</b> GitHub repository that only you can see. With one computer you don't need it. <button class="help-q" data-help="sync" title="Explain this">?</button></div>
+    <div class="set-intro sync"><b>One library on all your computers.</b> Goes through a private GitHub repository only you can see. With one computer you don't need it. <button class="help-q" data-help="sync" title="Explain this">?</button></div>
     <div class="set-status ${s.sync_repo && s.has_sync_token ? (s.last_sync_error ? 'bad' : 'ok') : ''}">${s.sync_repo && s.has_sync_token
       ? `${s.last_sync_error ? `⚠ Last sync failed: ${esc(s.last_sync_error)}` : `✓ On – ${s.last_sync ? `last sync ${esc(new Date(s.last_sync).toLocaleString())}` : 'not synced yet'}`} · <span class="muted">${esc(s.sync_repo.replace(/^https?:\/\/github\.com\//, ''))}</span>`
       : 'Not set up yet: 4 steps, about 5 minutes, the first time only.'}</div>
@@ -1085,30 +1099,16 @@ function openSettings(startTab) {
         <div class="sync-actions"><button class="btn small" id="sync-test">Test</button><span id="sync-test-res" class="muted small"></span></div></li>
     </ol>
     ${s.has_git === false ? `<p class="warn-box small"><b>Git is needed</b> and isn't installed on this computer. ${state.platform === 'darwin' ? 'Open the Terminal app, type <code>xcode-select --install</code>, press Enter and accept.' : 'Install it from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a> (default options), then restart PaperShelf.'}</p>` : ''}
-    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>When PaperShelf starts and every 20 minutes. Otherwise press ⟳.</small></span></label>
-    <label class="opt"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>GitHub works best under ~1 GB (≈ 400 papers). Off: free PDFs can be fetched again with “Find PDFs”.</small></span></label>
-    <p class="muted small"><b>On your other computer:</b> install PaperShelf, then do step 4 with the same repository (same token, or a new one). Your library appears after the first sync.</p>
+    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>At start-up and every 20 minutes.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>Best under ~1 GB (≈ 400 papers).</small></span></label>
+    <p class="muted small"><b>Second computer:</b> install PaperShelf and do step 4 with the same repository.</p>
     </div>
 
     <div class="stab-panel" data-panel="sharing">
     ${typeof Shares !== 'undefined' ? Shares.settingsHtml(s) : ''}
     </div>
 
-    <div class="stab-panel" data-panel="data">
-    <div class="section-label">OpenAlex API key (optional) <button class="help-q" data-help="keys" title="Explain this">?</button></div>
-    <input class="input wide" id="set-oakey" type="password" autocomplete="off" placeholder="${s.has_openalex_key ? '•••••••• key saved – paste a new one to replace it' : 'Free key from openalex.org/settings/api'}">
-    <p class="muted small">Citation data, suggestions, title search and researcher profiles come from OpenAlex. Without a key there is a small free daily allowance; a free key gives ten times more.</p>
-    <div class="section-label">Journal rankings (SCImago) <button class="help-q" data-help="journal-metrics" title="Explain this">?</button></div>
-    <p class="muted small">Used for the IF columns and quartiles in the Researchers tab. Normally downloaded automatically; if scimagojr.com refuses, open <a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">scimagojr.com</a>, choose a year, click “Download data”, and import the files here – several at once is fine (the year is read from the file name, e.g. <i>scimagojr 2024.csv</i>).</p>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><button class="btn small" id="sjr-file-btn">Import tables…</button><button class="btn small" id="sjr-dir-btn" title="SCImago tables downloaded by your browser are moved here and used automatically">Open tables folder</button><input type="file" id="sjr-file" accept=".csv,.txt,.xls" multiple hidden><span class="muted small" id="sjr-loaded"></span></div>
-    </div>
 
-    <div class="stab-panel" data-panel="updates">
-    <div class="section-label">PaperShelf ${esc(state.version || '')} <button class="help-q" data-help="updates" title="Explain this">?</button></div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="muted small">${Updates.info && Updates.info.available ? `<b>${esc(Updates.info.latest)} is available.</b>` : 'New versions come from github.com/MirkoZanon/PaperShelf.'}</span><button class="btn small" id="set-updates">Check for updates…</button></div>
-    <label class="opt" style="margin-top:10px"><input type="checkbox" id="set-upd-check" ${s.update_check !== '' ? 'checked' : ''}><span>Check for updates automatically<small>When PaperShelf starts and twice a day – an anonymous request to GitHub.</small></span></label>
-    <label class="opt"><input type="checkbox" id="set-upd-auto" ${s.update_auto !== '' ? 'checked' : ''}><span>Install updates automatically<small>A new version is installed when PaperShelf starts, before it opens (a backup of the old one is kept). Off: the ⬆ Update button appears and you choose when.</small></span></label>
-    </div>
     </div>
     <div class="modal-actions"><button class="btn" data-close>Cancel</button><button class="btn primary" id="set-save">Save</button></div>`, {wide: true, nofocus: true});
   m.el.querySelector('.modal').classList.add('settings-modal');

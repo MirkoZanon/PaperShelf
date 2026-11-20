@@ -2,6 +2,15 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.28 – 2026-11-20
+
+- **One look everywhere** – the glass style of Home (tinted panels, soft cards, rounded corners) now covers the Library,
+  Write, Lab and Researchers too, in light and dark and with every colour.
+- **The logo follows your colour** – the PaperShelf logo and the browser-tab icon take the accent you choose in Settings.
+- **Simpler Settings** – four tabs (General, PDFs & sources, My computers, Groups), shorter texts, rarely used things
+  folded away (optional keys, app shortcuts, browser buttons). Updates moved into General, data sources into PDFs & sources.
+- **A shorter Guide** – 11 pages instead of 22, starting with a one-page Quick start. Old help links still open the right page.
+
 ## 2.27.1 – 2026-11-20
 
 - **The logo is the Home button** – the Home tab and the little arrow are gone from the top bar (Library, Write, Lab,
