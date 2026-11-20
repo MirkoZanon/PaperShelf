@@ -4,6 +4,8 @@ Each section's text is used as the release notes shown in the app's Update windo
 
 ## 2.28 – 2026-11-20
 
+- Home cards: each title (Read, Write, Needs you, Groups, Tools) now sits on a tinted band, and the items below use small plain icons, so titles and items no longer look alike.
+
 - **One look everywhere** – the glass style of Home (tinted panels, soft cards, rounded corners) now covers the Library,
   Write, Lab and Researchers too, in light and dark and with every colour.
 - **The logo follows your colour** – the PaperShelf logo and the browser-tab icon take the accent you choose in Settings.
