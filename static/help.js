@@ -133,6 +133,7 @@ const Help = (() => {
         <li><b>Citations</b>: type <code>[@</code> for a list of papers, best matches first (matching is local). The reference list is written for you.</li>
         <li><b>Tables</b> and <b>pictures</b> (paste, drop or <b>Picture</b>; max 12 per document, 2 MB total).</li>
         <li><b>Show pasted text</b> in Review hatches pasted passages. It is a transparency aid, not an AI detector.</li>
+        <li><b>Delete or archive</b>: hover a document in the Write list and click <b>⋯</b> (or use ⋯ inside the document). Archive tidies it away; only its creator can delete it, and the others keep a read-only copy until they remove it.</li>
         <li><b>History</b>: save named versions or restore an earlier one. <b>Export</b>: Word, Markdown, text, or PDF (print → Save as PDF).</li>
         <li>Updates take about 5–10 seconds. Everyone in the group needs the same PaperShelf version.</li></ul>
 

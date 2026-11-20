@@ -162,7 +162,8 @@ const Write = (() => {
       <div class="wr-list">${shown.map(d => `<button class="wr-row" data-wr="open|${esc(d.sid)}|${esc(d.id)}">
           <span class="wr-ic">${ic('file')}</span>
           <span class="wr-t"><b>${esc(d.title)}</b><small><span class="wr-chip">${ic('group')}${esc(d.group)}</span>Edited ${ago(d.updated)}${d.authors?.length ? ` by ${esc(d.authors.slice(0, 3).join(', '))}${d.authors.length > 3 ? '…' : ''}` : ''} · ${Number(d.words || 0).toLocaleString()} words</small></span>
-          ${d.open ? `<span class="hm-badge" title="Open comments and suggestions">${ic('chat')}${d.open}</span>` : ''}</button>`).join('')
+          ${d.open ? `<span class="hm-badge" title="Open comments and suggestions">${ic('chat')}${d.open}</span>` : ''}
+          ${d.can_write ? `<span class="wr-more" role="button" tabindex="0" title="Archive or delete" data-wr="menu|${esc(d.sid)}|${esc(d.id)}">⋯</span>` : ''}</button>`).join('')
         || `<div class="wr-empty"><div class="big">${ic('pen')}</div><h3>${wr.length && !arch ? 'Nothing matches' : arch ? 'Nothing archived' : 'No documents yet'}</h3>
            <p class="muted">${wr.length || arch ? 'Try another search or group.' : 'Start a manuscript, a proposal, a review or the minutes of a meeting. Documents live in a group – even a group of just you.'}</p>
            ${wr.length || arch ? '' : `<button class="btn primary" data-wr="new">${ic('plus')}New document</button>`}</div>`}</div></div>`;
@@ -174,6 +175,28 @@ const Write = (() => {
       const b = e.target.closest('[data-wr]'); if (!b) return; const [k, x, y] = b.dataset.wr.split('|');
       if (k === 'new') return newDoc(); if (k === 'open') return open(x, y);
       if (k === 'arch') { arch = !arch; draw($('#write-main')); }
+      if (k === 'menu') { e.stopPropagation(); return menu(b, x, y); }
+    });
+    document.addEventListener('click', () => $('.wr-pop')?.remove());
+    $('#write-main').addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.wr?.startsWith('menu|')) { e.preventDefault(); e.target.click(); } });
+  }
+  function menu(btn, sid, did) {
+    $('.wr-pop')?.remove();
+    const d = data.docs.find(x => x.id === did); if (!d) return;
+    const pop = document.createElement('div'); pop.className = 'wr-pop';
+    pop.innerHTML = `<button data-a="arch">${d.arch ? 'Move back to documents' : 'Archive'}</button>`
+      + (d.can_delete ? '<button class="danger" data-a="del">Delete document…</button>' : '<span class="muted small">Only its creator can delete it.</span>');
+    btn.closest('.wr-row').appendChild(pop);
+    pop.addEventListener('click', async e => {
+      e.stopPropagation(); const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return; pop.remove();
+      try {
+        if (a === 'arch') { await api(`/api/shares/${encodeURIComponent(sid)}/docs/${encodeURIComponent(did)}`, {method: 'PUT', body: {arch: !d.arch}}); toast(d.arch ? 'Back in your documents.' : 'Archived.'); }
+        else {
+          if (!await confirmBox('Delete this document for the group?', 'It stops being shared and disappears from your list. The other members keep their copy on their own computer until they remove it themselves, so nobody loses work suddenly. This cannot be undone.', {ok: 'Delete', danger: true})) return;
+          await api(`/api/shares/${encodeURIComponent(sid)}/docs/${encodeURIComponent(did)}`, {method: 'DELETE'}); toast('Document deleted.');
+        }
+        data = await api('/api/docs/recent'); draw($('#write-main'));
+      } catch (err) { toast(err.message, 'error'); }
     });
   }
   async function open(sid, did, opt = {}) {

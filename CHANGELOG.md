@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.28.2 – 2026-11-20
+
+- **Delete or archive a document from the Write list** – hover a document and click ⋯. Only the person who created a document can delete it; everyone who can write can archive it.
+
 ## 2.28.1 – 2026-11-20
 
 - Researchers profiles now use the Home style too (hero panel, cards with tinted title bands, soft tiles).

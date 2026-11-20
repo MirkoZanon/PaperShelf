@@ -3852,7 +3852,8 @@ def docs_recent():
         for did, d in (st.get("docs") or {}).items():
             if sharing.is_gone(d) and (d["by"] in me or not (d.get("ops") or d.get("cm"))):
                 continue
-            docs.append({**_doc_row(d, did, names, me), "sid": r["id"], "group": gname, "can_write": bool(author) and not sharing.is_gone(d)})
+            docs.append({**_doc_row(d, did, names, me), "sid": r["id"], "group": gname, "can_write": bool(author) and not sharing.is_gone(d),
+                         "can_delete": bool(author) and d["by"] in me and not sharing.is_gone(d)})
     docs.sort(key=lambda x: x["updated"] or "", reverse=True)
     return jsonify(docs=docs, groups=groups)
 
