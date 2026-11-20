@@ -1,8 +1,10 @@
 """Shared documents: citations and export (Markdown, plain text, Word). Pure Python, no extra libraries."""
 from __future__ import annotations
 
+import base64
 import io
 import re
+import struct
 import zipfile
 from xml.sax.saxutils import escape
 
@@ -71,8 +73,15 @@ def resolve(text: str, items: dict):
     return CITE_RE.sub(sub, text), cited
 
 
-def markdown(title: str, text: str, items: dict, by: str = "", date: str = "") -> str:
+IMG_RE = re.compile(r"!\[([^\]\n]*)\]\(img:([0-9a-f]{16})\)")
+SEP_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$")
+
+
+def markdown(title: str, text: str, items: dict, by: str = "", date: str = "", images: dict | None = None, inline_images: bool = False) -> str:
     body, cited = resolve(text, items)
+    if inline_images:     # a stand-alone Markdown file carries its pictures inside
+        body = IMG_RE.sub(lambda m: (f"![{m.group(1)}](data:{images[m.group(2)][0]};base64,{base64.b64encode(images[m.group(2)][1]).decode()})"
+                                     if images and m.group(2) in images else f"[picture: {m.group(1)}]"), body)
     L = [f"# {title}", ""]
     if by or date:
         L += [f"_{' · '.join(x for x in (by, date) if x)}_", ""]
@@ -84,7 +93,8 @@ def markdown(title: str, text: str, items: dict, by: str = "", date: str = "") -
 
 
 def plain(md: str) -> str:
-    s = re.sub(r"^#{1,6}\s*", "", md, flags=re.M)
+    s = IMG_RE.sub(lambda m: f"[picture: {m.group(1)}]" if m.group(1) else "[picture]", md)
+    s = re.sub(r"^#{1,6}\s*", "", s, flags=re.M)
     s = re.sub(r"(\*\*|__)(.+?)\1", r"\2", s)
     s = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"\1", s)
     return re.sub(r"\[([^\]]+)\]\((https?://[^)]+)\)", r"\1 (\2)", s)
@@ -123,17 +133,118 @@ def _para(line: str):
     return f"<w:p>{_runs(line)}</w:p>" if line.strip() else "<w:p/>"
 
 
-def docx_bytes(md: str, title: str = "") -> bytes:
+def img_size(raw: bytes):
+    """(width, height) in pixels of a JPEG, PNG, GIF or WebP; (480, 320) when it cannot be read."""
+    try:
+        if raw[:8] == b"\x89PNG\r\n\x1a\n":
+            return struct.unpack(">II", raw[16:24])
+        if raw[:3] == b"GIF":
+            return struct.unpack("<HH", raw[6:10])
+        if raw[:4] == b"RIFF":
+            if raw[12:16] == b"VP8X":
+                return 1 + int.from_bytes(raw[24:27], "little"), 1 + int.from_bytes(raw[27:30], "little")
+            if raw[12:16] == b"VP8 ":
+                return struct.unpack("<HH", raw[26:30])[0] & 0x3FFF, struct.unpack("<HH", raw[26:30])[1] & 0x3FFF
+            if raw[12:16] == b"VP8L":
+                v = int.from_bytes(raw[21:25], "little")
+                return (v & 0x3FFF) + 1, ((v >> 14) & 0x3FFF) + 1
+        if raw[:2] == b"\xff\xd8":
+            i = 2
+            while i < len(raw) - 9:
+                if raw[i] != 0xFF:
+                    i += 1
+                    continue
+                m = raw[i + 1]
+                if m in (0xD8, 0x01) or 0xD0 <= m <= 0xD7:
+                    i += 2
+                    continue
+                if 0xC0 <= m <= 0xCF and m not in (0xC4, 0xC8, 0xCC):
+                    h, w = struct.unpack(">HH", raw[i + 5:i + 9])
+                    return w, h
+                i += 2 + struct.unpack(">H", raw[i + 2:i + 4])[0]
+    except Exception:
+        pass
+    return 480, 320
+
+
+def _cells(line: str) -> list:
+    t = line.strip()
+    t = t[1:] if t.startswith("|") else t
+    t = t[:-1] if t.endswith("|") and not t.endswith("\\|") else t
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", t)]
+
+
+def _table(rows: list, align: list) -> str:
+    n = max(len(r) for r in rows)
+    w = 9298 // n
+    jc = {"c": "center", "r": "right"}
+    out = ['<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>'
+           + "".join(f'<w:{e} w:val="single" w:sz="4" w:space="0" w:color="999999"/>' for e in ("top", "left", "bottom", "right", "insideH", "insideV"))
+           + '</w:tblBorders><w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'
+           + f'<w:gridCol w:w="{w}"/>' * n + "</w:tblGrid>"]
+    for ri, r in enumerate(rows):
+        out.append("<w:tr>" + ("<w:trPr><w:tblHeader/></w:trPr>" if ri == 0 else ""))
+        for ci in range(n):
+            txt = r[ci] if ci < len(r) else ""
+            runs = _runs(txt)
+            if ri == 0:
+                runs = runs.replace("<w:r>", "<w:r><w:rPr><w:b/></w:rPr>").replace("<w:r><w:rPr><w:b/></w:rPr><w:rPr>", "<w:r><w:rPr><w:b/>")
+            al = align[ci] if ci < len(align) else ""
+            out.append(f'<w:tc><w:tcPr><w:tcW w:w="{w}" w:type="dxa"/>' + ('<w:shd w:val="clear" w:color="auto" w:fill="EEEEEE"/>' if ri == 0 else "") + "</w:tcPr>"
+                       f'<w:p><w:pPr><w:spacing w:after="40"/>{f"<w:jc w:val=\"{jc[al]}\"/>" if al in jc else ""}</w:pPr>{runs}</w:p></w:tc>')
+        out.append("</w:tr>")
+    out.append("</w:tbl><w:p/>")
+    return "".join(out)
+
+
+def _picture(n: int, rid: str, alt: str, raw: bytes) -> str:
+    w, h = img_size(raw)
+    cx, cy = max(w, 1) * 9525, max(h, 1) * 9525
+    if cx > 5_400_000:
+        cy, cx = cy * 5_400_000 // cx, 5_400_000
+    a = escape(alt, {'"': "&quot;"})
+    return (f'<w:p><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="{cx}" cy="{cy}"/>'
+            f'<wp:docPr id="{n}" name="Picture {n}" descr="{a}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+            '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+            f'<pic:nvPicPr><pic:cNvPr id="{n}" name="Picture {n}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="{rid}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+            f'<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>'
+            '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>')
+
+
+def docx_bytes(md: str, title: str = "", images: dict | None = None) -> bytes:
+    images = images or {}
     lines = md.split("\n")
     if lines and lines[0].startswith("# "):
         lines = lines[1:]
-    body = []
+    body, media, i = [], [], 0
     if title:
         body.append(f'<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>{_runs(title)}</w:p>')
-    body += [_para(l) for l in lines]
-    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+    while i < len(lines):
+        ln = lines[i]
+        if "|" in ln and i + 1 < len(lines) and SEP_RE.match(lines[i + 1]) and "|" in lines[i + 1]:
+            head = _cells(ln)
+            al = ["c" if c.startswith(":") and c.endswith(":") else "r" if c.endswith(":") else "" for c in _cells(lines[i + 1])]
+            rows, i = [head], i + 2
+            while i < len(lines) and lines[i].strip() and "|" in lines[i]:
+                rows.append(_cells(lines[i]))
+                i += 1
+            body.append(_table(rows, al))
+            continue
+        m = IMG_RE.fullmatch(ln.strip())
+        if m and m.group(2) in images:
+            raw = images[m.group(2)][1]
+            media.append((images[m.group(2)][0], raw))
+            body.append(_picture(len(media), f"rIdImg{len(media)}", m.group(1), raw))
+        elif m:
+            body.append(f"<w:p>{_runs('[picture: ' + m.group(1) + ']')}</w:p>")
+        else:
+            body.append(_para(ln))
+        i += 1
+    ns = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+          'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"')
     doc = (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document {ns}><w:body>{"".join(body)}'
            '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1304" w:bottom="1440" w:left="1304" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>')
+    ns = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
 
     def style(sid, name, size, bold=False, italic=False, after=120, before=0, ind=0):
         return (f'<w:style w:type="paragraph" w:styleId="{sid}"><w:name w:val="{name}"/><w:basedOn w:val="Normal"/><w:qFormat/>'
@@ -148,12 +259,15 @@ def docx_bytes(md: str, title: str = "") -> bytes:
               + style("Quote", "Quote", 22, italic=True, ind=567) + "</w:styles>")
     ct = ('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>'
+          '<Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="png" ContentType="image/png"/><Default Extension="gif" ContentType="image/gif"/><Default Extension="webp" ContentType="image/webp"/>'
           '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
           '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>')
     rels = ('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
     drels = ('<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-             '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>')
+             '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+             + "".join(f'<Relationship Id="rIdImg{k}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/img{k}.{mt.split("/")[1].replace("jpeg", "jpeg")}"/>' for k, (mt, _) in enumerate(media, 1))
+             + '</Relationships>')
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", ct)
@@ -161,4 +275,6 @@ def docx_bytes(md: str, title: str = "") -> bytes:
         z.writestr("word/document.xml", doc)
         z.writestr("word/styles.xml", styles)
         z.writestr("word/_rels/document.xml.rels", drels)
+        for k, (mt, raw) in enumerate(media, 1):
+            z.writestr(f"word/media/img{k}.{mt.split('/')[1]}", raw)
     return buf.getvalue()

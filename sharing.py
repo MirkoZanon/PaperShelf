@@ -44,6 +44,7 @@ you delete it yourself.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import unicodedata
@@ -830,7 +831,7 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
 # nobody else's, so two people typing at the same time never overwrite each other: the text is rebuilt from
 # all the logs, always in the same order, whatever the order in which copies are merged. Comments,
 # suggestions and named versions are entries owned by their author, like the notes.
-DOC_LIMITS = {"docs": 300, "ops": 30000, "insert": 20000, "chars": 2_000_000, "comments": 3000, "body": 5000, "title": 150, "ranges": 400}
+DOC_LIMITS = {"docs": 300, "ops": 30000, "insert": 20000, "chars": 2_000_000, "comments": 3000, "body": 5000, "title": 150, "ranges": 400, "img_bytes": 250_000, "imgs": 12, "img_total": 2_000_000}
 DOC_KINDS = ("c", "res", "snap")
 RES_STATES = ("resolved", "open", "accepted", "rejected")
 _SURR = re.compile("[\ud800-\udfff]")
@@ -867,7 +868,10 @@ def _clean_op(op, owner, last_end):
         a = op.get("a")
         if a is not None and not _id_ok(a):
             return None
-        return {"k": "i", "c": c, "a": [a[0], a[1]] if a else None, "t": t, "at": at}
+        out = {"k": "i", "c": c, "a": [a[0], a[1]] if a else None, "t": t, "at": at}
+        if op.get("p") and len(t) >= 20:
+            out["p"] = 1          # written by pasting or dropping text (set by the author's own PaperShelf; only informative)
+        return out
     if op.get("k") == "d":
         rs = []
         for r in (op.get("r") or [])[:DOC_LIMITS["ranges"]]:
@@ -931,6 +935,73 @@ def _tail(log) -> int:
     return _op_end(log[-1]) if log else 0
 
 
+_IMG_MAGIC = ((b"\xff\xd8\xff", "image/jpeg"), (b"\x89PNG\r\n\x1a\n", "image/png"), (b"GIF87a", "image/gif"), (b"GIF89a", "image/gif"))
+
+
+def _img_mime(raw: bytes):
+    for m, mime in _IMG_MAGIC:
+        if raw.startswith(m):
+            return mime
+    return "image/webp" if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP" else None
+
+
+def _img_id(raw: bytes) -> str:
+    return hashlib.sha1(raw).hexdigest()[:16]
+
+
+def add_doc_image(st, author, did, raw: bytes, name="") -> str:
+    """Store a (client-downscaled) picture in the document; the id is a hash of the bytes, so the same picture is stored once."""
+    d = doc_of(st, did)
+    if is_gone(d):
+        raise ShareError("This document was deleted by its creator.")
+    mime = _img_mime(raw)
+    if not mime:
+        raise ShareError("Only JPEG, PNG, GIF and WebP pictures can be inserted.")
+    if len(raw) > DOC_LIMITS["img_bytes"]:
+        raise ShareError("This picture is too big (more than 250 KB after resizing).")
+    iid = _img_id(raw)
+    imgs = d.setdefault("img", {})
+    if iid in imgs:
+        return iid
+    if len(imgs) >= DOC_LIMITS["imgs"] or sum(i["n"] for i in imgs.values()) + len(raw) > DOC_LIMITS["img_total"]:
+        raise ShareError("This document already has as many pictures as it can hold (12, 2 MB in all). Remove unused ones first.")
+    imgs[iid] = {"mime": mime, "b64": base64.b64encode(raw).decode(), "n": len(raw), "by": author, "at": _now(),
+                 "name": " ".join(str(name or "").split())[:80]}
+    return iid
+
+
+def del_doc_image(st, author, did, iid):
+    d = doc_of(st, did)
+    i = (d.get("img") or {}).get(iid)
+    if not i:
+        return
+    if i.get("by") != author:
+        raise ShareError("Only the person who inserted a picture can remove it.")
+    del d["img"][iid]
+
+
+def doc_image(st, did, iid):
+    i = ((doc_of(st, did).get("img") or {}).get(iid))
+    return (i["mime"], base64.b64decode(i["b64"])) if i else None
+
+
+def _validate_imgs(raw) -> dict:
+    out = {}
+    for iid, i in list((raw if isinstance(raw, dict) else {}).items())[:DOC_LIMITS["imgs"]]:
+        try:
+            data = base64.b64decode(str(i.get("b64") or ""), validate=True)
+        except Exception:
+            continue
+        if not data or len(data) > DOC_LIMITS["img_bytes"] or _img_id(data) != iid or _img_mime(data) != i.get("mime"):
+            continue
+        by = str(i.get("by") or "")
+        if not (NAME_RE.match(by) or by.startswith("local-")):
+            continue
+        out[iid] = {"mime": i["mime"], "b64": base64.b64encode(data).decode(), "n": len(data), "by": by,
+                    "at": str(i.get("at") or "")[:40], "name": str(i.get("name") or "")[:80]}
+    return out
+
+
 def new_doc(st, author, title="") -> str:
     docs = _docs(st)
     if len(docs) >= DOC_LIMITS["docs"]:
@@ -938,7 +1009,7 @@ def new_doc(st, author, title="") -> str:
     did = uuid.uuid4().hex[:12]
     s = tick(st, author)
     docs[did] = {"by": author, "created": _now(), "title": {"v": " ".join(str(title or "").split())[:DOC_LIMITS["title"]] or "Untitled document", "s": s},
-                 "arch": {"v": False, "s": s}, "gone": {"v": False, "s": s}, "ops": {}, "cm": {}}
+                 "arch": {"v": False, "s": s}, "gone": {"v": False, "s": s}, "ops": {}, "cm": {}, "img": {}}
     return did
 
 
@@ -972,7 +1043,7 @@ def purge_doc(st, did):
     d = doc_of(st, did)
     if not (d.get("gone") or {}).get("v"):
         raise ShareError("Only a deleted document can be removed from your computer. Ask its creator to delete it first.")
-    d["ops"], d["cm"] = {}, {}
+    d["ops"], d["cm"], d["img"] = {}, {}, {}
 
 
 def is_gone(d) -> bool:
@@ -985,7 +1056,7 @@ def for_publish(st: dict) -> dict:
     if not any(is_gone(d) for d in docs.values()):
         return st
     out = dict(st)
-    out["docs"] = {k: (dict(d, ops={}, cm={}) if is_gone(d) else d) for k, d in docs.items()}
+    out["docs"] = {k: (dict(d, ops={}, cm={}, img={}) if is_gone(d) else d) for k, d in docs.items()}
     return out
 
 
@@ -1135,6 +1206,7 @@ def _merge_docs(a: dict, b: dict) -> dict:
                 best = lx if json.dumps(lx, sort_keys=True) >= json.dumps(ly, sort_keys=True) else ly
             m["ops"][au] = [dict(o) for o in best]
         m["cm"] = _merge_notes(x.get("cm") or {}, y.get("cm") or {})
+        m["img"] = {**(y.get("img") or {}), **(x.get("img") or {})}
         out[did] = m
     return out
 
@@ -1157,7 +1229,7 @@ def _validate_docs(raw) -> dict:
         by = str(d.get("by") or "")
         if not (NAME_RE.match(by) or by.startswith("local-")):
             continue
-        doc = {"by": by, "created": str(d.get("created") or "")[:40], "ops": {}, "cm": {}}
+        doc = {"by": by, "created": str(d.get("created") or "")[:40], "ops": {}, "cm": {}, "img": _validate_imgs(d.get("img"))}
         for k, dflt in (("title", "Untitled document"), ("arch", False), ("gone", False)):
             v = d.get(k) if isinstance(d.get(k), dict) else {}
             stp = _stamp(v.get("s"))
@@ -1215,6 +1287,9 @@ def _trust_docs(st, owner, copy):
                 d["ops"][owner] = [dict(o) for o in t["ops"][owner]]
             else:
                 del d["ops"][owner]
+        for iid, e in list((d.get("img") or {}).items()):
+            if e.get("by") == owner and iid not in (t.get("img") or {}):
+                del d["img"][iid]
         for cid, e in list((d.get("cm") or {}).items()):
             if e.get("by") != owner:
                 continue

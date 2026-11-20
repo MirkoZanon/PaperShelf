@@ -8,6 +8,7 @@ computer: the database and the PDFs are stored in ~/PaperShelf by default.
 """
 from __future__ import annotations
 
+import base64
 import argparse
 import json
 import logging
@@ -990,6 +991,39 @@ def delete_pdf(pid):
     if errors:
         return error("The PDF could not be moved to the Trash: " + errors[0], 500)
     return jsonify(paper=load_paper(db, pid))
+
+
+@app.get("/api/storage")
+def storage():
+    """How much room the PDFs take, how full the disk is, and which PDFs could go (read long ago, can be downloaded again)."""
+    db = get_db()
+    pdf_dir = Path(get_settings(db)["pdf_dir"]).expanduser()
+    last = {r[0]: r[1] for r in db.execute("SELECT paper_id, MAX(day) FROM reading_log GROUP BY paper_id")}
+    now_d = datetime.now()
+    rows, total = [], 0
+    for r in db.execute("SELECT id, title, year, doi, arxiv_id, pdf_url, pdf_path, status, added_at, read_at FROM papers WHERE pdf_path != ''"):
+        try:
+            size = os.path.getsize(r["pdf_path"])
+        except OSError:
+            continue
+        total += size
+        used = max([x for x in (r["read_at"] or "", last.get(r["id"]) or "", r["added_at"] or "") if x] or [""])[:10]
+        try:
+            idle = (now_d - datetime.strptime(used, "%Y-%m-%d")).days
+        except ValueError:
+            idle = 0
+        again = bool(r["doi"] or r["arxiv_id"] or r["pdf_url"])
+        rows.append({"id": r["id"], "title": r["title"] or "(untitled)", "year": r["year"], "size": size, "used": used, "idle_days": idle,
+                     "again": again, "status": r["status"], "suggest": again and idle >= 90 and r["status"] != "reading"})
+    rows.sort(key=lambda x: -x["size"])
+    try:
+        du = shutil.disk_usage(pdf_dir if pdf_dir.exists() else pdf_dir.anchor or str(Path.home()))
+        disk = {"total": du.total, "free": du.free}
+    except OSError:
+        disk = {"total": 0, "free": 0}
+    low = bool(disk["total"]) and (disk["free"] < 5 * 2**30 or disk["free"] / disk["total"] < 0.10)
+    return jsonify(pdfs=rows, total=total, count=len(rows), disk=disk, low=low, folder=str(pdf_dir),
+                   suggest_bytes=sum(x["size"] for x in rows if x["suggest"]))
 
 
 @app.post("/api/papers/pdf/delete")
@@ -3755,7 +3789,8 @@ def lab_overview():
 
 
 # --------------------------------------------------------------------------- shared documents
-import docexport  # noqa: E402
+import docexport
+import refsuggest  # noqa: E402
 
 _DOC_SYNC = {}   # share id -> time of the last update triggered by an open document
 
@@ -3830,6 +3865,8 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
                    comments=[{**{k: c.get(k) for k in ("id", "body", "created", "at", "by", "anchor", "quote", "rep", "parent", "state", "ins")},
                               "name": who(c["by"], c.get("name")), "mine": c["by"] in ({ident["user"], ident["local"]} - {""})} for c in cmv["comments"]],
                    snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
+                   images=[{"id": k, "name": i.get("name") or "", "n": i["n"], "mine": i["by"] in ({ident["user"], ident["local"]} - {""})}
+                           for k, i in sorted((d.get("img") or {}).items(), key=lambda kv: kv[1].get("at") or "")],
                    papers=papers, **extra)
 
 
@@ -4002,6 +4039,98 @@ def doc_comment_resolve(sid, did, cid):
     return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.resolve_doc_comment(st, au, _display_name(db), did, cid, b.get("state")))
 
 
+@app.post("/api/shares/<sid>/docs/<did>/refs")
+def doc_refs(sid, did):
+    """Papers that fit the paragraph being written: the group's papers first, then others of your own library (to add to the group).
+    Words are matched on this computer; nothing leaves it."""
+    db = get_db()
+    row, st = _load_share(db, sid)
+    if not st or did not in (st.get("docs") or {}):
+        return error("That document doesn't exist any more.", 404)
+    b = request.get_json(silent=True) or {}
+    text, query = str(b.get("text") or "")[:4000], str(b.get("query") or "")[:60]
+    items = _doc_items(st)
+    lab = docexport.labels(items)
+    local = [dict(r) for r in db.execute("SELECT id, title, doi, abstract, keywords, authors, year FROM papers")]
+    by_doi = {(r["doi"] or "").lower(): r for r in local if r["doi"]}
+    by_title = {re.sub(r"\W+", " ", (r["title"] or "").lower()).strip(): r for r in local}
+    grp_ids, cands = set(), []
+    for k, e in items.items():
+        m = e.get("meta") or {}
+        r = by_doi.get((m.get("doi") or "").lower()) or by_title.get(re.sub(r"\W+", " ", (m.get("title") or "").lower()).strip())
+        if r:
+            grp_ids.add(r["id"])
+        kw = ""
+        try:
+            kw = " ".join(json.loads(r["keywords"] or "[]")) if r else ""
+        except ValueError:
+            pass
+        cands.append({"id": k, "label": lab[k], "title": m.get("title") or "", "abs": (r["abstract"] or "")[:1500] if r else "", "kw": kw,
+                      "cite": docexport.short_cite(m)})
+    for r in db.execute("SELECT paper_id FROM paper_shares WHERE share_id=?", (sid,)):
+        grp_ids.add(r[0])
+    mine = {c["id"]: c for c in cands}
+    group = [{**{k: mine[x["id"]][k] for k in ("label", "cite", "title")}, "score": x["score"], "why": x["why"]} for x in refsuggest.rank(text, cands, 6, query)]
+    libc = []
+    for r in local:
+        if r["id"] in grp_ids:
+            continue
+        try:
+            au = json.loads(r["authors"] or "[]")
+            kw = " ".join(json.loads(r["keywords"] or "[]"))
+        except ValueError:
+            au, kw = [], ""
+        libc.append({"id": r["id"], "label": "", "title": r["title"] or "", "abs": (r["abstract"] or "")[:1500], "kw": kw,
+                     "cite": docexport.short_cite({"authors": au, "year": r["year"]})})
+    lib_by = {c["id"]: c for c in libc}
+    library = [{"id": x["id"], "cite": lib_by[x["id"]]["cite"], "title": lib_by[x["id"]]["title"], "score": x["score"], "why": x["why"]}
+               for x in refsuggest.rank(text, libc, 4, query)]
+    return jsonify(group=group, library=library)
+
+
+@app.post("/api/shares/<sid>/docs/<did>/images")
+def doc_image_add(sid, did):
+    """A picture (already shrunk by the browser) for the document; the body is the image itself."""
+    db = get_db()
+    st, author, err = _doc_write(db, sid, did)
+    if err:
+        return err
+    raw = request.get_data(cache=False) if (request.content_length or 0) <= 400_000 else b""
+    if not raw:
+        return error("The picture is empty or too big.", 413)
+    try:
+        iid = sharing.add_doc_image(st, author, did, raw, request.args.get("name", ""))
+    except sharing.ShareError as e:
+        return error(str(e), 400)
+    _doc_saved(db, sid, st)
+    return _doc_payload(db, sid, did, st=st, image=iid)
+
+
+@app.delete("/api/shares/<sid>/docs/<did>/images/<iid>")
+def doc_image_del(sid, did, iid):
+    db = get_db()
+    st, author, err = _doc_write(db, sid, did)
+    if err:
+        return err
+    try:
+        sharing.del_doc_image(st, author, did, iid)
+    except sharing.ShareError as e:
+        return error(str(e), 403)
+    _doc_saved(db, sid, st)
+    return _doc_payload(db, sid, did, st=st)
+
+
+@app.get("/api/shares/<sid>/docs/<did>/images/<iid>")
+def doc_image_get(sid, did, iid):
+    db = get_db()
+    row, st = _load_share(db, sid)
+    got = sharing.doc_image(st, did, iid) if st and (st.get("docs") or {}).get(did) else None
+    if not got:
+        return error("Picture not found.", 404)
+    return Response(got[1], mimetype=got[0], headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff",
+                                                      "Content-Security-Policy": "default-src 'none'; sandbox"})
+
+
 @app.post("/api/shares/<sid>/docs/<did>/snaps")
 def doc_snap(sid, did):
     return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.add_snap(st, au, _display_name(db), did, b.get("label")))
@@ -4020,10 +4149,11 @@ def doc_export(sid, did):
     names, _ = _doc_names(db, st, share_identity(db))
     title = d["title"]["v"]
     md = docexport.markdown(title, sharing.doc_text(d, upto if upto else None), _doc_items(st),
-                            ", ".join(names.get(a, a) for a in sharing.doc_stats(d)["authors"]), date.today().isoformat())
+                            ", ".join(names.get(a, a) for a in sharing.doc_stats(d)["authors"]), date.today().isoformat(),
+                            images={k: (i["mime"], base64.b64decode(i["b64"])) for k, i in (d.get("img") or {}).items()}, inline_images=fmt == "md")
     fname = re.sub(r"[^\w.-]+", "_", title).strip("_")[:60] or "document"
     if fmt == "docx":
-        return Response(docexport.docx_bytes(md, title), mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        return Response(docexport.docx_bytes(md, title, {k: (i["mime"], base64.b64decode(i["b64"])) for k, i in (d.get("img") or {}).items()}), mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         headers={"Content-Disposition": f'attachment; filename="{fname}.docx"'})
     if fmt == "txt":
         return Response(docexport.plain(md), mimetype="text/plain; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{fname}.txt"'})

@@ -2,6 +2,20 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.26 – 2026-11-20
+
+- **Tables and pictures in shared documents** – *Table* inserts a table, *Picture* (or paste / drop an image) adds a
+  picture, shrunk on your computer and stored in the document for the whole group. They show in Preview and are
+  included in the Word, Markdown and PDF exports. Everyone in the group needs this version.
+- **Suggested citations** – type `[@` and the papers that fit the paragraph come first; in the *Cite* tab, *Suggest*
+  finds papers for the paragraph you are in, from the group and from the rest of your library (add to the group and
+  cite in one click). Matched on your computer, nothing is sent.
+- **Pasted text in Review** – *Show pasted text* marks what was pasted or dropped rather than typed, with the share of
+  the text.
+- **Storage** (Settings → Storage…) – how much room the PDFs take and how full the disk is, with a list of PDFs you
+  could clear (not opened for 3 months and re-downloadable). Nothing is removed without your confirmation, and PDFs
+  go to the Trash. If the disk is nearly full PaperShelf tells you, once a day.
+
 ## 2.25 – 2026-11-19
 
 - **Suggest mode, like in Google Docs** – the document bar now has *Edit | Suggest | Review | Preview*. In *Suggest*

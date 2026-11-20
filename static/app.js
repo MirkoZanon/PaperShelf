@@ -45,6 +45,7 @@ async function api(path, opts = {}) {
   const o = {method: opts.method || 'GET', headers: {}};
   if (opts.body !== undefined) { o.headers['Content-Type'] = 'application/json'; o.body = JSON.stringify(opts.body); }
   if (opts.form) o.body = opts.form;
+  if (opts.raw !== undefined) { o.body = opts.raw; o.headers['Content-Type'] = opts.raw.type || 'application/octet-stream'; }
   let r;
   try { r = await fetch(path, o); }
   catch (e) { throw new Error('PaperShelf is not running. Start it again (start.command) and reload this page.'); }
@@ -1039,7 +1040,7 @@ function openSettings(startTab) {
     <label class="opt"><input type="checkbox" id="set-checks" ${s.list_checkboxes === '1' ? 'checked' : ''}><span>Always show selection boxes in the list<small>Off: they appear when you select (${state.platform === 'darwin' ? '⌘' : 'Ctrl'}-click or Shift-click).</small></span></label>
     <div class="section-label">Citations & files</div>
     <div class="set-grid"><span class="muted small">Citation style</span><select class="input" id="set-style">${state.styles.map(x => `<option value="${x.id}" ${x.id === s.default_style ? 'selected' : ''}>${esc(x.name)} – ${esc(x.journals)}</option>`).join('')}</select>
-      <span class="muted small">PDF folder</span><div style="display:flex;gap:6px"><input class="input" id="set-dir" style="flex:1" value="${esc(s.pdf_dir)}"><button class="btn" id="open-dir">Open</button></div></div>
+      <span class="muted small">PDF folder</span><div style="display:flex;gap:6px"><input class="input" id="set-dir" style="flex:1" value="${esc(s.pdf_dir)}"><button class="btn" id="open-dir">Open</button><button class="btn" id="open-storage" title="See how much room the PDFs take and clear some">Storage…</button></div></div>
     <details class="more"><summary>Browser buttons – save an article from any web page</summary>
       <p class="muted small" style="margin-bottom:4px">Show the bookmarks bar (⇧⌘B on Mac, Ctrl+Shift+B on Windows), then <b>drag</b> these buttons onto it. On an article page, click one to save it here. <button class="help-q" data-help="adding" title="Explain this">?</button></p>
       <a class="bookmarklet" href="${esc(bm(false))}" onclick="return false">＋ Save to PaperShelf</a>
@@ -1159,6 +1160,7 @@ function openSettings(startTab) {
   $('#set-quit', m.el).onclick = () => { m.close(); quitApp(); };
   if (typeof Shares !== 'undefined') Shares.settingsBind(m);
   $('#set-updates', m.el).onclick = () => { m.close(); Updates.open(); };
+  $('#open-storage', m.el).onclick = () => openStorage();
   $('#open-dir', m.el).onclick = () => api('/api/open-folder', {method: 'POST'}).catch(e => toast(e.message, 'error'));
   $('#sync-test', m.el).onclick = async () => {
     const res = $('#sync-test-res', m.el); res.textContent = 'Testing…';
@@ -2055,7 +2057,46 @@ async function init() {
   try { lastEvent = (await api('/api/events?after=999999999')).last_id || 0; } catch (e) { /* ignore */ }
   schedulePoll(3000);
   Help.welcome();
-
+  storageCheck();
+}
+const sizeTxt = n => n >= 2 ** 30 ? (n / 2 ** 30).toFixed(1) + ' GB' : n >= 2 ** 20 ? Math.round(n / 2 ** 20) + ' MB' : (n ? Math.max(1, Math.round(n / 1024)) : 0) + ' KB';
+/* once a day, only when the disk is nearly full: a hint where to clear room (nothing is ever deleted by itself) */
+async function storageCheck() {
+  try {
+    const day = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem('papershelf-storage-day') === day) return;
+    const r = await api('/api/storage'); if (!r.low) return;
+    localStorage.setItem('papershelf-storage-day', day);
+    toast(`This computer is almost full (${sizeTxt(r.disk.free)} free); your PDFs use ${sizeTxt(r.total)}. Settings → Storage… shows which ones you could clear.`, 'info', 12000);
+  } catch (e) { /* not important */ }
+}
+async function openStorage() {
+  let r; try { r = await api('/api/storage'); } catch (e) { toast(e.message, 'error'); return; }
+  const m = modal(`<h3>Storage</h3><div id="st-body"></div>`, {wide: true});
+  let view = r.suggest_bytes ? 'suggest' : 'all'; const sel = new Set();
+  const draw = () => {
+    const used = r.disk.total ? Math.round(100 * (r.disk.total - r.disk.free) / r.disk.total) : 0;
+    const rows = r.pdfs.filter(x => view === 'all' || x.suggest);
+    const idle = d => d >= 365 ? `${Math.floor(d / 365)} y` : d >= 60 ? `${Math.floor(d / 30)} months` : d >= 14 ? `${Math.floor(d / 7)} weeks` : d + ' days';
+    $('#st-body', m.el).innerHTML = `
+      <p class="muted small">${r.count} PDF${r.count === 1 ? '' : 's'} use <b>${sizeTxt(r.total)}</b> in <code>${esc(r.folder)}</code>. ${r.disk.total ? `The disk has ${sizeTxt(r.disk.free)} free of ${sizeTxt(r.disk.total)} (${used}% used).` : ''}</p>
+      ${r.disk.total ? `<div class="st-bar" title="Disk used"><i style="width:${used}%"></i></div>` : ''}
+      <div class="st-tabs"><button class="btn small ${view === 'suggest' ? 'primary' : ''}" data-v="suggest">Could be cleared (${r.pdfs.filter(x => x.suggest).length} · ${sizeTxt(r.suggest_bytes)})</button><button class="btn small ${view === 'all' ? 'primary' : ''}" data-v="all">All PDFs, largest first</button></div>
+      <p class="muted small">${view === 'suggest' ? 'Not opened for 3 months or more, not in your reading queue, and PaperShelf can find them again (DOI, arXiv or link).' : 'Marked <b>only copy</b>: no DOI or link to download it again.'} The papers, notes and highlights stay; PDFs go to the Trash, so you can still get them back.</p>
+      <div class="st-list">${rows.map(x => `<label class="st-row"><input type="checkbox" data-id="${x.id}" ${sel.has(x.id) ? 'checked' : ''}><span class="st-t">${esc(x.title)}${x.year ? ` <small>(${x.year})</small>` : ''}</span><span class="st-m">${x.again ? '' : '<b class="st-only">only copy</b> '}${idle(x.idle_days)} ago</span><span class="st-s">${sizeTxt(x.size)}</span></label>`).join('') || '<p class="muted small" style="padding:14px 4px">Nothing to suggest right now.</p>'}</div>
+      <div class="modal-actions"><span class="muted small" style="margin-right:auto">${sel.size ? `${sel.size} selected · ${sizeTxt(r.pdfs.filter(x => sel.has(x.id)).reduce((a, x) => a + x.size, 0))}` : ''}</span><button class="btn" data-close>Close</button><button class="btn danger" id="st-del" ${sel.size ? '' : 'disabled'}>Move to Trash</button></div>`;
+  };
+  draw();
+  m.el.addEventListener('click', async e => {
+    const v = e.target.closest('[data-v]')?.dataset.v; if (v) { view = v; draw(); return; }
+    const cb = e.target.closest('input[data-id]'); if (cb) { const id = +cb.dataset.id; cb.checked ? sel.add(id) : sel.delete(id); draw(); return; }
+    if (e.target.id === 'st-del' && sel.size) {
+      const only = r.pdfs.filter(x => sel.has(x.id) && !x.again).length;
+      if (!await confirmBox(`Move ${sel.size} PDF${sel.size === 1 ? '' : 's'} to the Trash?`, only ? `${only} of them can't be downloaded again by PaperShelf (no DOI or link): they stay in the Trash until you empty it.` : 'PaperShelf can download them again whenever you open the paper.', {ok: 'Move to Trash', danger: true})) return;
+      try { const d = await api('/api/papers/pdf/delete', {method: 'POST', body: {ids: [...sel]}}); toast(`${d.deleted} PDF${d.deleted === 1 ? '' : 's'} moved to the Trash.`); await loadLibrary(); r = await api('/api/storage'); sel.clear(); draw(); }
+      catch (err) { toast(err.message, 'error'); }
+    }
+  });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 

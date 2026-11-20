@@ -8,7 +8,8 @@ const Notes = (() => {
 
   /* ---------------------------------------------------------------- markdown (escaped first: no HTML runs) */
   function inline(t) {
-    const codes = [];
+    const codes = [], imgs = [];
+    t = t.replace(/!\[([^\]\n]*)\]\(img:([0-9a-f]{16})\)/g, (_, alt, id) => { imgs.push(`<img class="dx-img" data-img="${id}" alt="${alt.replace(/"/g, '&quot;')}">`); return `\u0001${imgs.length - 1}\u0001`; });
     t = t.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
     t = t.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (all, label, url) => {
       let u = url.replace(/&amp;/g, '&');
@@ -22,7 +23,7 @@ const Notes = (() => {
     t = t.replace(/(^|[^\w_/])_(?!\s)(.+?)(?<!\s)_(?![\w_])/g, '$1<em>$2</em>');
     t = t.replace(/~~(.+?)~~/g, '<del>$1</del>').replace(/==(.+?)==/g, '<mark>$1</mark>');
     t = t.replace(/\{(red|orange|green|blue|purple|grey|gray)\}([\s\S]+?)\{\/\}/g, (_, c, x) => `<span style="color:${COLORS[c]}">${x}</span>`);
-    return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);
+    return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`).replace(/\u0001(\d+)\u0001/g, (_, i) => imgs[+i]);
   }
   function md(src) {
     const lines = String(src || '').replace(/\r\n/g, '\n').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').split('\n');
@@ -30,7 +31,18 @@ const Notes = (() => {
     const fPara = () => { if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; } };
     const fList = () => { if (list) { out.push(`<${list.k}>${list.items.join('')}</${list.k}>`); list = null; } };
     const fQuote = () => { if (quote.length) { out.push('<blockquote>' + md(quote.join('\n').replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&')) + '</blockquote>'); quote = []; } };
-    for (const ln of lines) {
+    const cells = r => r.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|'));
+    const SEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
+    for (let i = 0; i < lines.length; i++) {
+      const ln = lines[i];
+      if (!inCode && ln.includes('|') && i + 1 < lines.length && lines[i + 1].includes('|') && SEP.test(lines[i + 1])) {   // a table
+        fPara(); fList(); fQuote();
+        const al = cells(lines[i + 1]).map(c => /^:-*:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:-/.test(c) ? 'left' : '');
+        const row = (r, tag) => '<tr>' + cells(r).map((c, k) => `<${tag}${al[k] ? ` style="text-align:${al[k]}"` : ''}>${inline(c)}</${tag}>`).join('') + '</tr>';
+        let html = `<div class="dx-tbl"><table><thead>${row(ln, 'th')}</thead><tbody>`; i += 2;
+        while (i < lines.length && lines[i].trim() && lines[i].includes('|')) { html += row(lines[i], 'td'); i++; }
+        out.push(html + '</tbody></table></div>'); i--; continue;
+      }
       if (/^\s*```/.test(ln)) {
         if (inCode) { out.push('<pre><code>' + code.join('\n') + '</code></pre>'); code = []; inCode = false; }
         else { fPara(); fList(); fQuote(); inCode = true; }

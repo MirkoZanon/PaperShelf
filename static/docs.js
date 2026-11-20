@@ -64,7 +64,7 @@ const Docs = (() => {
     .replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '�');
   function pushOp(op) {
     const R = D.R, log = R.ops[R.me] || (R.ops[R.me] = []), last = log[log.length - 1], unsent = log.length - 1 >= Math.max(R.sent, R.fl || 0);   // an operation already on its way never grows
-    if (unsent && last && last.k === 'i' && op.k === 'i' && op.a && op.a[0] === opEnd(last) && op.a[1] === R.me && op.c === R.max + 1 && R.max === opEnd(last)) {
+    if (unsent && last && last.k === 'i' && op.k === 'i' && !op.p && !last.p && op.a && op.a[0] === opEnd(last) && op.a[1] === R.me && op.c === R.max + 1 && R.max === opEnd(last)) {
       last.t += op.t; last.at = op.at; R.max = opEnd(last); return;               // typing: one operation grows
     }
     if (unsent && last && last.k === 'd' && op.k === 'd' && last.r.length + op.r.length < 380) {
@@ -74,7 +74,7 @@ const Docs = (() => {
     log.push(op); R.max = Math.max(R.max, opEnd(op));
   }
   // turn "the text became newText" into operations (common start and end are kept)
-  function editTo(newText) {
+  function editTo(newText, pasted) {
     const R = D.R, B = R.B, old = B.text; newText = clean(newText);
     if (old === newText) return false;
     let p = 0; const n = Math.min(old.length, newText.length);
@@ -88,7 +88,7 @@ const Docs = (() => {
       for (let i = i0; i < i1; i++) { const x = B.vis[i], l = r[r.length - 1]; if (l && l[1] === x.a && l[0] + l[2] === x.c) l[2]++; else r.push([x.c, x.a, 1]); }
       pushOp({k: 'd', c: R.max + 1, r: r.slice(0, 399), at: nowIso()});
     }
-    if (ins) { const a = i0 ? [B.vis[i0 - 1].c, B.vis[i0 - 1].a] : null; pushOp({k: 'i', c: R.max + 1, a, t: ins, at: nowIso()}); }
+    if (ins) { const a = i0 ? [B.vis[i0 - 1].c, B.vis[i0 - 1].a] : null; pushOp({k: 'i', c: R.max + 1, a, t: ins, at: nowIso(), ...(pasted && ins.length >= 20 ? {p: 1} : {})}); }
     rebuild(); schedule(); return true;
   }
   function rebuild(upto) { const R = D.R; R.B = build(R.ops, upto); R.max = Math.max(R.max || 0, maxCtr(R.ops)); }
@@ -135,7 +135,7 @@ const Docs = (() => {
       const out = r.comments.filter(c => !dels.has(c.id)).map(c => keep.get(c.id) || c);
       keep.forEach((c, id) => { if (!r.comments.some(x => x.id === id)) out.push(c); });
       R.comments = out; }
-    R.snaps = r.snaps; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
+    R.snaps = r.snaps; R.images = r.images || []; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
     return changed;
   }
   async function pull() {
@@ -276,6 +276,7 @@ const Docs = (() => {
         <button data-fmt="h1" title="Heading 1"><b>H1</b></button><button data-fmt="h2" title="Heading 2"><b>H2</b></button><button data-fmt="h3" title="Heading 3"><b>H3</b></button><span class="dx-sep"></span>
         <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><span class="dx-sep"></span>
         <button data-fmt="ul" title="Bulleted list">• List</button><button data-fmt="ol" title="Numbered list">1. List</button><button data-fmt="quote" title="Quote">❝</button><button data-fmt="link" title="Link">${ic('link')}</button><span class="dx-sep"></span>
+        <button data-fmt="table" title="Insert a table">${ic('table')}Table</button><button data-fmt="image" title="Insert a picture (or paste / drop one into the text)">${ic('image')}Picture</button><span class="dx-sep"></span>
         <button data-fmt="cite" title="Cite a paper of the group">${ic('book')}Cite</button>
         <button data-fmt="comment" title="Comment on the selected text (${MOD}+Alt+M)">${ic('chat')}Comment</button>
         <button data-fmt="suggest" title="Suggest a change to the selected text">${ic('pen')}Suggest</button>
@@ -302,7 +303,8 @@ const Docs = (() => {
   function previewHtml(B, title) {
     const {text, used} = resolveCites(B.text);
     const refs = used.slice().sort((a, b) => a.ref.toLowerCase().localeCompare(b.ref.toLowerCase()));
-    return `<article class="dx-prev"><h1>${esc(title)}</h1>${mdHtml(text)}${refs.length ? `<h2>References</h2><ol class="dx-refs">${refs.map(p => `<li>${esc(p.ref)}</li>`).join('')}</ol>` : ''}</article>`;
+    const withImgs = h => h.replace(/<img class="dx-img" data-img="([0-9a-f]{16})"/g, (_m, id) => `<img class="dx-img" src="${location.origin}${base()}/${q(D.id)}/images/${id}" data-img="${id}"`);
+    return `<article class="dx-prev"><h1>${esc(title)}</h1>${withImgs(mdHtml(text))}${refs.length ? `<h2>References</h2><ol class="dx-refs">${refs.map(p => `<li>${esc(p.ref)}</li>`).join('')}</ol>` : ''}</article>`;
   }
   // comment highlights, suggestions (old text struck out, new text inserted), flags where others wrote
   function reviewItems(B) {
@@ -330,6 +332,7 @@ const Docs = (() => {
     [...hi, ...sug].forEach(x => { cuts.add(x.a); cuts.add(Math.min(x.b, n)); });
     ins.forEach((_v, k) => cuts.add(Math.min(k, n))); flags.forEach((_v, k) => cuts.add(k));
     if (D.auth) for (let i = 1; i < n; i++) if (B.vis[i].a !== B.vis[i - 1].a) cuts.add(i);
+    const pas = D.pasted ? pastedFlags(B) : null; if (pas) for (let i = 1; i < n; i++) if (pas[i] !== pas[i - 1]) cuts.add(i);
     const pts = [...cuts].sort((x, y) => x - y); let h = '';
     const mineOf = id => !!D.R.comments.find(c => c.id === id)?.mine;
     const extra = k => (ins.get(k) || []).map(x => { items.push({kind: 'ins', id: x.id, text: x.rep, mine: mineOf(x.id)}); return `<ins class="dx-ins ${x.id === D.selCm ? 'sel' : ''} ${mineOf(x.id) ? 'mine' : ''}" data-i="${items.length - 1}" data-id="${esc(x.id)}" data-cmref="${esc(x.id)}">${esc(x.rep)}</ins>`; }).join('')
@@ -338,17 +341,22 @@ const Docs = (() => {
       h += extra(pts[k]);
       const a = pts[k], b = pts[k + 1]; if (b == null || b <= a) continue;
       const cm = hi.filter(x => x.a <= a && x.b >= b).map(x => x.id), sg = sug.filter(x => x.a <= a && x.b >= b).map(x => x.id), all = [...sg, ...cm];
-      const cls = ['dx-t', cm.length ? 'dx-cm' : '', sg.length ? 'dx-del' : '', all.includes(D.selCm) ? 'sel' : '', D.auth ? 'dx-au' : ''].filter(Boolean).join(' ');
+      const cls = ['dx-t', cm.length ? 'dx-cm' : '', sg.length ? 'dx-del' : '', all.includes(D.selCm) ? 'sel' : '', D.auth ? 'dx-au' : '', pas && pas[a] ? 'dx-paste' : ''].filter(Boolean).join(' ');
       items.push({kind: 'base', a, b, struck: sg.length > 0});
       h += `<span class="${cls}" data-i="${items.length - 1}" data-a="${a}" data-b="${b}" ${all.length ? `data-cmref="${all.map(esc).join(' ')}"` : ''} ${D.auth ? `style="--c:${auHue(B.vis[a].a)}" title="${esc(peopleName(B.vis[a].a))}"` : ''}>${esc(B.text.slice(B.off[a], B.off[b]))}</span>`;
     }
     D.items = items;
     return h || (edit ? '<span class="dx-empty">&#8203;</span>' : '<span class="muted">Empty document.</span>');
   }
+  // characters that came in by pasting (or dropping) text, as reported by each writer's own PaperShelf
+  function pastedFlags(B) {
+    const rng = {}; for (const [a, log] of Object.entries(D.R.ops)) for (const o of log) if (o.k === 'i' && o.p) (rng[a] || (rng[a] = [])).push([o.c, o.c + o.t.length - 1]);
+    return B.vis.map(x => !!rng[x.a] && rng[x.a].some(r => x.c >= r[0] && x.c <= r[1]));
+  }
   function legendHtml() {
     const R = D.R, counts = {}; R.B.vis.forEach(n => { counts[n.a] = (counts[n.a] || 0) + 1; });
-    const tot = R.B.vis.length || 1;
-    return `<div class="dx-legend">${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([a, n]) => `<span><i style="background:hsl(${auHue(a)} 62% 52%)"></i>${esc(peopleName(a))} ${Math.round(100 * n / tot)}%</span>`).join('')}</div>`;
+    const tot = R.B.vis.length || 1, pn = D.pasted ? pastedFlags(R.B).filter(Boolean).length : 0;
+    return `<div class="dx-legend">${D.pasted ? `<span class="dx-pnote"><i class="dx-paste-sw"></i>Pasted: ${Math.round(100 * pn / tot)}% of the text</span>` : ''}${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([a, n]) => `<span><i style="background:hsl(${auHue(a)} 62% 52%)"></i>${esc(peopleName(a))} ${Math.round(100 * n / tot)}%</span>`).join('')}</div>`;
   }
   function paintPage() {
     const pg = $('#dx-page', D.host); if (!pg) return;
@@ -367,7 +375,7 @@ const Docs = (() => {
       pg.innerHTML = `<div class="dx-sugbar">${ic('pen')}<span><b>Suggesting.</b> Write and delete as usual: your changes show in the text as suggestions (deleted text struck out, new text in green) and the others can accept or reject them.</span><span class="grow"></span><button class="btn small" data-dx-mode="write">Back to editing</button></div><div class="dx-src dx-suggest" id="dx-src" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Document text (suggesting)">${marksHtml(R.B, true)}</div>`;
       if (D.focusSrc) { D.focusSrc = false; placeCaret(D.caret || {base: R.B.vis.length}); }
     } else if (D.mode === 'marks') {
-      pg.innerHTML = `<div class="dx-revbar">${W ? '<span class="muted small">Select some text to comment on it or suggest a change.</span>' : ''}<span class="grow"></span><label class="dx-chk"><input type="checkbox" data-dx-auth ${D.auth ? 'checked' : ''}> Colour by writer</label></div>${D.auth ? legendHtml() : ''}<div class="dx-src" id="dx-src">${marksHtml(R.B)}</div>`;
+      pg.innerHTML = `<div class="dx-revbar">${W ? '<span class="muted small">Select some text to comment on it or suggest a change.</span>' : ''}<span class="grow"></span><label class="dx-chk" title="Text that came in by pasting or dropping, as reported by each writer's own PaperShelf"><input type="checkbox" data-dx-paste ${D.pasted ? 'checked' : ''}> Show pasted text</label><label class="dx-chk"><input type="checkbox" data-dx-auth ${D.auth ? 'checked' : ''}> Colour by writer</label></div>${D.auth || D.pasted ? legendHtml() : ''}<div class="dx-src" id="dx-src">${marksHtml(R.B)}</div>`;
     } else {
       pg.innerHTML = previewHtml(R.B, R.title);
     }
@@ -403,8 +411,8 @@ const Docs = (() => {
     const el = $('#dx-side', D.host); if (!el || !D.R) return;
     const R = D.R, openN = R.comments.filter(c => !c.parent && c.state === 'open').length;
     const keep = $('.dx-sbody', el)?.scrollTop || 0, draft = $('#dx-cnew', el)?.value, foc = document.activeElement?.id === 'dx-cnew';
-    el.innerHTML = `<div class="dx-stabs">${sideTab('comments', 'Comments', openN)}${sideTab('cite', 'Cite', '')}${sideTab('history', 'History', '')}</div>
-      <div class="dx-sbody">${D.side === 'cite' ? citeHtml() : D.side === 'history' ? historyHtml() : commentsHtml()}</div>`;
+    el.innerHTML = `<div class="dx-stabs">${sideTab('comments', 'Comments', openN)}${sideTab('cite', 'Cite', '')}${sideTab('media', 'Pictures', (R.images || []).length)}${sideTab('history', 'History', '')}</div>
+      <div class="dx-sbody">${D.side === 'cite' ? citeHtml() : D.side === 'history' ? historyHtml() : D.side === 'media' ? mediaHtml() : commentsHtml()}</div>`;
     const sb = $('.dx-sbody', el); if (sb) sb.scrollTop = keep;
     if (draft != null && $('#dx-cnew', el)) { $('#dx-cnew', el).value = draft; if (foc) $('#dx-cnew', el).focus(); }
   }
@@ -436,7 +444,7 @@ const Docs = (() => {
   }
   function citeHtml() {
     const P = D.R.papers || [];
-    return `<p class="muted small">Click a paper to put its citation in the text. The reference list is written for you in Preview and when you export.</p>
+    return `${D.can ? `<div class="dx-sugrefs"><div class="dx-row"><b>Fits what you are writing</b><span class="grow"></span><button class="btn small" data-dx="refs" title="Find papers that fit the paragraph you are in">${ic('refresh')}Suggest</button></div><div id="dx-sugrefs">${D.refsHtml || '<p class="muted small">Put the cursor in a paragraph and press <b>Suggest</b>, or type <code>[@</code> in the text. Matching is done on this computer.</p>'}</div></div>` : ''}<p class="muted small">Click a paper to put its citation in the text. The reference list is written for you in Preview and when you export.</p>
       ${P.length > 6 ? '<input class="input" id="dx-cq" placeholder="Search the group\'s papers" style="margin-bottom:8px">' : ''}
       <div id="dx-plist">${P.map(p => `<button class="dx-paper" data-dx-cite="${esc(p.label)}" data-s="${esc((p.label + ' ' + p.title).toLowerCase())}"><b>${esc(p.cite)}</b><span>${esc(truncate(p.title, 110))}</span><code>[@${esc(p.label)}]</code></button>`).join('') || '<p class="muted small dx-none">The group has no papers yet. Add papers to the group in the library, then cite them here.</p>'}</div>`;
   }
@@ -483,10 +491,117 @@ const Docs = (() => {
       case 'h1': case 'h2': case 'h3': { const h = '#'.repeat(+kind[1]) + ' '; prefixLine(l => h + l.replace(/^#{1,6}\s+/, '')); break; }
       case 'ul': prefixLine(l => l.startsWith('- ') ? l.slice(2) : '- ' + l); break;
       case 'ol': { let n = 0; prefixLine(l => /^\d+\.\s/.test(l) ? l.replace(/^\d+\.\s/, '') : `${++n}. ${l}`); break; }
+      case 'table': { const T = '| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n|          |          |          |\n|          |          |          |'; const pre = s && v[s - 1] !== '\n' ? '\n\n' : s && v[s - 2] !== '\n' ? '\n' : '', post = v[e] === '\n' ? '\n' : '\n\n'; out = v.slice(0, s) + pre + T + post + v.slice(e); from = s + pre.length + 2; to = from + 8; break; }
       case 'quote': prefixLine(l => l.startsWith('> ') ? l.slice(2) : '> ' + l); break;
       default: return;
     }
     ta.value = out; ta.setSelectionRange(from, to); ta.focus(); editTo(out); autosize(ta); paintSide();
+  }
+  // a picture: shrunk here (max 1200 px, about 200 KB), stored inside the group's document, shown as ![name](img:id)
+  async function shrink(file) {
+    if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) throw new Error('Only JPEG, PNG, GIF and WebP pictures can be inserted.');
+    const bmp = await createImageBitmap(file).catch(() => null);
+    if (!bmp) throw new Error('This picture could not be read.');
+    if (file.size <= 200000 && bmp.width <= 1600 && bmp.height <= 1600) return file;
+    let k = Math.min(1, 1200 / Math.max(bmp.width, bmp.height)), qv = 0.85, blob;
+    for (let i = 0; i < 8; i++) {
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(bmp.width * k)); c.height = Math.max(1, Math.round(bmp.height * k));
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+      blob = await new Promise(r => c.toBlob(r, 'image/jpeg', qv));
+      if (blob && blob.size <= 230000) return blob;
+      if (qv > 0.55) qv -= 0.1; else k *= 0.8;
+    }
+    throw new Error('This picture is too detailed to fit. Try a smaller one.');
+  }
+  async function insertImage(file) {
+    if (!D.can) return;
+    if (D.mode !== 'write') { toast('Switch to Edit to insert pictures.'); return; }
+    try {
+      const blob = await shrink(file);
+      const name = (file.name || 'picture').replace(/\.[^.]+$/, '').replace(/[\[\]()\n]/g, ' ').trim().slice(0, 60) || 'picture';
+      const r = await api(`${base()}/${q(D.id)}/images?name=${encodeURIComponent(name)}`, {method: 'POST', raw: blob});
+      absorb(r); paintSide();
+      const ta = $('#dx-text', D.host); let e = ta.selectionEnd; if (ta.selectionStart === e) { const t = ta.value; let nl = t.indexOf('\n', e); e = nl < 0 ? t.length : nl; while (t.slice(t.lastIndexOf('\n', e - 1) + 1, e).includes('|') && e < t.length) { nl = t.indexOf('\n', e + 1); e = nl < 0 ? t.length : nl; } ta.setSelectionRange(e, e); }   // a picture goes on its own line, after the current one
+      const v = ta.value, s = ta.selectionStart, pre = s && v[s - 1] !== '\n' ? '\n\n' : '', md = `${pre}![${name}](img:${r.image})\n\n`;
+      insertAtCursor(md); toast('Picture added.');
+    } catch (err) { toast(err.message, 'error'); }
+  }
+  function pickImage() {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/jpeg,image/png,image/gif,image/webp';
+    i.onchange = () => i.files[0] && insertImage(i.files[0]); i.click();
+  }
+  function mediaHtml() {
+    const R = D.R, used = id => R.B.text.includes(`img:${id}`);
+    return `<p class="muted small">Pictures are stored inside the document, so everybody in the group sees them (12 pictures, 2 MB at most). Use <b>Picture</b> in the toolbar, or paste or drop an image into the text.</p>
+      ${(R.images || []).map(i => `<div class="dx-media"><img src="${base()}/${q(D.id)}/images/${i.id}" alt=""><div><b>${esc(i.name || 'picture')}</b><small>${Math.round(i.n / 1024)} KB${used(i.id) ? '' : ' · not used in the text'}</small>
+        <div class="dx-row">${D.can && D.mode === 'write' ? `<button class="btn small" data-dx-imgins="${i.id}|${esc(i.name || 'picture')}">Insert again</button>` : ''}${i.mine && D.can ? `<button class="btn small" data-dx-imgdel="${i.id}">Remove</button>` : ''}</div></div></div>`).join('') || '<p class="muted small dx-none">No pictures yet.</p>'}`;
+  }
+  /* ------------------------------------------------------------- reference suggestions (matched on this computer) */
+  function paraText(ta) {
+    const v = ta.value, c = ta.selectionStart; let a = v.lastIndexOf('\n\n', c - 1); a = a < 0 ? 0 : a + 2; let b = v.indexOf('\n\n', c); if (b < 0) b = v.length;
+    let t = v.slice(a, b); if (t.length < 40 && a > 0) { const a2 = v.lastIndexOf('\n\n', a - 3); t = v.slice(a2 < 0 ? 0 : a2 + 2, b); }
+    return t.slice(0, 3000);
+  }
+  async function askRefs(text, query) { return api(`${base()}/${q(D.id)}/refs`, {method: 'POST', body: {text, query}}); }
+  function refsHtml(r) {
+    const g = r.group.map(x => `<button class="dx-paper" data-dx-cite="${esc(x.label)}"><b>${esc(x.cite)}</b><span>${esc(truncate(x.title, 100))}</span>${x.why.length ? `<small>matches: ${esc(x.why.join(', '))}</small>` : ''}<code>[@${esc(x.label)}]</code></button>`).join('');
+    const l = r.library.map(x => `<div class="dx-paper lib"><b>${esc(x.cite)}</b><span>${esc(truncate(x.title, 100))}</span>${x.why.length ? `<small>matches: ${esc(x.why.join(', '))}</small>` : ''}<button class="btn small" data-dx-addlib="${x.id}" data-title="${esc(x.title)}" title="Adds this paper to the group (title, authors and DOI, no PDF) and cites it">Add to group and cite</button></div>`).join('');
+    return (g || l) ? `${g}${l ? `<h4 class="dx-h">From your library, not in the group yet</h4>${l}` : ''}` : '<p class="muted small">Nothing fits this paragraph yet. Write a little more, or pick a paper from the list below.</p>';
+  }
+  async function refsNow() {
+    const ta = $('#dx-text', D.host); if (!ta || !D.can) { toast('Switch to Edit and put the cursor in a paragraph first.'); return; }
+    if (D.side !== 'cite') { D.side = 'cite'; paintSide(); }
+    const box = $('#dx-sugrefs', D.host); if (box) box.innerHTML = '<p class="muted small">Looking…</p>';
+    try { D.refsHtml = refsHtml(await askRefs(paraText(ta), '')); } catch (err) { D.refsHtml = `<p class="muted small">${esc(err.message)}</p>`; }
+    const b2 = $('#dx-sugrefs', D.host); if (b2) b2.innerHTML = D.refsHtml;
+  }
+  let refsT = null;
+  function refsSoon() { if (D.side !== 'cite' || D.mode !== 'write') return; clearTimeout(refsT); refsT = setTimeout(refsNow, 900); }
+  async function addLibrary(pid, title) {
+    if (!D.ackLib) { if (!await confirmBox('Add this paper to the group?', 'The group will see its title, authors, year and DOI (never the PDF or your notes). Then it is cited like the others.', {ok: 'Add and cite'})) return; D.ackLib = true; }
+    try { await api(`/api/shares/${q(D.sid)}/papers`, {method: 'POST', body: {paper_ids: [pid]}}); await pull(); } catch (err) { toast(err.message, 'error'); return; }
+    const hit = (D.R.papers || []).find(p => p.title === title);
+    if (hit) insertAtCursor(`[@${hit.label}]`); else toast('The paper was added to the group; cite it from the list below.');
+    refsNow();
+  }
+  function caretXY(ta, pos) {
+    const cs = getComputedStyle(ta), d = document.createElement('div');
+    ['fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'paddingTop', 'paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderTopWidth', 'tabSize'].forEach(k => { d.style[k] = cs[k]; });
+    d.style.cssText += `;position:absolute;visibility:hidden;white-space:pre-wrap;overflow-wrap:break-word;box-sizing:border-box;width:${ta.clientWidth + parseFloat(cs.borderLeftWidth) * 2}px`;
+    d.textContent = ta.value.slice(0, pos); const sp = document.createElement('span'); sp.textContent = '\u200b'; d.appendChild(sp); document.body.appendChild(d);
+    const r = ta.getBoundingClientRect(), x = r.left + sp.offsetLeft - ta.scrollLeft, y = r.top + sp.offsetTop - ta.scrollTop + (parseFloat(cs.lineHeight) || 22); d.remove();
+    return {x, y};
+  }
+  function closePop() { D.pop = null; $('.dx-cpop')?.remove(); }
+  function drawPop() {
+    const P = D.pop; if (!P) return; let el = $('.dx-cpop');
+    if (!el) { el = document.createElement('div'); el.className = 'dx-cpop'; el.setAttribute('role', 'listbox'); document.body.appendChild(el); }
+    el.innerHTML = P.items.map((x, i) => `<button class="${i === P.sel ? 'on' : ''}" role="option" data-dx-pop="${i}" onmousedown="event.preventDefault()"><b>${esc(x.cite)}</b><span>${esc(truncate(x.title, 70))}</span>${x.lib ? '<em>add to group</em>' : ''}</button>`).join('');
+    const w = 360; el.style.left = Math.max(8, Math.min(innerWidth - w - 8, P.x)) + 'px'; el.style.top = Math.min(innerHeight - el.offsetHeight - 8, P.y) + 'px';
+  }
+  let popSeq = 0;
+  async function citePopup(ta) {
+    if (D.mode !== 'write' || !D.can) return closePop();
+    const c = ta.selectionStart, m = /\[@([^\]\s;,]*)$/.exec(ta.value.slice(Math.max(0, c - 60), c));
+    if (!m) return closePop();
+    const seq = ++popSeq; let r;
+    try { r = await askRefs(m[1] ? '' : paraText(ta), m[1]); } catch (e) { return; }
+    if (seq !== popSeq || ta.selectionStart !== c) return;
+    let items = [...r.group, ...r.library.map(x => ({...x, lib: true}))];
+    if (!items.length && !m[1]) items = (D.R.papers || []).slice(0, 6).map(p => ({label: p.label, cite: p.cite, title: p.title}));
+    if (!items.length) return closePop();
+    const xy = caretXY(ta, c); D.pop = {items, sel: 0, start: c - m[0].length, end: c, ...xy}; drawPop();
+  }
+  async function pickPop(i) {
+    const P = D.pop, x = P?.items[i]; if (!x) return; closePop();
+    const ta = $('#dx-text', D.host); if (!ta) return;
+    let label = x.label;
+    if (x.lib) {
+      if (!D.ackLib) { if (!await confirmBox('Add this paper to the group?', 'The group will see its title, authors, year and DOI (never the PDF or your notes). Then it is cited like the others.', {ok: 'Add and cite'})) return; D.ackLib = true; }
+      try { await api(`/api/shares/${q(D.sid)}/papers`, {method: 'POST', body: {paper_ids: [x.id]}}); await pull(); label = (D.R.papers.find(p => p.title === x.title) || {}).label; } catch (err) { toast(err.message, 'error'); return; }
+      if (!label) { toast('The paper was added; cite it from the list on the right.'); return; }
+    }
+    const v = ta.value, ins = `[@${label}]`; ta.value = v.slice(0, P.start) + ins + v.slice(P.end); const p = P.start + ins.length; ta.setSelectionRange(p, p); ta.focus(); editTo(ta.value); autosize(ta); paintSide();
   }
   function insertAtCursor(text) {
     const ta = $('#dx-text', D.host); if (!ta || !D.can) { toast('Switch to Write mode to insert text.'); return; }
@@ -790,7 +905,7 @@ const Docs = (() => {
     if (kind === 'pdf') {
       const w = window.open('', '_blank'); if (!w) { toast('Allow pop-ups for PaperShelf to print.', 'error'); return; }
       const html = previewHtml(D.R.B, D.R.title);
-      w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(D.R.title)}</title><style>body{font:12pt/1.5 Georgia,'Times New Roman',serif;max-width:700px;margin:40px auto;padding:0 20px;color:#111}h1{font-size:22pt}h2{font-size:16pt;margin-top:1.4em}h3{font-size:13pt}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:14px;color:#444}code{background:#f2f2f2;padding:0 3px}.dx-refs li{margin:.3em 0}</style>${html}<script>setTimeout(()=>print(),300)<\/script>`);
+      w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(D.R.title)}</title><style>table{border-collapse:collapse;margin:.8em 0}td,th{border:1px solid #888;padding:4px 9px;vertical-align:top}th{background:#eee}img{max-width:100%;height:auto}body{font:12pt/1.5 Georgia,'Times New Roman',serif;max-width:700px;margin:40px auto;padding:0 20px;color:#111}h1{font-size:22pt}h2{font-size:16pt;margin-top:1.4em}h3{font-size:13pt}blockquote{border-left:3px solid #ccc;margin-left:0;padding-left:14px;color:#444}code{background:#f2f2f2;padding:0 3px}.dx-refs li{margin:.3em 0}</style>${html}<script>setTimeout(()=>print(),300)<\/script>`);
       w.document.close(); return;
     }
     const a = document.createElement('a'); a.href = `${base()}/${q(D.id)}/export?format=${kind}`; document.body.appendChild(a); a.click(); a.remove();
@@ -798,15 +913,20 @@ const Docs = (() => {
 
   /* ------------------------------------------------------------- events */
   function bind(host) {
+    host.addEventListener('paste', e => { const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith('image/')); if (f && e.target.id === 'dx-text') { e.preventDefault(); insertImage(f); } });
+    host.addEventListener('dragover', e => { if (e.target.id === 'dx-text' && [...(e.dataTransfer?.items || [])].some(x => x.type.startsWith('image/'))) e.preventDefault(); });
+    host.addEventListener('drop', e => { const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('image/')); if (f && e.target.id === 'dx-text') { e.preventDefault(); insertImage(f); } });
     host.addEventListener('input', e => {
       if (e.target.id === 'dx-text') {
         if (D.composing) return; if (!D.can) return;
-        editTo(e.target.value); autosize(e.target); paintNow(); D.sel = selection();
+        editTo(e.target.value, /^insertFrom(Paste|Drop)/.test(e.inputType || '')); autosize(e.target); paintNow(); D.sel = selection(); citePopup(e.target); refsSoon();
         const open = D.R.comments.length; if (open) paintSideSoon();
       } else if (e.target.id === 'dx-cq') {
         const v = e.target.value.toLowerCase(); $$('#dx-plist .dx-paper', host).forEach(b => { b.hidden = !!v && !b.dataset.s.includes(v); });
       }
     });
+    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text' && /^(Arrow|Home|End|Page)/.test(e.key)) { refsSoon(); if (!D.pop) citePopup(e.target); } });
+    host.addEventListener('click', e => { if (e.target.id === 'dx-text') { refsSoon(); closePop(); } });
     host.addEventListener('beforeinput', onBeforeInput);
     host.addEventListener('compositionstart', e => { if (e.target.id === 'dx-src' || e.target.closest?.('#dx-src')) { const sel = getSelection(), r = sel.rangeCount ? sel.getRangeAt(0) : null; D.comp = r ? {s: posOf(r.startContainer, r.startOffset), e: posOf(r.endContainer, r.endOffset)} : null; } });
     host.addEventListener('compositionend', e => { if (D.mode === 'suggest' && D.comp && e.target.closest?.('#dx-src')) { const c = D.comp; D.comp = null; const data = clean(e.data || ''); repaintSuggest(null); if (c.s && c.e) applyEdit(c.s, c.e, data); } });
@@ -816,7 +936,7 @@ const Docs = (() => {
     host.addEventListener('keyup', e => { if ((D.mode === 'marks' || D.mode === 'suggest') && e.shiftKey && e.target.closest?.('#dx-src, body')) setTimeout(showBubble, 10); });
     document.addEventListener('mousedown', e => { if (!e.target.closest('.dx-bubble, .dx-comp') && !e.target.closest('#dx-src')) hideBubble(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') hideBubble(); });
-    host.addEventListener('change', e => { if (e.target.matches('[data-dx-auth]')) { D.auth = e.target.checked; paintPage(); } });
+    host.addEventListener('change', e => { if (e.target.matches('[data-dx-auth]')) { D.auth = e.target.checked; paintPage(); } if (e.target.matches('[data-dx-paste]')) { D.pasted = e.target.checked; paintPage(); } });
     host.addEventListener('select', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
@@ -826,6 +946,11 @@ const Docs = (() => {
       }
     });
     host.addEventListener('keydown', e => {
+      if (D.pop && e.target.id === 'dx-text') {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); D.pop.sel = (D.pop.sel + (e.key === 'ArrowDown' ? 1 : D.pop.items.length - 1)) % D.pop.items.length; drawPop(); return; }
+        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); return pickPop(D.pop.sel); }
+        if (e.key === 'Escape') { e.preventDefault(); return closePop(); }
+      }
       if (e.target.id === 'dx-text' && (e.metaKey || e.ctrlKey) && !e.altKey) {
         const k = e.key.toLowerCase(); if (k === 'b') { e.preventDefault(); wrap('bold'); } else if (k === 'i') { e.preventDefault(); wrap('italic'); }
       }
@@ -865,7 +990,12 @@ const Docs = (() => {
       if (mode) { D.sel = selection(); if (D.mode === 'suggest') await flushAll(); D.mode = mode; D.view = null; D.focusSrc = mode === 'suggest'; paint(); if (mode === 'write') $('#dx-text', host)?.focus(); return; }
       const side = t.closest('[data-dx-side]')?.dataset.dxSide; if (side) { D.side = side; return paintSide(); }
       const fmt = t.closest('[data-fmt]')?.dataset.fmt;
-      if (fmt) { if (fmt === 'comment' || fmt === 'suggest') { D.sel = selection(); D.side = 'comments'; paintSide(); if (fmt === 'suggest') return addComment(true); $('#dx-cnew', host)?.focus(); return; } if (fmt === 'cite') { D.side = 'cite'; return paintSide(); } return wrap(fmt); }
+      if (fmt) { if (fmt === 'comment' || fmt === 'suggest') { D.sel = selection(); D.side = 'comments'; paintSide(); if (fmt === 'suggest') return addComment(true); $('#dx-cnew', host)?.focus(); return; } if (fmt === 'cite') { D.side = 'cite'; return paintSide(); } if (fmt === 'image') return pickImage(); return wrap(fmt); }
+      const imi = t.closest('[data-dx-imgins]')?.dataset.dxImgins; if (imi) { const [id, nm] = imi.split('|'); const ta = $('#dx-text', host); if (ta) { const v = ta.value, s2 = ta.selectionStart; insertAtCursor(`${s2 && v[s2 - 1] !== '\n' ? '\n\n' : ''}![${nm}](img:${id})\n\n`); } return; }
+      const imd = t.closest('[data-dx-imgdel]')?.dataset.dxImgdel; if (imd) { if (await confirmBox('Remove this picture?', 'It disappears from the group\'s copy of the document. Text that still shows it will show nothing.', {ok: 'Remove', danger: true})) { try { absorb(await api(`${base()}/${q(D.id)}/images/${imd}`, {method: 'DELETE'})); paintSide(); } catch (err) { toast(err.message, 'error'); } } return; }
+      const al = t.closest('[data-dx-addlib]'); if (al) return addLibrary(+al.dataset.dxAddlib, al.dataset.title);
+      if (t.closest('[data-dx="refs"]')) return refsNow();
+      const pk = t.closest('[data-dx-pop]')?.dataset.dxPop; if (pk != null && t.closest('.dx-cpop')) { e.preventDefault(); return pickPop(+pk); }
       const cite = t.closest('[data-dx-cite]')?.dataset.dxCite; if (cite) { if (D.mode !== 'write') { toast('Switch to Write mode to insert a citation.'); return; } return insertAtCursor(`[@${cite}]`); }
       const res = t.closest('[data-dx-res]')?.dataset.dxRes; if (res) { const [id, st] = res.split('|'); return cmCall('POST', `/${q(id)}/resolve`, {state: st}); }
       const acc = t.closest('[data-dx-accept]')?.dataset.dxAccept; if (acc) return acceptSuggestion(acc);
