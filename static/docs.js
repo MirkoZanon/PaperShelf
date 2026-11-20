@@ -231,7 +231,7 @@ const Docs = (() => {
     } catch (err) { toast(err.message, 'error'); D.id = null; await loadList(); paintList(); }
   }
   function closeDoc() {
-    flushAll().finally(() => { stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble(); loadList().then(paintList); });
+    flushAll().finally(() => { stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble(); if (D.onBack) { const f = D.onBack; D.onBack = null; D.host = null; f(); return; } loadList().then(paintList); });
   }
   async function flushNow() { clearTimeout(D.flushT); for (let i = 0; i < 3 && D.R && ((D.R.ops[D.R.me] || []).length > D.R.sent || D.flushing); i++) { if (!D.flushing) await flush(); else await new Promise(r => setTimeout(r, 300)); } }
 
@@ -1016,16 +1016,19 @@ const Docs = (() => {
   function paintList() { if (D.host) root().innerHTML = listHtml(); }
   const skeleton = host => { if (!$('#dx-root', host)) host.innerHTML = '<div id="dx-root"></div><div id="dx-lib"></div>'; };
   let bound = null;
-  async function mount(host, sid, canWrite) {
+  async function mount(host, sid, canWrite, opt = {}) {
+    D.onBack = opt.onBack || null;
     if (D.sid !== sid) { stopPoll(); D.id = null; D.R = null; D.list = null; D.view = null; D.showArch = false; }
     D.sid = sid; D.host = host; D.can = canWrite; skeleton(host);
     host.classList.toggle('split', D.split);
     document.body.classList.toggle('dx-split-on', D.split);
     if (bound !== host) { bind(host); bound = host; }
     if (D.split && !$('iframe', $('#dx-lib', host))) setSplit(true);
-    if (D.id && D.R) { paint(); startPoll(); return; }
+    if (D.id && D.R && (!opt.open || opt.open === D.id)) { paint(); startPoll(); return; }
     root().innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
+    if (opt.open) { await loadList(); await openDoc(opt.open); return; }
     await loadList(); if (D.host === host && !D.id) paintList();
+    if (opt.newDoc && D.can) newDialog();
   }
   // true while someone is writing: the lab must not redraw the page under their fingers
   const busy = sid => !!(D.R && D.id && D.sid === sid && D.host && document.body.contains(D.host));

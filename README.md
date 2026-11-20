@@ -122,7 +122,7 @@ keywords are taken from the text itself and marked to check); a green **＋ Add*
 (highlighted, first) and want to read, each with a PDF button and *✓ Read* to tick it off – just the
 list, filtered from the sidebar by labels and keywords (click a selected label again, or the *Reading
 list* button, to see everything). The **Library** tab has all your papers, read ones included, with the
-map, review tables and statistics; **Discover** (its own tab) suggests related papers. Choose the start page in Settings.
+map, review tables and statistics; **Discover** (inside the Library: All papers | Reading list | Discover) suggests related papers. **Home** is the desk (search/add from one box, continue reading, documents, what needs you, all tools) and **Write** lists the documents of all groups. Choose the start page in Settings.
 
 **Organising** – **labels** that work like tags (a paper can have many; dragging adds, never moves):
 your own topics, nested if you like, used by the map and statistics – kept apart from *Groups* (see below). Automatic

@@ -1022,7 +1022,7 @@ function openSettings(startTab) {
 
     <div class="stab-panel" data-panel="general">
     <div class="section-label">Open PaperShelf on</div>
-    <select class="input wide" id="set-start"><option value="reading" ${(s.start_page || 'reading') === 'reading' ? 'selected' : ''}>📚 Library – reading list</option><option value="library" ${s.start_page === 'library' ? 'selected' : ''}>📚 Library – all papers</option><option value="people" ${s.start_page === 'people' ? 'selected' : ''}>👥 Researchers</option><option value="lab" ${s.start_page === 'lab' ? 'selected' : ''}>🧪 Lab</option></select>
+    <select class="input wide" id="set-start">${[['home', '🏠 Home – your desk'], ['reading', '📚 Library – reading list'], ['library', '📚 Library – all papers'], ['write', '✍️ Write – documents'], ['lab', '🧪 Lab – groups'], ['people', '👥 Researchers']].map(([v, l]) => `<option value="${v}" ${(s.start_page || 'home') === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
     <div class="section-label">Look</div>
     <div class="seg look-seg"><button type="button" data-look="glass" class="${s.look !== 'flat' ? 'on' : ''}">✦ Glass</button><button type="button" data-look="flat" class="${s.look === 'flat' ? 'on' : ''}">Flat</button></div>
     <div class="section-label">Colour <span class="muted small">– buttons, tabs and what is selected</span></div>
@@ -1381,15 +1381,16 @@ async function brandMenu() {
   let installed = true;
   try { installed = !!(await api('/api/app-status')).installed; } catch (e) { /* ignore */ }
   const item = (act, icon, label, small = '') => `<button type="button" data-bm="${act}"><span class="mi">${ic(icon)}</span><span><b>${label}</b>${small ? `<small>${small}</small>` : ''}</span></button>`;
-  const here = state.tab === 'people' ? 'people' : state.tab === 'lab' ? 'lab' : isDiscover() ? 'discover' : 'library';
+  const here = ['people', 'lab', 'home', 'write'].includes(state.tab) ? state.tab : isDiscover() ? 'discover' : 'library';
   const tool = (act, icon, label, small) => item(act, icon, label, small).replace('<button ', `<button class="${here === act ? 'on' : ''}" `);
   menu.innerHTML = `<div class="bm-head"><img src="/static/icons/icon-64.png" alt=""><div><b>PaperShelf ${esc(state.version || '')}</b><small>${state.papers.length} papers · ${state.groups.length} labels · ${(state.shares || []).length} groups</small></div></div>
     ${upd ? item('install-update', 'upload', `Install PaperShelf ${esc(Updates.info.latest)}`, 'A new version is available') + '<div class="bm-sep"></div>' : ''}
-    <div class="bm-title">The four places of PaperShelf</div>
-    ${tool('library', 'books', 'Library', 'Your papers: a reading list and all papers, with labels, a citation map and review tables')}
-    ${tool('discover', 'compass', 'Discover', 'Papers related to yours, or found by topic')}
+    <div class="bm-title">The places of PaperShelf</div>
+    ${tool('home', 'home', 'Home', 'Your desk: what to read, what to write, what needs you, and every tool')}
+    ${tool('library', 'books', 'Library', 'Your papers: reading list, all papers, labels, citation map, review tables – and Discover')}
+    ${tool('write', 'pen', 'Write', 'The documents of all your groups: write together, comment, cite your papers')}
+    ${tool('lab', 'flask', 'Lab', 'The research space of your groups: ideas, plans, tasks, documents')}
     ${tool('people', 'user', 'Researchers', 'Profiles of the people you follow: publications, citations, h-index')}
-    ${tool('lab', 'flask', 'Lab', 'The research space of your groups: ideas, plans, tasks')}
     <div class="bm-sep"></div>
     ${item('groups', 'group', 'Groups', 'Create or join a group, open its library, lab and chats')}
     ${item('export', 'export', 'Export references or notes', 'All papers, a view, or chosen labels')}
@@ -1411,6 +1412,8 @@ async function brandMenu() {
     if (a === 'stats') Stats.open();
     if (a === 'checklib') { const t = toast('Checking your library…', 'info', 0); Smart.runChecks({force: true}).catch(err => toast(err.message, 'error')).finally(() => t.close()); }
     if (a === 'shares' || a === 'groups') Shares.page();
+    if (a === 'home') setTab('home');
+    if (a === 'write') setTab('write');
     if (a === 'library') setTab(state.libScope === 'library' ? 'library' : 'reading');
     if (a === 'discover') setTab('discover');
     if (a === 'people') setTab('people');
@@ -1512,6 +1515,7 @@ async function handleEvent(e) {
   }
 }
 function setTab(tab, {keepView = false} = {}) {
+  if (state.tab === 'write' && tab !== 'write' && typeof Write !== 'undefined') Write.leave();
   if (tab === 'reading' || tab === 'library' || tab === 'discover') {
     // each button shows its whole page (no label or keyword selected) – Discover can keep the label you were looking at
     const area = tab === 'reading' ? 'reading' : 'library';
@@ -1524,14 +1528,18 @@ function setTab(tab, {keepView = false} = {}) {
   } else state.tab = tab;
   savePrefs();
   document.body.classList.toggle('tab-people', state.tab === 'people');
+  document.body.classList.toggle('tab-home', state.tab === 'home');
+  document.body.classList.toggle('tab-write', state.tab === 'write');
   document.body.classList.toggle('tab-lab', state.tab === 'lab');
   document.body.classList.toggle('area-reading', state.tab === 'library' && state.area === 'reading');
   document.body.classList.toggle('tab-discover', isDiscover());
-  const on = state.tab === 'people' || state.tab === 'lab' ? state.tab : isDiscover() ? 'discover' : 'library';   // Reading list and All papers are two views of the Library
+  const on = ['people', 'lab', 'home', 'write'].includes(state.tab) ? state.tab : 'library';   // Discover is a part of the Library   // Reading list and All papers are two views of the Library
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
-  $$('#scope-seg [data-scope]').forEach(b => b.classList.toggle('on', b.dataset.scope === state.area));
+  $$('#scope-seg [data-scope]').forEach(b => b.classList.toggle('on', b.dataset.scope === (isDiscover() ? 'discover' : state.area)));
   document.body.classList.remove('side-open'); Side.apply();
-  if (state.tab === 'people') { Graph.stop(); People.show(); }
+  if (state.tab === 'home') { Graph.stop(); closeDetail(); Docs.leave(); Home.show(); }
+  else if (state.tab === 'write') { Graph.stop(); closeDetail(); Write.show(); }
+  else if (state.tab === 'people') { Graph.stop(); Docs.leave(); People.show(); }
   else if (state.tab === 'lab') { Graph.stop(); closeDetail(); Lab.show(); }
   else { closeDetail(); renderAll(); renderMode(true); }
 }
@@ -1700,7 +1708,8 @@ function bind() {
     const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (lines.length > 1) { e.preventDefault(); openBulkAdd(lines.join('\n')); }
   });
-  $('#brand-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); brandMenu(); });
+  $('#brand-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); if (e.target.closest('.brand-car')) brandMenu(); else { $('#brand-menu').classList.remove('open'); setTab('home'); } });
+  $('#brand-btn').addEventListener('contextmenu', e => { e.preventDefault(); brandMenu(); });
   document.addEventListener('click', e => { if (!e.target.closest('#brand-menu')) $('#brand-menu').classList.remove('open'); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.menu.open').forEach(m => m.classList.remove('open')); });
   $('#more-btn').addEventListener('click', e => { e.stopPropagation(); fillAddMenu(); $('#more-menu').classList.toggle('open'); });
@@ -1957,7 +1966,7 @@ function bind() {
   $('#settings-btn').addEventListener('click', openSettings);
   $('#sync-btn').addEventListener('click', syncNow);
   $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab === 'library' ? (state.libScope === 'library' ? 'library' : 'reading') : b.dataset.tab); });
-  $('#scope-seg').addEventListener('click', e => { const b = e.target.closest('[data-scope]'); if (!b) return; if (state.area === b.dataset.scope && !isDiscover()) return; setTab(b.dataset.scope === 'reading' ? 'reading' : 'library', {keepView: true}); });
+  $('#scope-seg').addEventListener('click', e => { const b = e.target.closest('[data-scope]'); if (!b) return; if (b.dataset.scope === 'discover') { if (!isDiscover()) setTab('discover', {keepView: true}); return; } if (state.area === b.dataset.scope && !isDiscover()) return; setTab(b.dataset.scope === 'reading' ? 'reading' : 'library', {keepView: true}); });
   $('#mode-seg').addEventListener('click', e => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
 
   // Detail panel
@@ -2051,8 +2060,8 @@ function handleHash() {
 async function init() {
   loadPrefs(); bind();
   try { await loadLibrary(); } catch (err) { toast(err.message, 'error', 0); }
-  const start = state.settings.start_page || 'reading';  // Settings → General → Open PaperShelf on
-  setTab(['library', 'people', 'lab'].includes(start) ? start : 'reading');
+  const start = state.settings.start_page || 'home';  // Settings → General → Open PaperShelf on
+  setTab(['home', 'library', 'write', 'people', 'lab'].includes(start) ? start : 'reading');
   handleHash();
   try { lastEvent = (await api('/api/events?after=999999999')).last_id || 0; } catch (e) { /* ignore */ }
   schedulePoll(3000);

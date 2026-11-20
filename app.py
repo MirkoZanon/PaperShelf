@@ -273,7 +273,7 @@ def get_settings(db=None, secrets=True) -> dict:
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
          "update_auto": "1", "just_updated": "", "own_window": "1",
          "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
-         "display_name": "", "list_checkboxes": "", "start_page": "reading", "stale_days": "60",
+         "display_name": "", "list_checkboxes": "", "start_page": "home", "stale_days": "60",
          "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]", "look": "glass", "accent": "green"}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
@@ -1993,7 +1993,7 @@ def write_settings():
         set_setting(db, "look", "glass" if body["look"] == "metal" else body["look"])
     if body.get("accent") in ("green", "teal", "blue", "violet", "rose", "amber", "graphite"):
         set_setting(db, "accent", body["accent"])
-    if body.get("start_page") in ("reading", "library", "people", "lab"):
+    if body.get("start_page") in ("home", "reading", "library", "write", "people", "lab"):
         set_setting(db, "start_page", body["start_page"])
     if "display_name" in body:
         dn = " ".join(str(body.get("display_name") or "").split())[:60]
@@ -3833,6 +3833,28 @@ def _docs_list(db, sid, st=None, **extra):
         docs.append(_doc_row(d, did, names, me))
     docs.sort(key=lambda x: x["updated"] or "", reverse=True)
     return jsonify(docs=docs, can_write=bool(author), **extra)
+
+
+@app.get("/api/docs/recent")
+def docs_recent():
+    """The documents of all your groups in one list (for Home and Write), newest edit first."""
+    db = get_db()
+    ident = share_identity(db)
+    me = {ident["user"], ident["local"]} - {""}
+    docs, groups = [], []
+    for r in db.execute("SELECT id FROM shares ORDER BY rowid").fetchall():
+        row, st = _load_share(db, r["id"])
+        if not st:
+            continue
+        gname = (st.get("name") or {}).get("v") or "Group"
+        names, author = _doc_names(db, st, ident)
+        groups.append({"id": r["id"], "name": gname, "can_write": bool(author), "members": len(sharing.people(st))})
+        for did, d in (st.get("docs") or {}).items():
+            if sharing.is_gone(d) and (d["by"] in me or not (d.get("ops") or d.get("cm"))):
+                continue
+            docs.append({**_doc_row(d, did, names, me), "sid": r["id"], "group": gname, "can_write": bool(author) and not sharing.is_gone(d)})
+    docs.sort(key=lambda x: x["updated"] or "", reverse=True)
+    return jsonify(docs=docs, groups=groups)
 
 
 def _doc_payload(db, sid, did, have=None, st=None, **extra):

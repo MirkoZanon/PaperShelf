@@ -2,6 +2,18 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.27 – 2026-11-20
+
+- **Home** – a new desk, and the page PaperShelf opens on (click the logo to come back): one box to search your library
+  or add a paper, *Read* (continue where you stopped), *Write* (your latest documents), *Needs you* (overdue tasks,
+  open comments, mentions, alerts), your groups, Discover, and every tool – citation map, review table, reading
+  stats, export, what's new, storage – one click away.
+- **Write** – a tab of its own with the documents of all your groups in one list: search, filter by group, start a new
+  document (also just for you), and open one without going through the Lab.
+- **Discover moved into the Library** – *All papers | Reading list | Discover*, so searching your papers and finding
+  new ones are side by side. The top bar is now Home, Library, Write, Lab, Researchers.
+- Settings → *Open PaperShelf on* now offers Home and Write too.
+
 ## 2.26 – 2026-11-20
 
 - **Tables and pictures in shared documents** – *Table* inserts a table, *Picture* (or paste / drop an image) adds a
