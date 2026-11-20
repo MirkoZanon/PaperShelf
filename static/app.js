@@ -1533,7 +1533,8 @@ function setTab(tab, {keepView = false} = {}) {
   document.body.classList.toggle('tab-lab', state.tab === 'lab');
   document.body.classList.toggle('area-reading', state.tab === 'library' && state.area === 'reading');
   document.body.classList.toggle('tab-discover', isDiscover());
-  const on = ['people', 'lab', 'home', 'write'].includes(state.tab) ? state.tab : 'library';   // Discover is a part of the Library   // Reading list and All papers are two views of the Library
+  const on = ['people', 'lab', 'write'].includes(state.tab) ? state.tab : state.tab === 'home' ? '' : 'library';   // Home is the logo; Discover is a part of the Library
+  $('#brand-btn').classList.toggle('on', state.tab === 'home');   // Reading list and All papers are two views of the Library
   $$('#tabs [data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === on));
   $$('#scope-seg [data-scope]').forEach(b => b.classList.toggle('on', b.dataset.scope === (isDiscover() ? 'discover' : state.area)));
   document.body.classList.remove('side-open'); Side.apply();
@@ -1708,8 +1709,7 @@ function bind() {
     const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (lines.length > 1) { e.preventDefault(); openBulkAdd(lines.join('\n')); }
   });
-  $('#brand-btn').addEventListener('click', e => { e.stopPropagation(); $('#more-menu').classList.remove('open'); if (e.target.closest('.brand-car')) brandMenu(); else { $('#brand-menu').classList.remove('open'); setTab('home'); } });
-  $('#brand-btn').addEventListener('contextmenu', e => { e.preventDefault(); brandMenu(); });
+  $('#brand-btn').addEventListener('click', () => { $('#more-menu').classList.remove('open'); setTab('home'); });
   document.addEventListener('click', e => { if (!e.target.closest('#brand-menu')) $('#brand-menu').classList.remove('open'); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') $$('.menu.open').forEach(m => m.classList.remove('open')); });
   $('#more-btn').addEventListener('click', e => { e.stopPropagation(); fillAddMenu(); $('#more-menu').classList.toggle('open'); });

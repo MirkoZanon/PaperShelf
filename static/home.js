@@ -16,11 +16,13 @@ const Home = (() => {
   /* ---------------------------------------------------------------- Home */
   async function show() {
     const el = $('#home-main'); const my = ++seq;
+    state.updateAvailable = (typeof Updates !== 'undefined' && Updates.info && Updates.info.available) ? Updates.info.latest : '';
     el.innerHTML = skeleton({docs: null, over: null});
-    const [docs, over, stor] = await Promise.all([
+    const [docs, over, stor, app] = await Promise.all([
       api('/api/docs/recent').catch(() => ({docs: [], groups: []})),
       api('/api/lab/overview').catch(() => ({groups: [], my_tasks: [], for_me: []})),
-      api('/api/storage').catch(() => null)]);
+      api('/api/storage').catch(() => null), api('/api/app-status').catch(() => null)]);
+    if (stor && app) stor.app_installed = !!app.installed;
     if (my !== seq || state.tab !== 'home') return;
     el.innerHTML = skeleton({docs, over, stor});
   }
@@ -47,6 +49,7 @@ const Home = (() => {
     return `<div class="hm">
       <section class="hm-hero">
         <h1>Your research desk</h1>
+        <p class="hm-sub">Read, write and share your research – everything starts here.</p>
         <form class="hm-omni" id="hm-omni" autocomplete="off">${ic('search')}<input id="hm-q" placeholder="Search your library – or paste a DOI, link or title to add a paper" aria-label="Search or add a paper"><button class="btn primary" type="submit">Go</button></form>
         <p class="hm-hint">Enter searches your library (titles, notes and the text of your PDFs). A DOI, an arXiv number or a web address is added as a new paper.</p>
         <div class="hm-chips">
@@ -77,7 +80,12 @@ const Home = (() => {
             ${[['map', 'map', 'Citation map', 'How your papers cite each other'], ['table', 'table', 'Review table', 'One row per paper, with columns'], ['stats', 'chart', 'Reading stats', 'What you read, and when'],
               ['export', 'export', 'Export', 'References (APA, BibTeX…) or notes'], ['feed', 'bell', 'What\'s new', alerts ? `${alerts} alert${alerts > 1 ? 's' : ''}` : 'Retractions, new versions'], ['storage', 'folder', 'Storage', stor ? `PDFs use ${sizeTxt(stor.total)}${stor.low ? ' · disk almost full' : ''}` : 'PDFs and disk space']]
               .map(([k, i, t, s]) => `<button class="hm-tile" data-hm="${k}"><span>${ic(i)}</span><b>${t}</b><small>${esc(s)}</small></button>`).join('')}</div></section>
-      </div></div>`;
+      </div>
+      <div class="hm-foot"><span>PaperShelf ${esc(state.version || '')}</span>
+        <button class="linklike" data-hm="guide">Guide</button><button class="linklike" data-hm="settings">Settings</button>
+        ${state.updateAvailable ? `<button class="linklike hm-upd" data-hm="update">Install PaperShelf ${esc(state.updateAvailable)}</button>` : '<button class="linklike" data-hm="update">Check for updates</button>'}
+        ${stor && stor.app_installed === false ? '<button class="linklike" data-hm="app">Install as an app</button>' : ''}
+        <span class="grow"></span><button class="linklike" data-hm="quit">Quit PaperShelf</button></div></div>`;
   }
   function addDays(d, n) { const t = new Date((d || new Date().toISOString().slice(0, 10)) + 'T12:00:00'); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); }
 
@@ -103,6 +111,11 @@ const Home = (() => {
       case 'export': return openExport();
       case 'feed': return Feed.open();
       case 'storage': return openStorage();
+      case 'guide': return Help.open('start');
+      case 'settings': return openSettings();
+      case 'update': return Updates.open();
+      case 'app': return openSettings('general');
+      case 'quit': return quitApp();
       case 'paper': { const id = +x, p = paperById(id); if (p?.pdf_exists) { Reader.open(id); } else { setTab('reading'); setTimeout(() => openDetail(id), 80); } return; }
       case 'doc': return Write.open(x, y);
       case 'group': case 'post': case 'task': setTab('lab'); return setTimeout(() => Lab.openGroup(x, k === 'task' ? {sub: 'plans'} : {}), 60);

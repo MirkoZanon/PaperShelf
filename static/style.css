@@ -2224,3 +2224,17 @@ body.tab-write .tab-library-only, body.tab-write .tab-people-only, body.tab-writ
 .wr-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; } .wr-t b { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .wr-t small { color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wr-chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, currentColor 9%, transparent); color: inherit; } .wr-chip .i { width: 12px; height: 12px; }
 .wr-empty { text-align: center; padding: 56px 20px; border: 1px dashed var(--border); border-radius: 14px; } .wr-empty .big { color: var(--accent); margin-bottom: 6px; } .wr-empty h3 { margin: 4px 0; }
+
+/* 2.27.1 Home: the logo is the Home button; calmer, clearer desk */
+.brand { border-radius: 10px; padding: 4px 8px 4px 4px; margin-left: -4px; transition: background .15s; } .brand:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.brand.on { background: color-mix(in srgb, var(--accent) 14%, transparent); } .brand.on { color: var(--accent); }
+.hm-hero { position: relative; padding: 30px 32px 22px; margin: 0; border-radius: 22px; border: 1px solid var(--border-soft);
+  background: radial-gradient(90% 140% at 0% 0%, color-mix(in srgb, var(--accent) 15%, transparent), transparent 62%), color-mix(in srgb, var(--panel) 70%, transparent); }
+.hm-hero h1 { font-size: 32px; margin: 0 0 4px; } .hm-sub { margin: 0 0 20px; color: var(--muted); font-size: 15px; }
+.hm-omni { max-width: 860px; border-radius: 16px; padding: 10px 10px 10px 18px; } .hm-omni input { font-size: 17px; }
+.hm-chips { margin: 16px 0 0; } .hm-hint { margin-top: 10px; }
+.hm-card { border-radius: 16px; transition: box-shadow .15s, border-color .15s; } .hm-card:hover { box-shadow: 0 6px 22px rgba(0,0,0,.06); }
+.hm-h h2 .i { width: 30px; height: 30px; padding: 6px; border-radius: 9px; background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.hm-foot { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-top: 26px; padding: 14px 4px 0; border-top: 1px solid var(--border-soft); color: var(--muted); font-size: 12.5px; }
+.hm-foot .grow { flex: 1; } .hm-upd { color: var(--accent); font-weight: 650; }
+@media (max-width: 1000px) { .hm-hero { padding: 22px 18px 18px; border-radius: 18px; margin: 0; } .hm-hero h1 { font-size: 26px; } }

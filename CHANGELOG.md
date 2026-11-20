@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.27.1 – 2026-11-20
+
+- **The logo is the Home button** – the Home tab and the little arrow are gone from the top bar (Library, Write, Lab,
+  Researchers remain). Guide, Settings, updates, *Install as an app* and *Quit PaperShelf* now sit at the bottom of Home.
+- Calmer Home: a tinted welcome panel, clearer section icons, and the logo is highlighted while you are on Home.
+
 ## 2.27 – 2026-11-20
 
 - **Home** – a new desk, and the page PaperShelf opens on (click the logo to come back): one box to search your library
