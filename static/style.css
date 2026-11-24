@@ -2391,3 +2391,19 @@ body .view-head.vh-mid > .filters { grid-row: 3; }
 .dx-tt { display: inline-flex; gap: 2px; align-items: center; padding-left: 6px; margin-left: 2px; border-left: 1px solid var(--border-soft); }
 .dx-tt[hidden] { display: none; }
 .dx-tt button { font-size: 12px; color: var(--accent); }
+
+/* 2.29.2 – floating Preview switch + who-is-where, always at the bottom of the document */
+.dx-float { position: fixed; bottom: 16px; right: 16px; z-index: 40; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; max-width: min(420px, calc(100vw - 24px)); }
+.dx-float > * { pointer-events: auto; }
+.dx-fab { border: 1px solid var(--border-soft); background: var(--accent); color: var(--accent-ink, #fff); font: 600 13px/1 inherit; padding: 11px 18px; border-radius: 999px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.22); }
+.dx-fab:hover { filter: brightness(1.08); }
+.dx-fab.on { background: var(--panel); color: var(--text); border-color: var(--accent); }
+.dx-pres { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.dx-pr { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; border: 1px solid var(--border-soft); background: var(--panel); color: var(--text); border-radius: 999px; padding: 5px 12px 5px 6px; font-size: 12.5px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.16); }
+.dx-pr span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dx-pr.typing { border-color: #2b8551; }
+.dx-pr.warn { border-color: #d9822b; background: #fff4e5; color: #6a3b00; }
+body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { background: #3a2a12; color: #ffd9a8; }
+@media print { .dx-float { display: none; } }
+/* 2.29.2 – main separation lines of a table with merged header cells stay visible all the way down */
+.md th.grp, .md td.grp, .dx-prev th.grp, .dx-prev td.grp { border-right: 2px solid color-mix(in srgb, currentColor 38%, transparent); }

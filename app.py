@@ -3890,6 +3890,8 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
                    can_write=bool(author) and not gone, can_delete=bool(author) and d["by"] in ({ident["user"], ident["local"]} - {""}) and not gone,
                    me=author or ident["user"], ok=_opkey(author, ident) or ident["user"],
                    people=[{"id": a, "name": n} for a, n in names.items()], ops=ops,
+                   pres=[{"k": k, "at": p.get("at"), "a": p.get("a")} for k, p in (d.get("pres") or {}).items()
+                         if k != _opkey(author, ident) and sharing.au_base(k) != (author or ident["user"])],
                    comments=[{**{k: c.get(k) for k in ("id", "body", "created", "at", "by", "anchor", "quote", "rep", "parent", "state", "ins")},
                               "name": who(c["by"], c.get("name")), "mine": c["by"] in ({ident["user"], ident["local"]} - {""})} for c in cmv["comments"]],
                    snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
@@ -3923,7 +3925,7 @@ def _doc_saved(db, sid, st):
         _DOC_PUB.discard(sid)
         _DOC_SYNC[sid] = time.time()
         publish_soon(sid)
-    t = threading.Timer(2.5, later)
+    t = threading.Timer(1.2, later)
     t.daemon = True
     t.start()
 
@@ -4007,13 +4009,25 @@ def doc_sync(sid, did):
     """While a document is open: fetch the others' latest work (at most every ~12 seconds) and return what is new."""
     db = get_db()
     err = None
-    if time.time() - _DOC_SYNC.get(sid, 0) > 4 and share_identity(db)["can_publish"]:
+    if time.time() - _DOC_SYNC.get(sid, 0) > 2.5 and share_identity(db)["can_publish"]:
         _DOC_SYNC[sid] = time.time()
         try:
             sync_all_shares(db, only=sid)
         except sharing.ShareError as exc:
             err = str(exc)
     return _doc_payload(db, sid, did, (request.get_json(silent=True) or {}).get("have"), sync_error=err)
+
+
+@app.post("/api/shares/<sid>/docs/<did>/presence")
+def doc_presence(sid, did):
+    """Where my cursor is, so the others see it and can keep away from the same paragraph (shared only inside the group)."""
+    db = get_db()
+    st, author, err = _doc_write(db, sid, did)
+    if err:
+        return err
+    sharing.doc_presence(st, _opkey(author, share_identity(db)), did, (request.get_json(silent=True) or {}).get("a"))
+    _doc_saved(db, sid, st)
+    return jsonify(ok=True)
 
 
 @app.post("/api/shares/<sid>/docs/<did>/ops")
@@ -4426,7 +4440,7 @@ def publish_soon(sid):
         return
 
     def run():
-        time.sleep(1.5)
+        time.sleep(0.6)
         db = connect()
         try:
             if share_identity(db)["can_publish"]:

@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.29.2 – 2026-11-24
+
+- **Preview is always at hand** – a floating **Preview** button sits at the bottom of the document, wherever you have scrolled (also **⌘/Ctrl + Alt + P**). In the preview it becomes **Back to editing**, and you return to the same place in the text.
+- **See who is working where, live** – the bottom of the document shows your collaborators ("Anna is writing · Methods"). Click one to jump to where they are. If somebody is writing in the paragraph you are in, the chip turns orange and you get a note, so you don't edit the same lines. Cursor positions are shared only inside the group, only while the document is open, and nothing else is stored.
+- **Faster updates** – changes of others reach you within a few seconds (checking every ~2.5 s while somebody is active, instead of 4.5 s; your own changes are sent sooner).
+- **Tables: the main separation lines stay visible** – with merged header cells (e.g. the days), their lines now run through all the rows, even when a merged cell crosses them; the text stays in the first part. Also in Word export.
+
 ## 2.29.1 – 2026-11-24
 
 - **Tables with merged cells and two header rows** – write a cell as `||` (no space between the bars) to merge it with the cell before it, e.g. `| Monday|| Tuesday||` gives two days spanning two columns each. A second dashed line under the first body row turns that row into a header row too (for example M / N under each day). Works in the document, the preview and Word export, and the table buttons keep the merges when you tidy.

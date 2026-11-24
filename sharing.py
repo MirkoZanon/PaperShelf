@@ -1071,7 +1071,7 @@ def for_publish(st: dict) -> dict:
     if not any(is_gone(d) for d in docs.values()):
         return st
     out = dict(st)
-    out["docs"] = {k: (dict(d, ops={}, cm={}, img={}) if is_gone(d) else d) for k, d in docs.items()}
+    out["docs"] = {k: (dict(d, ops={}, cm={}, img={}, pres={}) if is_gone(d) else d) for k, d in docs.items()}
     return out
 
 
@@ -1102,6 +1102,19 @@ def doc_append(st, author, did, frm, ops) -> int:
         if clean["k"] == "i":
             total += len(clean["t"])
     return len(log)
+
+
+def doc_presence(st, opkey, did, anchor):
+    """Report where this computer's cursor is (the character before it), or None. Informative only."""
+    d = doc_of(st, did)
+    if is_gone(d):
+        return
+    pres = d.setdefault("pres", {})
+    a = [anchor[0], anchor[1]] if isinstance(anchor, (list, tuple)) and _id_ok(anchor) else None
+    pres[opkey] = {"at": _now(), "a": a}
+    if len(pres) > 40:                      # forget the oldest reports
+        for k in sorted(pres, key=lambda k: pres[k].get("at") or "")[:len(pres) - 40]:
+            del pres[k]
 
 
 def _anchor_ok(v):
@@ -1220,6 +1233,10 @@ def _merge_docs(a: dict, b: dict) -> dict:
             else:
                 best = lx if json.dumps(lx, sort_keys=True) >= json.dumps(ly, sort_keys=True) else ly
             m["ops"][au] = [dict(o) for o in best]
+        m["pres"] = {}                      # who is where (only informative): the newest report of each computer wins
+        for k in set(x.get("pres") or {}) | set(y.get("pres") or {}):
+            p, q = (x.get("pres") or {}).get(k), (y.get("pres") or {}).get(k)
+            m["pres"][k] = dict(q if q and (not p or (q.get("at") or "") > (p.get("at") or "")) else p)
         m["cm"] = _merge_notes(x.get("cm") or {}, y.get("cm") or {})
         m["img"] = {**(y.get("img") or {}), **(x.get("img") or {})}
         out[did] = m
@@ -1264,6 +1281,11 @@ def _validate_docs(raw) -> dict:
                 last = _op_end(op)
             if ok:
                 doc["ops"][str(au)] = ok
+        doc["pres"] = {}
+        for k, p in list((d.get("pres") if isinstance(d.get("pres"), dict) else {}).items())[:MAX_MEMBERS]:
+            if au_ok(k) and isinstance(p, dict) and isinstance(p.get("at"), str):
+                an = p.get("a")
+                doc["pres"][str(k)] = {"at": p["at"][:30], "a": [an[0], an[1]] if isinstance(an, (list, tuple)) and _id_ok(an) else None}
         for cid, n in list((d.get("cm") if isinstance(d.get("cm"), dict) else {}).items())[:DOC_LIMITS["comments"]]:
             if not (isinstance(n, dict) and OID_RE.match(str(cid)) and n.get("k") in DOC_KINDS):
                 continue

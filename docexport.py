@@ -193,6 +193,24 @@ def _spans(line: str) -> list:
 
 def _table(rows: list, align: list, nhead: int = 1) -> str:
     n = max(sum(sp for _t, sp in r) for r in rows)
+    # the main separation lines (the column edges of the first header row) stay visible: a merged cell crossing one is cut there
+    edges, c0 = set(), 0
+    for _t, sp in rows[0]:
+        c0 += sp
+        edges.add(c0)
+    bounds = edges if any(sp > 1 for _t, sp in rows[0]) else set()
+    cut = []
+    for r in rows:
+        out, col = [], 0
+        for txt, sp in r:
+            frm, first = col, True
+            while frm < col + sp:
+                to = min([x for x in bounds if frm < x < col + sp] or [col + sp])
+                out.append((txt if first else "", to - frm, to in bounds))
+                first, frm = False, to
+            col += sp
+        cut.append(out)
+    rows = cut
     w = 9298 // n
     jc = {"c": "center", "r": "right"}
     out = ['<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>'
@@ -203,12 +221,13 @@ def _table(rows: list, align: list, nhead: int = 1) -> str:
         head = ri < nhead
         out.append("<w:tr>" + ("<w:trPr><w:tblHeader/></w:trPr>" if head else ""))
         ci = 0
-        for txt, sp in r:
+        for txt, sp, grp in r:
             runs = _runs(txt)
             if head:
                 runs = runs.replace("<w:r>", "<w:r><w:rPr><w:b/></w:rPr>").replace("<w:r><w:rPr><w:b/></w:rPr><w:rPr>", "<w:r><w:rPr><w:b/>")
             al = align[ci] if ci < len(align) else ""
             out.append(f'<w:tc><w:tcPr><w:tcW w:w="{w * sp}" w:type="dxa"/>' + (f'<w:gridSpan w:val="{sp}"/>' if sp > 1 else "")
+                       + ('<w:tcBorders><w:right w:val="single" w:sz="12" w:space="0" w:color="555555"/></w:tcBorders>' if grp else "")
                        + ('<w:shd w:val="clear" w:color="auto" w:fill="EEEEEE"/>' if head else "") + "</w:tcPr>"
                        f'<w:p><w:pPr><w:spacing w:after="40"/>{f"<w:jc w:val=\"{jc[al]}\"/>" if al in jc else ""}</w:pPr>{runs}</w:p></w:tc>')
             ci += sp

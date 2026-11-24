@@ -97,7 +97,7 @@ const Docs = (() => {
   const setStatus = s => { D.status = s; const el = $('#dx-status', D.host); if (el) { el.textContent = {saved: 'Saved', saving: 'Saving…', offline: 'Not saved yet, retrying…', read: 'Read only'}[s] || ''; el.className = 'dx-status ' + s; } };
   function schedule() {
     setStatus('saving'); clearTimeout(D.flushT);
-    D.flushT = setTimeout(flush, D.R && activeAuthors().length ? 900 : 1800);
+    D.flushT = setTimeout(flush, D.R && activeAuthors().length ? 500 : 1200);
     if (!D.firstEdit) D.firstEdit = Date.now();
     if (Date.now() - D.firstEdit > 5000) { clearTimeout(D.flushT); flush(); }
   }
@@ -135,7 +135,7 @@ const Docs = (() => {
       const out = r.comments.filter(c => !dels.has(c.id)).map(c => keep.get(c.id) || c);
       keep.forEach((c, id) => { if (!r.comments.some(x => x.id === id)) out.push(c); });
       R.comments = out; }
-    R.snaps = r.snaps; R.images = r.images || []; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
+    R.pres = r.pres || []; R.snaps = r.snaps; R.images = r.images || []; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
     return changed;
   }
   async function pull() {
@@ -144,7 +144,7 @@ const Docs = (() => {
       const r = await api(`${base()}/${q(D.id)}/sync`, {method: 'POST', body: {have: D.R.have}});
       if (!D.R || r.id !== D.id) return;
       const changed = absorb(r);
-      if (changed) applyRemote(); else paintSide();
+      if (changed) applyRemote(); else { paintSide(); paintNow(); }
       if (r.sync_error) $('#dx-net', D.host)?.setAttribute('title', r.sync_error);
     } catch (err) { /* offline: try again later */ }
   }
@@ -153,9 +153,9 @@ const Docs = (() => {
     stopPoll(); D.pollOn = true;
     const tick = async () => {
       if (!D.pollOn) return;
-      if (document.visibilityState === 'visible' && D.host && D.host.offsetParent !== null && D.R && !D.R.gone) await pull();
+      if (document.visibilityState === 'visible' && D.host && D.host.offsetParent !== null && D.R && !D.R.gone) { presSend(); await pull(); }
       if (!D.pollOn) return;
-      D.poll = setTimeout(tick, document.visibilityState !== 'visible' ? 30000 : D.R && activeAuthors().length ? 4500 : 12000);
+      D.poll = setTimeout(tick, document.visibilityState !== 'visible' ? 30000 : D.R && activeAuthors().length ? 2500 : 7000);
     };
     D.poll = setTimeout(tick, 3500);
     D.onvis = () => { if (document.visibilityState === 'visible' && D.R && !D.R.gone) pull(); };
@@ -239,14 +239,22 @@ const Docs = (() => {
   const auHue = a => { a = String(a).split('~')[0]; const ids = [...new Set([...(D.R.people || []).map(p => p.id), ...Object.keys(D.R.ops).map(k => k.split('~')[0])])].sort(); const i = Math.max(0, ids.indexOf(a)); return Math.round((i * 137.508 + 150) % 360); };
   function au(a) { return String(a).split('~')[0]; }   // the person behind an operation log ('name~computer')
   function peopleName(a) { a = au(a); return (D.R.people.find(p => p.id === a) || {}).name || a; }
+  const presOf = a => (D.R.pres || []).find(p => p.k === a);
+  function lastAt(a) {      // when somebody last wrote or moved the cursor (their own clock)
+    const log = D.R.ops[a] || [], op = log[log.length - 1], p = presOf(a);
+    return Math.max(op ? Date.parse(op.at) || 0 : 0, p ? Date.parse(p.at) || 0 : 0);
+  }
+  const typingNow = a => { const log = D.R.ops[a] || [], op = log[log.length - 1]; return !!op && Date.now() - Date.parse(op.at) < 20000; };
   function activeAuthors(ms = 150000) {
     const R = D.R, out = [];
-    for (const [a, log] of Object.entries(R.ops)) { const last = log[log.length - 1]; if (a !== R.ok && au(a) !== R.me && last && Date.now() - Date.parse(last.at) < ms) out.push(a); }
+    for (const a of new Set([...Object.keys(R.ops), ...(R.pres || []).map(p => p.k)])) { const t = lastAt(a); if (a !== R.ok && au(a) !== R.me && t && Date.now() - t < ms) out.push(a); }
     return out;
   }
-  // where somebody wrote last: a visible index in the text
+  // where somebody is (cursor) or wrote last: a visible index in the text
   function lastSpot(a) {
-    const B = D.R.B, log = D.R.ops[a] || [], op = log[log.length - 1]; if (!op) return null;
+    const B = D.R.B, log = D.R.ops[a] || [], op = log[log.length - 1], p = presOf(a);
+    if (p && (!op || Date.parse(p.at) >= Date.parse(op.at))) return p.a ? (visAfter(B, p.a) ?? 0) : 0;
+    if (!op) return null;
     if (op.k === 'i') { const n = Array.from(op.t).length; return visAfter(B, [op.c + n - 1, a]); }
     return op.r.length ? visBefore(B, [op.r[0][0], op.r[0][1]]) : null;
   }
@@ -282,17 +290,68 @@ const Docs = (() => {
         <button data-fmt="comment" title="Comment on the selected text (${MOD}+Alt+M)">${ic('chat')}Comment</button>
         <button data-fmt="suggest" title="Suggest a change to the selected text">${ic('pen')}Suggest</button>
       </div>` : ''}
-      <div class="dx-main"><div class="dx-page" id="dx-page"></div><aside class="dx-side" id="dx-side"></aside></div></div>`;
+      <div class="dx-main"><div class="dx-page" id="dx-page"></div><aside class="dx-side" id="dx-side"></aside></div>
+      <div class="dx-float" id="dx-float"></div></div>`;
     paintPage(); paintSide(); paintNow();
   }
   function paintNow() {
     const el = $('#dx-now', D.host); if (!el || !D.R) return;
     const act = activeAuthors();
     el.innerHTML = act.slice(0, 3).map(a => {
-      const typing = Date.now() - Date.parse(D.R.ops[a][D.R.ops[a].length - 1].at) < 20000, sp = lastSpot(a), sec = sp == null ? '' : sectionAt(sp);
+      const typing = typingNow(a), sp = lastSpot(a), sec = sp == null ? '' : sectionAt(sp);
       return `<span class="dx-live ${typing ? 'typing' : ''}" title="${esc(peopleName(a))}${typing ? ' is writing' : ' was here a moment ago'}">${av(a, peopleName(a), 22)}<span class="dx-live-t"><b>${esc(peopleName(a).split(' ')[0])}</b>${typing ? ' is writing' : ' is here'}${sec ? ` · ${esc(sec)}` : ''}</span></span>`;
     }).join('') + (act.length > 3 ? `<span class="muted small">+${act.length - 3}</span>` : '');
+    paintFloat();
   }
+  /* ---- always at hand, bottom of the page: who is working where (warns when it is your paragraph) and the Preview switch */
+  const paraRange = (text, off) => { const a = text.lastIndexOf('\n\n', off - 1), b = text.indexOf('\n\n', off); return [a < 0 ? 0 : a + 2, b < 0 ? text.length : b]; };
+  function placeFloat() {
+    const el = $('#dx-float', D.host), pg = $('#dx-page', D.host); if (!el || !pg) return;
+    const r = pg.getBoundingClientRect(); el.style.right = Math.max(12, window.innerWidth - r.right + 12) + 'px';
+  }
+  function paintFloat() {
+    const el = $('#dx-float', D.host); if (!el || !D.R) return;
+    if (D.view) { el.innerHTML = ''; return; }
+    const R = D.R, B = R.B, ta = $('#dx-text', D.host), mine = ta && D.mode === 'write' && ta.value === B.text ? paraRange(B.text, ta.selectionStart) : null;
+    let warn = null;
+    const rows = activeAuthors(90000).slice(0, 4).map(a => {
+      const sp = lastSpot(a); if (sp == null) return '';
+      const off = B.off[Math.min(sp, B.vis.length)], pr = paraRange(B.text, off), who = peopleName(a).split(' ')[0], sec = sectionAt(sp);
+      const near = !!mine && pr[0] === mine[0] && (typingNow(a) || Date.now() - lastAt(a) < 30000); if (near) warn = warn || who;
+      return `<button class="dx-pr ${near ? 'warn' : typingNow(a) ? 'typing' : ''}" data-dx-pres="${off}" title="Go to where ${esc(peopleName(a))} is">${av(a, peopleName(a), 20)}<span><b>${esc(who)}</b> ${near ? 'is writing in your paragraph' : typingNow(a) ? 'is writing' : 'is here'}${sec ? ` · ${esc(sec)}` : ''}</span></button>`;
+    }).join('');
+    const key = warn ? warn + (mine ? mine[0] : '') : ''; if (key && key !== D.warned) toast(`${warn} is writing in this paragraph. Your edits will merge, but you may want to wait or move on.`); D.warned = key;
+    const prev = D.mode === 'preview';
+    el.innerHTML = (rows ? `<div class="dx-pres">${rows}</div>` : '') +
+      `<button class="dx-fab ${prev ? 'on' : ''}" data-dx="fab" title="${prev ? 'Back to the text you were editing' : 'See the formatted document (tables, pictures, citations)'} (${MOD}+Alt+P)">${prev ? (D.can ? 'Back to editing' : 'Back to the text') : 'Preview'}</button>`;
+    placeFloat();
+  }
+  function scroller() { for (let e = D.host; e && e !== document.body; e = e.parentElement) { const o = getComputedStyle(e).overflowY; if (o === 'auto' || o === 'scroll') return e; } return document.scrollingElement; }
+  function scrollRatio() { const sc = scroller(), m = sc.scrollHeight - sc.clientHeight; return m > 0 ? sc.scrollTop / m : 0; }
+  async function gotoMode(mode) {
+    const host = D.host, ratio = scrollRatio();
+    if (mode === 'preview' && D.mode !== 'preview') D.prevMode = D.mode;
+    D.sel = selection(); if (D.mode === 'suggest') await flushAll(); D.mode = mode; D.view = null; D.focusSrc = mode === 'suggest'; paint();
+    if (mode === 'write') $('#dx-text', host)?.focus({preventScroll: true});
+    const sc = scroller(), m = sc.scrollHeight - sc.clientHeight; sc.scrollTop = Math.max(0, ratio * m);
+  }
+  const togglePreview = () => gotoMode(D.mode === 'preview' ? (D.prevMode && D.prevMode !== 'preview' && (D.can || D.prevMode !== 'suggest') ? D.prevMode : D.can ? 'write' : 'marks') : 'preview');
+  function jumpToOffset(off) {
+    const ta = $('#dx-text', D.host);
+    if (ta && D.mode === 'write') { const r = ta.getBoundingClientRect(), len = Math.max(1, ta.value.length); const sc = scroller(); sc.scrollTop = Math.max(0, sc.scrollTop + r.top - sc.getBoundingClientRect().top + (off / len) * r.height - sc.clientHeight / 3); return; }
+    const fl = $('.dx-flag', D.host); if (fl) fl.scrollIntoView({block: 'center', behavior: 'smooth'});
+  }
+  /* where my cursor is, told to the group (only inside the group) so that the others can keep away from my paragraph */
+  function presSend() {
+    if (!D.R || !D.can || D.R.gone || D.view || document.visibilityState !== 'visible') return;
+    const B = D.R.B, S = selection(); let a = null;
+    if (S && S.a > 0 && S.a <= B.vis.length) a = [B.vis[S.a - 1].c, B.vis[S.a - 1].a];
+    const key = JSON.stringify(a), now = Date.now();
+    if (key === D.presKey && now - D.presAt < 25000) return;
+    if (now - D.presAt < 3000) { presSoon(); return; }
+    D.presKey = key; D.presAt = now; api(`${base()}/${q(D.id)}/presence`, {method: 'POST', body: {a}}).catch(() => {});
+  }
+  function presSoon() { clearTimeout(D.presT); D.presT = setTimeout(presSend, 1200); }
 
   // ---- the page itself: textarea (write), coloured source (review) or formatted text (preview)
   function resolveCites(text) {
@@ -337,7 +396,7 @@ const Docs = (() => {
     const pts = [...cuts].sort((x, y) => x - y); let h = '';
     const mineOf = id => !!D.R.comments.find(c => c.id === id)?.mine;
     const extra = k => (ins.get(k) || []).map(x => { items.push({kind: 'ins', id: x.id, text: x.rep, mine: mineOf(x.id)}); return `<ins class="dx-ins ${x.id === D.selCm ? 'sel' : ''} ${mineOf(x.id) ? 'mine' : ''}" data-i="${items.length - 1}" data-id="${esc(x.id)}" data-cmref="${esc(x.id)}">${esc(x.rep)}</ins>`; }).join('')
-      + (flags.get(k) || []).map(a => `<span class="dx-flag ${Date.now() - Date.parse(D.R.ops[a][D.R.ops[a].length - 1].at) < 20000 ? '' : 'old'}" contenteditable="false" style="--c:${auHue(a)}" data-n="${esc(peopleName(a).split(' ')[0])}"></span>`).join('');
+      + (flags.get(k) || []).map(a => `<span class="dx-flag ${typingNow(a) || Date.now() - lastAt(a) < 20000 ? '' : 'old'}" contenteditable="false" style="--c:${auHue(a)}" data-n="${esc(peopleName(a).split(' ')[0])}"></span>`).join('');
     for (let k = 0; k < pts.length; k++) {
       h += extra(pts[k]);
       const a = pts[k], b = pts[k + 1]; if (b == null || b <= a) continue;
@@ -937,8 +996,10 @@ const Docs = (() => {
       if (!c.md || c.md === (e.clipboardData.getData('text/plain') || '')) return;          // plain text: the browser does it
       e.preventDefault(); pasteMd(e.target, c.md);
     });
-    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') tblTools(); });
-    host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') tblTools(); });
+    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); } });
+    host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); } });
+    window.addEventListener('scroll', () => { if (D.R && D.host && document.body.contains(D.host)) placeFloat(); }, {passive: true, capture: true});
+    window.addEventListener('resize', () => { if (D.R && D.host && document.body.contains(D.host)) placeFloat(); });
     host.addEventListener('dragover', e => { if (e.target.id === 'dx-text' && [...(e.dataTransfer?.items || [])].some(x => x.type.startsWith('image/'))) e.preventDefault(); });
     host.addEventListener('drop', e => { const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('image/')); if (f && e.target.id === 'dx-text') { e.preventDefault(); insertImage(f); } });
     host.addEventListener('input', e => {
@@ -979,6 +1040,7 @@ const Docs = (() => {
       if (e.target.id === 'dx-text' && (e.metaKey || e.ctrlKey) && !e.altKey) {
         const k = e.key.toLowerCase(); if (k === 'b') { e.preventDefault(); wrap('bold'); } else if (k === 'i') { e.preventDefault(); wrap('italic'); }
       }
+      if (D.R && !D.view && (e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyP') { e.preventDefault(); togglePreview(); return; }
       if (e.target.id === 'dx-text' && (e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 'm') { e.preventDefault(); D.side = 'comments'; paintSide(); $('#dx-cnew', host)?.focus(); }
       if (e.target.id === 'dx-text' && e.key === 'Enter' && D.can && !e.shiftKey && !e.metaKey && !e.ctrlKey) {   // continue a list
         const t = e.target, s = t.selectionStart, ls = t.value.lastIndexOf('\n', s - 1) + 1, line = t.value.slice(ls, s), m = line.match(/^(\s*)(- \[[ x]\] |[-*] |(\d+)\. |> )(.*)$/);
@@ -994,6 +1056,8 @@ const Docs = (() => {
       const t = e.target;
       const open = t.closest('[data-dx-open]'); if (open) { await openDoc(open.dataset.dxOpen); return; }
       const dx = t.closest('[data-dx]')?.dataset.dx;
+      if (dx === 'fab') return togglePreview();
+      const pres = t.closest('[data-dx-pres]')?.dataset.dxPres; if (pres != null) return jumpToOffset(+pres);
       if (dx === 'new') return newDialog();
       if (dx === 'toggle-arch') { D.showArch = !D.showArch; return paintList(); }
       if (dx === 'back') return closeDoc();
@@ -1012,7 +1076,7 @@ const Docs = (() => {
       if (dx === 'restore') return restore();
       if (dx === 'leave-view') { D.view = null; paintPage(); return; }
       const mode = t.closest('[data-dx-mode]')?.dataset.dxMode;
-      if (mode) { D.sel = selection(); if (D.mode === 'suggest') await flushAll(); D.mode = mode; D.view = null; D.focusSrc = mode === 'suggest'; paint(); if (mode === 'write') $('#dx-text', host)?.focus(); return; }
+      if (mode) return gotoMode(mode);
       const side = t.closest('[data-dx-side]')?.dataset.dxSide; if (side) { D.side = side; return paintSide(); }
       const tb = t.closest('[data-tbl]')?.dataset.tbl; if (tb) return tblOp(tb);
       const fmt = t.closest('[data-fmt]')?.dataset.fmt;

@@ -40,9 +40,16 @@ const Notes = (() => {
         fPara(); fList(); fQuote();
         const al = cells(lines[i + 1]).map(c => /^:-*:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:-/.test(c) ? 'left' : '');
         // a cell written as "||" (no space between the bars) is merged with the one before it (colspan)
+        let bounds = null;     // column edges of the first header row: the main separation lines, kept visible all the way down
         const row = (r, tag) => { const cs = raw(r), out = []; let col = 0;
           cs.forEach((c, k) => { if (k > 0 && c === '') { out[out.length - 1].span++; col++; return; } out.push({c: c.trim().replace(/\\\|/g, '|'), span: 1, col}); col++; });
-          return '<tr>' + out.map(o => `<${tag}${o.span > 1 ? ` colspan="${o.span}"` : ''}${al[o.col] ? ` style="text-align:${al[o.col]}"` : ''}>${inline(o.c)}</${tag}>`).join('') + '</tr>'; };
+          if (!bounds) { const e = new Set(); out.forEach(o => e.add(o.col + o.span)); bounds = out.some(o => o.span > 1) ? e : new Set(); }
+          const cells = [];
+          out.forEach(o => {   // a merged cell that crosses a main line is cut there, so the line stays visible (the text stays in the first part)
+            let from = o.col, first = true;
+            while (from < o.col + o.span) { const cut = [...bounds].filter(x => x > from && x < o.col + o.span).sort((x, y) => x - y)[0], to = cut || o.col + o.span; cells.push({c: first ? o.c : '', span: to - from, col: from, grp: bounds.has(to)}); first = false; from = to; }
+          });
+          return '<tr>' + cells.map(o => `<${tag}${o.span > 1 ? ` colspan="${o.span}"` : ''}${o.grp ? ' class="grp"' : ''}${al[o.col] ? ` style="text-align:${al[o.col]}"` : ''}>${inline(o.c)}</${tag}>`).join('') + '</tr>'; };
         const MID = /^\s*\|(\s*:?-{3,}:?\s*\|?)+\s*$/;
         let head = row(ln, 'th'), body = ''; i += 2;
         while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
