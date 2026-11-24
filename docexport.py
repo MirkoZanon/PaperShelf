@@ -205,7 +205,7 @@ def _table(rows: list, align: list, nhead: int = 1) -> str:
         for txt, sp in r:
             frm, first = col, True
             while frm < col + sp:
-                to = min([x for x in bounds if frm < x < col + sp] or [col + sp])
+                to = min([x for x in bounds if frm < x < col + sp] or [col + sp]) if first else frm + 1
                 out.append((txt if first else "", to - frm, to in bounds))
                 first, frm = False, to
             col += sp

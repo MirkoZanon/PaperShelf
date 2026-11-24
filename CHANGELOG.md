@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.29.3 – 2026-11-24
+
+- **Tables: no more missing cell lines** – when a merged cell crosses a main line (e.g. between two days), the cells after the cut are now single cells again, so every separation line shows (also in Word export).
+
 ## 2.29.2 – 2026-11-24
 
 - **Preview is always at hand** – a floating **Preview** button sits at the bottom of the document, wherever you have scrolled (also **⌘/Ctrl + Alt + P**). In the preview it becomes **Back to editing**, and you return to the same place in the text.

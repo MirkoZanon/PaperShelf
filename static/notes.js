@@ -47,7 +47,7 @@ const Notes = (() => {
           const cells = [];
           out.forEach(o => {   // a merged cell that crosses a main line is cut there, so the line stays visible (the text stays in the first part)
             let from = o.col, first = true;
-            while (from < o.col + o.span) { const cut = [...bounds].filter(x => x > from && x < o.col + o.span).sort((x, y) => x - y)[0], to = cut || o.col + o.span; cells.push({c: first ? o.c : '', span: to - from, col: from, grp: bounds.has(to)}); first = false; from = to; }
+            while (from < o.col + o.span) { const cut = [...bounds].filter(x => x > from && x < o.col + o.span).sort((x, y) => x - y)[0], to = first ? (cut || o.col + o.span) : from + 1; cells.push({c: first ? o.c : '', span: to - from, col: from, grp: bounds.has(to)}); first = false; from = to; }
           });
           return '<tr>' + cells.map(o => `<${tag}${o.span > 1 ? ` colspan="${o.span}"` : ''}${o.grp ? ' class="grp"' : ''}${al[o.col] ? ` style="text-align:${al[o.col]}"` : ''}>${inline(o.c)}</${tag}>`).join('') + '</tr>'; };
         const MID = /^\s*\|(\s*:?-{3,}:?\s*\|?)+\s*$/;
