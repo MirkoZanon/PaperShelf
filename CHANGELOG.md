@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.29.4 – 2026-11-24
+
+- **Fixed: the page jumped when you started typing** – the view slid down so you lost the place you were writing. It now stays exactly where it is, also when somebody else's changes arrive.
+- **Colored cursors of your collaborators** in the text (Edit mode), each with a name tag, blinking while they type.
+- **Their latest changes are colored** – text they just added is highlighted in their color, a dashed marker shows where they deleted something, and both fade away after about 12 seconds.
+
 ## 2.29.3 – 2026-11-24
 
 - **Tables: no more missing cell lines** – when a merged cell crosses a main line (e.g. between two days), the cells after the cut are now single cells again, so every separation line shows (also in Word export).

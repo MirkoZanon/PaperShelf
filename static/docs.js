@@ -127,7 +127,7 @@ const Docs = (() => {
     const R = D.R; let changed = false;
     for (const [a, o] of Object.entries(r.ops || {})) {
       if (a === R.ok) { if (o.n > (R.ops[a] || []).length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.sent = R.ops[a].length; changed = true; } R.have[a] = Math.max(R.have[a] || 0, o.n); continue; }
-      if (o.ops.length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.have[a] = o.n; changed = true; }
+      if (o.ops.length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.have[a] = o.n; changed = true; if (au(a) !== R.me) for (const op of o.ops) (D.fresh || (D.fresh = [])).push({a, op, t: Date.now()}); }
     }
     R.title = r.title; R.arch = r.arch; R.gone = r.gone; R.canDelete = r.can_delete;
     { const keep = new Map(), dels = new Set();      // the suggestions I am typing right now are newer than what the server sent
@@ -324,9 +324,50 @@ const Docs = (() => {
     const prev = D.mode === 'preview';
     el.innerHTML = (rows ? `<div class="dx-pres">${rows}</div>` : '') +
       `<button class="dx-fab ${prev ? 'on' : ''}" data-dx="fab" title="${prev ? 'Back to the text you were editing' : 'See the formatted document (tables, pictures, citations)'} (${MOD}+Alt+P)">${prev ? (D.can ? 'Back to editing' : 'Back to the text') : 'Preview'}</button>`;
-    placeFloat();
+    placeFloat(); remoteLayer();
   }
   function scroller() { for (let e = D.host; e && e !== document.body; e = e.parentElement) { const o = getComputedStyle(e).overflowY; if (o === 'auto' || o === 'scroll') return e; } return document.scrollingElement; }
+  /* ---- other people's cursors and their latest changes, drawn over the text box (Edit mode); the changes fade after a few seconds */
+  const FRESH_MS = 12000;
+  function measure(ta, items) {     // items: [{s, e}] sorted, not overlapping (offsets in ta.value) -> the rectangles of each, relative to the text box
+    let m = D.mirror; if (!m) { m = D.mirror = document.createElement('div'); m.setAttribute('aria-hidden', 'true'); document.body.appendChild(m); }
+    const cs = getComputedStyle(ta);
+    m.style.cssText = `position:absolute;left:-99999px;top:0;visibility:hidden;white-space:pre-wrap;overflow-wrap:break-word;word-break:${cs.wordBreak};box-sizing:border-box;border:0;width:${ta.clientWidth}px;padding:${cs.paddingTop} ${cs.paddingRight} ${cs.paddingBottom} ${cs.paddingLeft};font-family:${cs.fontFamily};font-size:${cs.fontSize};font-weight:${cs.fontWeight};font-style:${cs.fontStyle};letter-spacing:${cs.letterSpacing};line-height:${cs.lineHeight};tab-size:${cs.tabSize};text-indent:${cs.textIndent}`;
+    m.textContent = ''; const text = ta.value, spans = []; let pos = 0;
+    for (const it of items) { m.append(text.slice(pos, it.s)); const sp = document.createElement('span'); sp.textContent = text.slice(it.s, it.e); m.append(sp); spans.push(sp); pos = it.e; }
+    const o = m.getBoundingClientRect(), lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.5;
+    return spans.map(sp => { const rs = [...sp.getClientRects()].map(r => ({x: r.left - o.left, y: r.top - o.top, w: r.width, h: r.height || lh})); if (!rs.length) rs.push({x: sp.offsetLeft, y: sp.offsetTop, w: 0, h: lh}); return rs; });
+  }
+  function remoteLayer() {
+    const host = D.host, ta = $('#dx-text', host), pg = $('#dx-page', host); let lay = $('#dx-rem', host);
+    const R = D.R, B = R && R.B;
+    if (!ta || !pg || !B || D.mode !== 'write' || D.view || ta.value !== B.text) { lay && lay.remove(); return; }
+    if (D.fresh) D.fresh = D.fresh.filter(f => Date.now() - f.t < FRESH_MS);
+    const marks = [];     // {s, e, kind, a, age}
+    for (const f of D.fresh || []) {
+      const op = f.op, age = (Date.now() - f.t) / 1000;
+      if (op.k === 'i') { const n = Array.from(op.t).length, s0 = visBefore(B, [op.c, f.a]), e0 = visAfter(B, [op.c + n - 1, f.a]); if (s0 != null && e0 != null && e0 > s0) marks.push({s: B.off[s0], e: B.off[e0], kind: 'add', a: f.a, age}); }
+      else if (op.r && op.r.length) { const p = visBefore(B, [op.r[0][0], op.r[0][1]]); if (p != null) marks.push({s: B.off[p], e: B.off[p], kind: 'del', a: f.a, age}); }
+    }
+    for (const a of activeAuthors(90000)) { const sp = lastSpot(a); if (sp != null) { const o = B.off[Math.min(sp, B.vis.length)]; marks.push({s: o, e: o, kind: 'cur', a, age: 0}); } }
+    if (!marks.length) { lay && lay.remove(); return; }
+    // measure in one pass: ranges first (clipped so that they do not overlap), then every cursor/deletion point
+    const rng = marks.filter(m => m.kind === 'add').sort((x, y) => x.s - y.s || x.e - y.e), items = []; let end = 0;
+    for (const m of rng) { const s0 = Math.max(m.s, end); if (m.e > s0) { items.push({s: s0, e: m.e, m}); end = m.e; } }
+    const pts = marks.filter(m => m.kind !== 'add').sort((x, y) => x.s - y.s);
+    const rects = new Map();
+    measure(ta, items).forEach((rs, i) => rects.set(items[i].m, rs));
+    pts.forEach(p => { const r = measure(ta, [{s: p.s, e: p.s}])[0]; rects.set(p, r); });
+    if (!lay) { lay = document.createElement('div'); lay.id = 'dx-rem'; lay.className = 'dx-rem'; pg.appendChild(lay); }
+    lay.style.cssText = `left:${ta.offsetLeft + ta.clientLeft}px;top:${ta.offsetTop + ta.clientTop}px;width:${ta.clientWidth}px;height:${ta.offsetHeight}px`;
+    lay.innerHTML = marks.map(m => (rects.get(m) || []).map((r, i) => {
+      const c = `--c:${auHue(m.a)};left:${r.x}px;top:${r.y}px;height:${r.h}px;`;
+      if (m.kind === 'add') return `<i class="add" style="${c}width:${r.w}px;animation-delay:-${m.age.toFixed(2)}s"></i>`;
+      if (m.kind === 'del') return `<i class="del" style="${c}animation-delay:-${m.age.toFixed(2)}s"></i>`;
+      return `<i class="cur ${typingNow(m.a) ? 'typing' : ''}" style="${c}" data-n="${esc(peopleName(m.a).split(' ')[0])}"></i>`;
+    }).join('')).join('');
+  }
+  const remoteSoon = () => { if (D.remT) return; D.remT = requestAnimationFrame(() => { D.remT = 0; if (D.R) remoteLayer(); }); };
   function scrollRatio() { const sc = scroller(), m = sc.scrollHeight - sc.clientHeight; return m > 0 ? sc.scrollTop / m : 0; }
   async function gotoMode(mode) {
     const host = D.host, ratio = scrollRatio();
@@ -440,7 +481,11 @@ const Docs = (() => {
       pg.innerHTML = previewHtml(R.B, R.title);
     }
   }
-  const autosize = ta => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight + 4, 420) + 'px'; };
+  const autosize = ta => {      // the box is collapsed to measure it: keep the scroll position or the page jumps while typing
+    const sc = scroller(), top = sc.scrollTop;
+    ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight + 4, 420) + 'px';
+    if (sc.scrollTop !== top) sc.scrollTop = top;
+  };
 
   // a remote change arrived: new text, keep the cursor where it was (by character, not by number)
   function applyRemote() {
@@ -456,10 +501,10 @@ const Docs = (() => {
     if (ta && D.mode === 'write') {
       if (D.composing) { D.late = true; paintSide(); return; }
       if (ta.value !== R.B.text) {
-        const sc = window.scrollY, top = ta.scrollTop; ta.value = R.B.text; autosize(ta);
+        const sct = scroller(), sc = sct.scrollTop, top = ta.scrollTop; ta.value = R.B.text; autosize(ta);
         const pos = id => id ? (visAfter(R.B, id) ?? 0) : 0;
         if (focus) { const a = R.B.off[pos(selA)], b = R.B.off[pos(selB)]; ta.setSelectionRange(a, Math.max(a, b)); }
-        ta.scrollTop = top; if (window.scrollY !== sc) window.scrollTo(0, sc);
+        ta.scrollTop = top; if (sct.scrollTop !== sc) sct.scrollTop = sc;
       }
     } else if (prevText !== R.B.text || D.mode !== 'write') { if (D.mode === 'suggest' && $('#dx-src', D.host)) repaintSuggest(caret); else paintPage(); }
     paintSide(); paintNow();
@@ -997,9 +1042,10 @@ const Docs = (() => {
       e.preventDefault(); pasteMd(e.target, c.md);
     });
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); } });
+    host.addEventListener('input', e => { if (e.target.id === 'dx-text') remoteSoon(); });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); } });
     window.addEventListener('scroll', () => { if (D.R && D.host && document.body.contains(D.host)) placeFloat(); }, {passive: true, capture: true});
-    window.addEventListener('resize', () => { if (D.R && D.host && document.body.contains(D.host)) placeFloat(); });
+    window.addEventListener('resize', () => { if (D.R && D.host && document.body.contains(D.host)) { placeFloat(); remoteSoon(); } });
     host.addEventListener('dragover', e => { if (e.target.id === 'dx-text' && [...(e.dataTransfer?.items || [])].some(x => x.type.startsWith('image/'))) e.preventDefault(); });
     host.addEventListener('drop', e => { const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('image/')); if (f && e.target.id === 'dx-text') { e.preventDefault(); insertImage(f); } });
     host.addEventListener('input', e => {
