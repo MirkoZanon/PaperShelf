@@ -144,7 +144,7 @@ const Docs = (() => {
       const r = await api(`${base()}/${q(D.id)}/sync`, {method: 'POST', body: {have: D.R.have}});
       if (!D.R || r.id !== D.id) return;
       const changed = absorb(r);
-      if (changed) applyRemote(); else { paintSide(); paintNow(); }
+      if (changed) applyRemote(); else paintNow();
       if (r.sync_error) $('#dx-net', D.host)?.setAttribute('title', r.sync_error);
     } catch (err) { /* offline: try again later */ }
   }
@@ -274,7 +274,7 @@ const Docs = (() => {
         <span class="grow"></span>
         <div class="seg dx-modes"><button data-dx-mode="write" class="${D.mode === 'write' ? 'on' : ''}" title="${W ? 'Write directly in the document' : 'Read the document'}">${W ? 'Edit' : 'Read'}</button>
           ${W ? `<button data-dx-mode="suggest" class="${D.mode === 'suggest' ? 'on' : ''}" title="Keep writing in the document: every change you make is recorded as a suggestion that the others can accept or reject">Suggest</button>` : ''}
-          <button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="Read with comments and suggestions in the text">Review</button>
+          ${W ? '' : `<button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="Read with comments and suggestions in the text">Review</button>`}
           <button data-dx-mode="preview" class="${D.mode === 'preview' ? 'on' : ''}" title="The formatted document with citations and references">Preview</button></div>
         ${D.standalone ? '' : `<button class="btn small dx-ibtn ${D.split ? 'on' : ''}" data-dx="split" title="Show your library next to the document">${ic('books')}<span>Library</span></button><button class="btn small dx-ibtn" data-dx="window" title="Open this document in its own window, to keep the library in the main one">${ic('export')}<span>New window</span></button>`}
         <span class="dx-menu"><button class="btn small" data-dx="export-menu">${ic('download')}Export</button></span>
@@ -321,7 +321,7 @@ const Docs = (() => {
       return `<button class="dx-pr ${near ? 'warn' : typingNow(a) ? 'typing' : ''}" data-dx-pres="${off}" title="Go to where ${esc(peopleName(a))} is">${av(a, peopleName(a), 20)}<span><b>${esc(who)}</b> ${near ? 'is writing in your paragraph' : typingNow(a) ? 'is writing' : 'is here'}${sec ? ` · ${esc(sec)}` : ''}</span></button>`;
     }).join('');
     const key = warn ? warn + (mine ? mine[0] : '') : ''; if (key && key !== D.warned) toast(`${warn} is writing in this paragraph. Your edits will merge, but you may want to wait or move on.`); D.warned = key;
-    const prev = D.mode === 'preview';
+    const prev = D.mode === 'preview' || (D.mode === 'marks' && D.can);
     el.innerHTML = (rows ? `<div class="dx-pres">${rows}</div>` : '') +
       `<button class="dx-fab ${prev ? 'on' : ''}" data-dx="fab" title="${prev ? 'Back to the text you were editing' : 'See the formatted document (tables, pictures, citations)'} (${MOD}+Alt+P)">${prev ? (D.can ? 'Back to editing' : 'Back to the text') : 'Preview'}</button>`;
     placeFloat(); remoteLayer();
@@ -350,7 +350,16 @@ const Docs = (() => {
       else if (op.r && op.r.length) { const p = visBefore(B, [op.r[0][0], op.r[0][1]]); if (p != null) marks.push({s: B.off[p], e: B.off[p], kind: 'del', a: f.a, age}); }
     }
     for (const a of activeAuthors(90000)) { const sp = lastSpot(a); if (sp != null) { const o = B.off[Math.min(sp, B.vis.length)]; marks.push({s: o, e: o, kind: 'cur', a, age: 0}); } }
-    if (!marks.length) { lay && lay.remove(); return; }
+    // comments and suggestions: marked in the text you are editing, the one you opened stronger
+    const cmr = {cm: [], sg: [], sel: []};
+    for (const c of R.comments) {
+      if (c.parent || c.state !== 'open' || !c.anchor) continue;
+      const a = visBefore(B, c.anchor[0]), b = visAfter(B, c.anchor[1]); if (a == null || b == null || b <= a) continue;
+      (D.selCm === c.id ? cmr.sel : c.rep != null ? cmr.sg : cmr.cm).push({s: B.off[a], e: B.off[b]});
+    }
+    if (!marks.length && !cmr.cm.length && !cmr.sg.length && !cmr.sel.length) { lay && lay.remove(); return; }
+    const merge = list => { const out = []; for (const x of list.sort((p, q) => p.s - q.s)) { const l = out[out.length - 1]; if (l && x.s <= l.e) l.e = Math.max(l.e, x.e); else out.push({s: x.s, e: x.e}); } return out; };
+    const cmHtml = Object.entries(cmr).map(([k, list]) => { const iv = merge(list); return iv.length ? measure(ta, iv).map(rs => rs.map(r => `<i class="${k}" style="left:${r.x}px;top:${r.y}px;height:${r.h}px;width:${r.w}px"></i>`).join('')).join('') : ''; }).join('');
     // measure in one pass: ranges first (clipped so that they do not overlap), then every cursor/deletion point
     const rng = marks.filter(m => m.kind === 'add').sort((x, y) => x.s - y.s || x.e - y.e), items = []; let end = 0;
     for (const m of rng) { const s0 = Math.max(m.s, end); if (m.e > s0) { items.push({s: s0, e: m.e, m}); end = m.e; } }
@@ -360,12 +369,20 @@ const Docs = (() => {
     pts.forEach(p => { const r = measure(ta, [{s: p.s, e: p.s}])[0]; rects.set(p, r); });
     if (!lay) { lay = document.createElement('div'); lay.id = 'dx-rem'; lay.className = 'dx-rem'; pg.appendChild(lay); }
     lay.style.cssText = `left:${ta.offsetLeft + ta.clientLeft}px;top:${ta.offsetTop + ta.clientTop}px;width:${ta.clientWidth}px;height:${ta.offsetHeight}px`;
-    lay.innerHTML = marks.map(m => (rects.get(m) || []).map((r, i) => {
+    lay.innerHTML = cmHtml + marks.map(m => (rects.get(m) || []).map((r, i) => {
       const c = `--c:${auHue(m.a)};left:${r.x}px;top:${r.y}px;height:${r.h}px;`;
       if (m.kind === 'add') return `<i class="add" style="${c}width:${r.w}px;animation-delay:-${m.age.toFixed(2)}s"></i>`;
       if (m.kind === 'del') return `<i class="del" style="${c}animation-delay:-${m.age.toFixed(2)}s"></i>`;
       return `<i class="cur ${typingNow(m.a) ? 'typing' : ''}" style="${c}" data-n="${esc(peopleName(m.a).split(' ')[0])}"></i>`;
     }).join('')).join('');
+  }
+  function caretComment(ta) {      // the cursor is inside a commented piece of text: show that comment in the panel
+    const R = D.R, B = R && R.B; if (!B || ta.value !== B.text || ta.selectionStart !== ta.selectionEnd) return;
+    const p = ta.selectionStart; let hit = null;
+    for (const c of R.comments) { if (c.parent || c.state !== 'open' || !c.anchor) continue; const a = visBefore(B, c.anchor[0]), b = visAfter(B, c.anchor[1]); if (a != null && b != null && b > a && B.off[a] <= p && p <= B.off[b]) { hit = c.id; break; } }
+    if (hit === (D.selCm || null) || (!hit && !D.selCm)) return;
+    if (!hit && D.selCm) { D.selCm = null; paintSide(); return; }
+    D.selCm = hit; D.side = 'comments'; paintSide(); $(`.dx-c[data-cm="${CSS.escape(hit)}"]`, D.host)?.scrollIntoView({block: 'nearest', behavior: 'smooth'});
   }
   const remoteSoon = () => { if (D.remT) return; D.remT = requestAnimationFrame(() => { D.remT = 0; if (D.R) remoteLayer(); }); };
   function scrollRatio() { const sc = scroller(), m = sc.scrollHeight - sc.clientHeight; return m > 0 ? sc.scrollTop / m : 0; }
@@ -376,7 +393,7 @@ const Docs = (() => {
     if (mode === 'write') $('#dx-text', host)?.focus({preventScroll: true});
     const sc = scroller(), m = sc.scrollHeight - sc.clientHeight; sc.scrollTop = Math.max(0, ratio * m);
   }
-  const togglePreview = () => gotoMode(D.mode === 'preview' ? (D.prevMode && D.prevMode !== 'preview' && (D.can || D.prevMode !== 'suggest') ? D.prevMode : D.can ? 'write' : 'marks') : 'preview');
+  const togglePreview = () => gotoMode(D.mode === 'marks' && D.can ? 'write' : D.mode === 'preview' ? (D.prevMode && D.prevMode !== 'preview' && (D.can || D.prevMode !== 'suggest') ? D.prevMode : D.can ? 'write' : 'marks') : 'preview');
   function jumpToOffset(off) {
     const ta = $('#dx-text', D.host);
     if (ta && D.mode === 'write') { const r = ta.getBoundingClientRect(), len = Math.max(1, ta.value.length); const sc = scroller(); sc.scrollTop = Math.max(0, sc.scrollTop + r.top - sc.getBoundingClientRect().top + (off / len) * r.height - sc.clientHeight / 3); return; }
@@ -516,10 +533,13 @@ const Docs = (() => {
     const el = $('#dx-side', D.host); if (!el || !D.R) return;
     const R = D.R, openN = R.comments.filter(c => !c.parent && c.state === 'open').length;
     const keep = $('.dx-sbody', el)?.scrollTop || 0, draft = $('#dx-cnew', el)?.value, foc = document.activeElement?.id === 'dx-cnew';
+    const rb = document.activeElement?.matches?.('[data-rbox]') ? document.activeElement : null, rbSel = rb ? [rb.selectionStart, rb.selectionEnd] : null;
     el.innerHTML = `<div class="dx-stabs">${sideTab('comments', 'Comments', openN)}${sideTab('cite', 'Cite', '')}${sideTab('media', 'Pictures', (R.images || []).length)}${sideTab('history', 'History', '')}</div>
       <div class="dx-sbody">${D.side === 'cite' ? citeHtml() : D.side === 'history' ? historyHtml() : D.side === 'media' ? mediaHtml() : commentsHtml()}</div>`;
     const sb = $('.dx-sbody', el); if (sb) sb.scrollTop = keep;
     if (draft != null && $('#dx-cnew', el)) { $('#dx-cnew', el).value = draft; if (foc) $('#dx-cnew', el).focus(); }
+    if (rbSel) { const nb = $('[data-rbox]', el); if (nb) { nb.focus({preventScroll: true}); nb.setSelectionRange(rbSel[0], rbSel[1]); } }
+    remoteSoon();
   }
   function commentsHtml() {
     const R = D.R, B = R.B, W = D.can;
@@ -536,6 +556,7 @@ const Docs = (() => {
           : c.anchor ? `<button class="dx-quote ${gone ? 'gone' : ''}" data-dx-goto="${esc(c.id)}" title="${gone ? 'The text was deleted' : 'Show in the text'}">${gone ? `<i>${esc(c.quote || 'Text deleted')}</i>` : esc(truncate(now, 140))}</button>` : ''}
         ${c.body ? `<div class="dx-c-b">${esc(c.body).replace(/\n/g, '<br>')}</div>` : ''}
         ${kids(c.id).map(k => `<div class="dx-reply"><div class="dx-c-h">${av(k.by, k.name, 18)}<b>${esc(k.name)}</b><span class="muted small">${esc(ago(k.created))}</span>${k.mine && W ? `<button class="dx-x" data-dx-cdel="${esc(k.id)}" title="Delete">✕</button>` : ''}</div><div class="dx-c-b">${esc(k.body).replace(/\n/g, '<br>')}</div></div>`).join('')}
+        ${W && D.rep === c.id ? `<div class="dx-rbox"><textarea class="input" rows="2" placeholder="Write a reply…" data-rbox="${esc(c.id)}">${esc(D.repDraft || '')}</textarea><div class="dx-row"><button class="btn small primary" data-dx-rsend="${esc(c.id)}">Reply</button><button class="btn small" data-dx-rcancel="1">Cancel</button></div></div>` : ''}
         ${W ? `<div class="dx-c-a">
           ${c.state === 'open' && sug && !gone ? `<button class="btn small primary" data-dx-accept="${esc(c.id)}">${ic('check')}Accept</button><button class="btn small" data-dx-res="${esc(c.id)}|rejected">Reject</button>`
             : c.state === 'open' ? `<button class="btn small" data-dx-res="${esc(c.id)}|resolved">${ic('check')}Resolve</button>` : `<button class="btn small" data-dx-res="${esc(c.id)}|open">Reopen</button>`}
@@ -769,11 +790,13 @@ const Docs = (() => {
   function gotoComment(id) {
     const c = D.R.comments.find(x => x.id === id); if (!c || !c.anchor && !c.ins) return;
     const B = D.R.B, a = c.anchor ? visBefore(B, c.anchor[0]) : 0, b = c.anchor ? visAfter(B, c.anchor[1]) : 0; if (!c.ins && (a == null || b == null || b <= a)) return;
-    D.selCm = id; if (D.mode === 'write') { D.mode = 'marks'; paint(); }
-    if (D.mode === 'preview') { D.mode = 'marks'; paint(); }
-    if (D.mode === 'write' && c.ins) { /* nothing to select */ }
-    else if (D.mode === 'write') { const ta = $('#dx-text', D.host); ta.focus(); ta.setSelectionRange(B.off[a], B.off[b]); const line = B.text.slice(0, B.off[a]).split('\n').length; ta.blur(); ta.focus(); const lh = parseFloat(getComputedStyle(ta).lineHeight) || 24; window.scrollTo({top: ta.getBoundingClientRect().top + window.scrollY + (line - 3) * lh - 120, behavior: 'smooth'}); }
-    else { paintPage(); ($('.dx-ins.sel', D.host) || $('.dx-t.sel', D.host))?.scrollIntoView({block: 'center', behavior: 'smooth'}); }
+    D.selCm = id;
+    if (D.mode === 'preview') { D.mode = D.can ? 'write' : 'marks'; paint(); }
+    if (D.mode === 'write') {
+      const ta = $('#dx-text', D.host);
+      if (ta && !c.ins) { ta.focus({preventScroll: true}); ta.setSelectionRange(B.off[a], B.off[b]); const mid = B.off[a] / Math.max(1, ta.value.length), sc = scroller(), r = ta.getBoundingClientRect(); sc.scrollTo({top: Math.max(0, sc.scrollTop + r.top - sc.getBoundingClientRect().top + mid * r.height - sc.clientHeight / 3), behavior: 'smooth'}); }
+      remoteSoon();
+    } else { paintPage(); ($('.dx-ins.sel', D.host) || $('.dx-t.sel', D.host))?.scrollIntoView({block: 'center', behavior: 'smooth'}); }
     paintSide();
   }
 
@@ -966,7 +989,7 @@ const Docs = (() => {
   function moreMenu(btn) {
     $('.dx-pop')?.remove(); const R = D.R;
     const pop = document.createElement('div'); pop.className = 'dx-pop';
-    pop.innerHTML = `${D.can ? `<button data-dx="archive">${R.arch ? 'Move back to documents' : 'Archive'}</button>` : ''}${R.canDelete ? '<button class="danger" data-dx="delete">Delete document…</button>' : ''}`;
+    pop.innerHTML = `${D.can ? '<button data-dx-mode="marks">Show who wrote what…</button>' : ''}${D.can ? `<button data-dx="archive">${R.arch ? 'Move back to documents' : 'Archive'}</button>` : ''}${R.canDelete ? '<button class="danger" data-dx="delete">Delete document…</button>' : ''}`;
     btn.parentElement.appendChild(pop); setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
   }
   async function deleteDoc() {
@@ -1041,9 +1064,10 @@ const Docs = (() => {
       if (!c.md || c.md === (e.clipboardData.getData('text/plain') || '')) return;          // plain text: the browser does it
       e.preventDefault(); pasteMd(e.target, c.md);
     });
-    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); } });
-    host.addEventListener('input', e => { if (e.target.id === 'dx-text') remoteSoon(); });
-    host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); } });
+    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
+    host.addEventListener('input', e => { if (e.target.id === 'dx-text') remoteSoon(); if (e.target.matches?.('[data-rbox]')) D.repDraft = e.target.value; });
+    host.addEventListener('keydown', e => { if (e.target.matches?.('[data-rbox]') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-dx-rsend]', host)?.click(); } });
+    host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
     window.addEventListener('scroll', () => { if (D.R && D.host && document.body.contains(D.host)) placeFloat(); }, {passive: true, capture: true});
     window.addEventListener('resize', () => { if (D.R && D.host && document.body.contains(D.host)) { placeFloat(); remoteSoon(); } });
     host.addEventListener('dragover', e => { if (e.target.id === 'dx-text' && [...(e.dataTransfer?.items || [])].some(x => x.type.startsWith('image/'))) e.preventDefault(); });
@@ -1137,7 +1161,10 @@ const Docs = (() => {
       const acc = t.closest('[data-dx-accept]')?.dataset.dxAccept; if (acc) return acceptSuggestion(acc);
       const go = t.closest('[data-dx-goto]')?.dataset.dxGoto; if (go) return gotoComment(go);
       const rep = t.closest('[data-dx-reply]')?.dataset.dxReply;
-      if (rep) { const card = t.closest('.dx-c'); if ($('.dx-rbox', card)) return; const b = document.createElement('div'); b.className = 'dx-rbox'; b.innerHTML = '<textarea class="input" rows="2" placeholder="Write a reply…"></textarea><div class="dx-row"><button class="btn small primary">Reply</button><button class="btn small">Cancel</button></div>'; $('.dx-c-a', card).before(b); const ta = $('textarea', b); ta.focus(); const [ok, no] = $$('button', b); no.onclick = () => b.remove(); ok.onclick = async () => { if (ta.value.trim()) await cmCall('POST', '', {body: ta.value, parent: rep}); }; return; }
+      if (rep) { if (D.rep !== rep) { D.rep = rep; D.repDraft = ''; paintSide(); } $('[data-rbox]', host)?.focus(); return; }
+      const rsend = t.closest('[data-dx-rsend]')?.dataset.dxRsend;
+      if (rsend) { const body = (D.repDraft || '').trim(); if (!body) return; const r = await cmCall('POST', '', {body, parent: rsend}); if (r) { D.rep = null; D.repDraft = ''; paintSide(); } return; }
+      if (t.closest('[data-dx-rcancel]')) { D.rep = null; D.repDraft = ''; paintSide(); return; }
       const del = t.closest('[data-dx-cdel]')?.dataset.dxCdel; if (del) { if (await confirmBox('Delete this comment?', 'It disappears for everybody in the group.', {ok: 'Delete', danger: true})) await cmCall('DELETE', `/${q(del)}`); return; }
       const ver = t.closest('[data-dx-ver]')?.dataset.dxVer; if (ver) { const i = ver.indexOf('|'); return viewAt(+ver.slice(0, i), ver.slice(i + 1)); }
       const exp = t.closest('[data-dx-exp]')?.dataset.dxExp; if (exp) { $('.dx-pop')?.remove(); return doExport(exp); }

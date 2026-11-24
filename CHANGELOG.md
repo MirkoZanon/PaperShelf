@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.29.5 – 2026-11-24
+
+- **Fixed: answering a comment** – the reply box disappeared (with your text) whenever the document refreshed in the background. It now stays, keeps what you typed and the cursor, and **⌘/Ctrl + Enter** sends the reply.
+- **No more separate Review mode** – you no longer have to leave Edit to work with comments. Comments are marked in yellow directly in the text you are editing (suggestions in green, the one you opened stronger); click one in the panel to jump to it, put the cursor inside a commented piece to see its comment. The "who wrote what" and "pasted text" views moved to **⋯ → Show who wrote what** (a **Back to editing** button is always at the bottom). Read-only members still have Read / Review / Preview.
+
 ## 2.29.4 – 2026-11-24
 
 - **Fixed: the page jumped when you started typing** – the view slid down so you lost the place you were writing. It now stays exactly where it is, also when somebody else's changes arrive.

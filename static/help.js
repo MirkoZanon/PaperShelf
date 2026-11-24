@@ -128,11 +128,11 @@ const Help = (() => {
 
       <h4>Write</h4>
       <p>The <b>Write</b> tab lists the documents of all your groups. <b>New document</b> → pick the group (or <i>Only me</i>) and write. Changes of several people are combined, never overwritten; you see others appear within seconds.</p>
-      <ul><li><b>Markdown</b> toolbar, <b>Preview</b>, and <b>Review</b> (who wrote what, comments).</li>
-        <li><b>Suggest</b> mode (like Google Docs): switch from <i>Edit</i> to <i>Suggest</i> and type normally; deletions stay struck out, insertions turn green, each change is a card to <b>Accept</b> or <b>Reject</b>. In Review you can also select text to comment or suggest.</li>
+      <ul><li><b>Markdown</b> toolbar and <b>Preview</b>. Comments are marked in yellow right in the text you are editing (green = suggestion): click one in the panel to jump to it and reply without leaving Edit. <b>⋯ → Show who wrote what</b> colours the text by author.</li>
+        <li><b>Suggest</b> mode (like Google Docs): switch from <i>Edit</i> to <i>Suggest</i> and type normally; deletions stay struck out, insertions turn green, each change is a card to <b>Accept</b> or <b>Reject</b>. In Edit or Suggest you can also select text to comment or suggest.</li>
         <li><b>Citations</b>: type <code>[@</code> for a list of papers, best matches first (matching is local). The reference list is written for you.</li>
         <li><b>Tables</b> and <b>pictures</b> (paste, drop or <b>Picture</b>; max 12 per document, 2 MB total).</li>
-        <li><b>Show pasted text</b> in Review hatches pasted passages. It is a transparency aid, not an AI detector.</li>
+        <li><b>Show pasted text</b> (⋯ → Show who wrote what) hatches pasted passages. It is a transparency aid, not an AI detector.</li>
         <li><b>Who is working where</b>: in Edit mode you see a colored cursor with the name of each collaborator, and what they just wrote is highlighted in their color for a few seconds (a dashed marker = something deleted). At the bottom of the document you also see who is there; click to jump to them. Orange = somebody is writing in your paragraph. The floating <b>Preview</b> button (or ⌘/Ctrl+Alt+P) is always within reach.</li>
         <li><b>Merged cells</b>: write a cell as <code>||</code> (no space between the bars) to merge it with the one before, e.g. <code>| Monday|| Tuesday||</code>. A second dashed line <code>|---|---|</code> below a row makes that row a header row too.</li>
         <li><b>Paste from Word, web or Excel</b>: headings, bold/italic, links, lists and tables are kept (converted to Markdown). With the cursor inside a table, the toolbar shows <b>+ Row</b>, <b>+ Column</b>, <b>− Row</b>, <b>− Column</b> and <b>Tidy</b>.</li>

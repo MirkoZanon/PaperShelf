@@ -2420,3 +2420,8 @@ body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { backgro
 .dx-rem .cur.typing { animation: dxblink 1.1s steps(2, start) infinite; }
 @keyframes dxfade { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .dx-rem .cur.typing { animation: none; } }
+
+/* 2.29.5 – comments and suggestions marked in the text you are editing */
+.dx-rem .cm { background: hsl(46 95% 58% / .26); border-bottom: 2px solid hsl(40 90% 50% / .75); }
+.dx-rem .sg { background: hsl(140 55% 45% / .22); border-bottom: 2px dashed hsl(140 55% 36% / .8); }
+.dx-rem .sel { background: hsl(46 95% 55% / .5); border-bottom: 2px solid hsl(34 95% 45%); border-radius: 2px; }
