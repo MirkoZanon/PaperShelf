@@ -50,8 +50,8 @@ const Home = (() => {
       <section class="hm-hero">
         <h1>Your research desk</h1>
         <p class="hm-sub">Read, write and share your research – everything starts here.</p>
-        <form class="hm-omni" id="hm-omni" autocomplete="off">${ic('search')}<input id="hm-q" placeholder="Search your library – or paste a DOI, link or title to add a paper" aria-label="Search or add a paper"><button class="btn primary" type="submit">Go</button></form>
-        <p class="hm-hint">Enter searches your library (titles, notes and the text of your PDFs). A DOI, an arXiv number or a web address is added as a new paper.</p>
+        <form class="hm-omni" id="hm-omni" autocomplete="off" style="position:relative">${ic('search')}<input id="hm-q" placeholder="Search your library and online – or paste a DOI, link or title" aria-label="Search or add a paper"><button class="btn primary" type="submit">Go</button></form>
+        <p class="hm-hint">Type to see papers from your library and from the web (OpenAlex, Crossref – only the words you type are sent). A DOI, an arXiv number or a web address is added as a new paper.</p>
         <div class="hm-chips">
           <button class="hm-chip" data-hm="add">${ic('plus')}Add a paper</button><button class="hm-chip" data-hm="pdfs">${ic('upload')}Import PDFs</button>
           <button class="hm-chip" data-hm="discover">${ic('compass')}Discover papers</button><button class="hm-chip" data-hm="newdoc">${ic('pen')}New document</button>
@@ -121,14 +121,81 @@ const Home = (() => {
       case 'group': case 'post': case 'task': setTab('lab'); return setTimeout(() => Lab.openGroup(x, k === 'task' ? {sub: 'plans'} : {}), 60);
     }
   }
+  /* ---- the search box: your library first, then the web ---- */
+  const sg = {items: [], act: -1, seq: 0, timer: 0, q: '', online: null, loading: false, err: ''};
+  const isId = v => /^(https?:\/\/|www\.|doi:|10\.\d{4,}\/|arxiv:|pmid:?|\d{4}\.\d{4,5}(v\d+)?$)/i.test(v.trim());
+  const words = q => q.toLowerCase().split(/\s+/).filter(Boolean);
+  function localMatches(q) {
+    const w = words(q); if (!w.length) return [];
+    return state.papers.filter(p => { const hay = `${p.title} ${(p.authors || []).join(' ')} ${p.year || ''} ${p.journal || ''} ${(p.keywords || []).join(' ')}`.toLowerCase(); return w.every(x => hay.includes(x)); });
+  }
+  const aLine = c => { const a = c.authors || []; return a.length > 2 ? `${a[0]} … ${a[a.length - 1]}` : a.join(', '); };
+  function sugBox(el) { let b = $('#hm-sug', el); if (!b) { b = document.createElement('div'); b.id = 'hm-sug'; b.className = 'hm-sug'; b.hidden = true; $('#hm-omni', el).appendChild(b); b.addEventListener('mousedown', e => e.preventDefault()); } return b; }
+  function closeSug(el) { const b = $('#hm-sug', el); if (b) { b.hidden = true; b.innerHTML = ''; } sg.items = []; sg.act = -1; }
+  function drawSug(el) {
+    const q = sg.q, b = sugBox(el); if (!q || isId(q)) return closeSug(el);
+    const loc = localMatches(q), items = [];
+    let h = '';
+    if (loc.length) {
+      h += `<div class="hm-sg-h">In your library <span class="muted">${loc.length}</span></div>`;
+      loc.slice(0, 4).forEach(p => { items.push({k: 'lib', id: p.id}); h += `<div class="hm-sg-i" data-i="${items.length - 1}"><b>${esc(p.title)}</b><small>${esc((p.authors || []).slice(0, 2).join(', '))}${p.year ? ' · ' + esc(p.year) : ''}${p.journal ? ' · ' + esc(p.journal) : ''}</small></div>`; });
+      if (loc.length > 4) { items.push({k: 'all'}); h += `<div class="hm-sg-i hm-sg-more" data-i="${items.length - 1}">Show all ${loc.length} in the Library</div>`; }
+    }
+    h += `<div class="hm-sg-h">On the web <span class="muted small">OpenAlex · Crossref</span></div>`;
+    if (sg.loading) h += '<div class="hm-sg-m">Searching online…</div>';
+    else if (sg.err) h += `<div class="hm-sg-m err">${esc(sg.err)}</div>`;
+    else if (sg.online === null) h += `<div class="hm-sg-m muted">${q.length < 6 || words(q).length < 2 ? 'Type a few more words to search online.' : '…'}</div>`;
+    else if (!sg.online.length) h += '<div class="hm-sg-m">Nothing found online. Try other words, the authors, or paste the DOI.</div>';
+    else sg.online.slice(0, 5).forEach(c => { items.push({k: 'web', c}); h += `<div class="hm-sg-i" data-i="${items.length - 1}"><b>${esc(c.title)}</b><small>${esc(aLine(c))}${c.year ? ' · ' + esc(c.year) : ''}${c.venue ? ' · ' + esc(String(c.venue).slice(0, 40)) : ''}</small>${c.in_library ? '<span class="hm-sg-have">in your library</span>' : '<span class="hm-sg-add">＋ add</span>'}</div>`; });
+    items.push({k: 'topic'}); h += `<div class="hm-sg-i hm-sg-act" data-i="${items.length - 1}">🔎 Search by topic: “${esc(q.slice(0, 50))}”</div>`;
+    sg.items = items; if (sg.act >= items.length) sg.act = -1;
+    b.innerHTML = h; b.hidden = false;
+    $$('.hm-sg-i', b).forEach(n => n.classList.toggle('on', +n.dataset.i === sg.act));
+  }
+  async function runOnline(el, q) {
+    if (q.length < 6 || words(q).length < 2 || isId(q)) { sg.online = null; sg.loading = false; return drawSug(el); }
+    const my = ++sg.seq; sg.loading = true; sg.err = ''; drawSug(el);
+    try { const d = await api('/api/search-online?q=' + encodeURIComponent(q)); if (my !== sg.seq) return; sg.online = d.results || []; }
+    catch (err) { if (my !== sg.seq) return; sg.err = err.message; }
+    sg.loading = false; drawSug(el);
+  }
+  async function pickSug(el, it) {
+    closeSug(el); const inp = $('#hm-q', el);
+    if (it.k === 'lib') { setTab('library'); return setTimeout(() => openDetail(it.id), 60); }
+    if (it.k === 'all') return libSearch(inp.value.trim());
+    if (it.k === 'topic') { const q = inp.value.trim(); setTab('discover'); return setTimeout(() => Discover.searchFor(q), 60); }
+    const c = it.c;
+    if (c.in_library) { setTab('library'); return setTimeout(() => openDetail(c.in_library), 60); }
+    try { const d = await addOne(c.doi || c.openalex_id); upsertPaper(d.paper); inp.value = ''; sg.q = ''; setTab('reading'); renderAll(); openDetail(d.paper.id);
+      toast(d.duplicate ? 'Already in your library – opened it.' : `Added: ${d.paper.title.slice(0, 80)}`, d.duplicate ? 'info' : 'ok'); }
+    catch (err) { toast(err.message, 'error', 9000); }
+  }
+  function libSearch(v) { setTab('library'); setTimeout(() => { const s = $('#search'); s.value = v; s.dispatchEvent(new Event('input', {bubbles: true})); }, 60); }
   function bind() {
     const el = $('#home-main');
-    el.addEventListener('click', e => { const b = e.target.closest('[data-hm]'); if (b) go(b.dataset.hm); });
+    el.addEventListener('click', e => {
+      const it = e.target.closest('.hm-sg-i'); if (it) return pickSug(el, sg.items[+it.dataset.i]);
+      const b = e.target.closest('[data-hm]'); if (b) go(b.dataset.hm);
+    });
+    el.addEventListener('input', e => {
+      if (e.target.id !== 'hm-q') return; sg.q = e.target.value.trim(); sg.act = -1; sg.online = null; sg.err = ''; clearTimeout(sg.timer); ++sg.seq; sg.loading = false;
+      drawSug(el); if (sg.q) sg.timer = setTimeout(() => runOnline(el, sg.q), 500);
+    });
+    el.addEventListener('keydown', e => {
+      if (e.target.id !== 'hm-q') return; const b = $('#hm-sug', el); if (!b || b.hidden) return;
+      if (e.key === 'Escape') { closeSug(el); return; }
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && sg.items.length) { e.preventDefault(); const n = sg.items.length; sg.act = e.key === 'ArrowDown' ? (sg.act + 1 >= n ? -1 : sg.act + 1) : (sg.act - 1 < -1 ? n - 1 : sg.act - 1);
+        $$('.hm-sg-i', b).forEach(x => x.classList.toggle('on', +x.dataset.i === sg.act)); $$('.hm-sg-i', b)[sg.act]?.scrollIntoView({block: 'nearest'}); }
+    });
+    document.addEventListener('click', e => { if (!e.target.closest('#hm-omni')) { const h = $('#home-main'); if (h) closeSug(h); } });
     el.addEventListener('submit', e => {
       if (e.target.id !== 'hm-omni') return; e.preventDefault();
       const v = $('#hm-q', el).value.trim(); if (!v) return;
-      if (/^(https?:\/\/|doi:|10\.\d{4,}\/|arxiv:|\d{4}\.\d{4,5}(v\d+)?$)/i.test(v)) { setTab('reading'); $('#add-input').value = v; setTimeout(() => $('#add-form').requestSubmit(), 60); }
-      else { setTab('library'); setTimeout(() => { const s = $('#search'); s.value = v; s.dispatchEvent(new Event('input', {bubbles: true})); }, 60); }
+      if (sg.act >= 0 && sg.items[sg.act]) return pickSug(el, sg.items[sg.act]);
+      if (/^(https?:\/\/|doi:|10\.\d{4,}\/|arxiv:|\d{4}\.\d{4,5}(v\d+)?$)/i.test(v)) { setTab('reading'); $('#add-input').value = v; setTimeout(() => $('#add-form').requestSubmit(), 60); return; }
+      if (localMatches(v).length) return libSearch(v);          // found in your library
+      if (sg.online && sg.online.length) { sg.act = sg.items.findIndex(i => i.k === 'web'); drawSug(el); return; }   // not here: show the web results
+      clearTimeout(sg.timer); runOnline(el, v);
     });
   }
   document.addEventListener('DOMContentLoaded', bind);

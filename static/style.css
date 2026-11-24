@@ -2348,3 +2348,35 @@ body.look-glass .p-card > .dash-head h3, body.look-glass .p-card > .sum-head h3 
 .wr-pop { position: absolute; right: 12px; top: 46px; z-index: 20; min-width: 210px; padding: 6px; display: flex; flex-direction: column; gap: 2px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); text-align: left; }
 .wr-pop button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; cursor: pointer; font: inherit; color: inherit; } .wr-pop button:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); } .wr-pop .danger { color: var(--danger); }
 .wr-pop > span { padding: 8px 10px; }
+
+/* 2.28.3 search/keyword chips get their own row under the header, never on top of the buttons; long titles are shortened */
+.view-head > .filters { grid-column: 1 / -1; min-width: 0; }
+.view-head > .filters:empty { display: none; }
+.view-head > .filters .fchip { max-width: 100%; min-width: 0; }
+.fchip .fc-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fchip button { flex: none; }
+
+/* header grid: explicit cells; below ~1060 px of free width (the sidebar takes its share) the view switch moves to its own row */
+.view-head > .vh-left { grid-column: 1; grid-row: 1; } .view-head > .vh-center { grid-column: 2; grid-row: 2; } .view-head > .head-right { grid-column: 3; grid-row: 1; }
+.view-head > .vh-center { grid-row: 1; }
+.view-head > .filters { grid-row: 2; }
+main.mid .view-head { grid-template-columns: minmax(0, 1fr) auto; }
+main.mid .view-head > .vh-left { grid-column: 1; grid-row: 1; } main.mid .view-head > .head-right { grid-column: 2; grid-row: 1; }
+main.mid .view-head > .vh-center { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+main.mid .view-head > .filters { grid-row: 3; }
+
+/* Home search suggestions */
+.hm-sug { position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 40; text-align: left; max-height: 62vh; overflow: auto; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); }
+.hm-sug[hidden] { display: none; }
+.hm-sg-h { padding: 8px 10px 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); display: flex; gap: 8px; align-items: baseline; }
+.hm-sg-i { padding: 8px 10px; border-radius: 10px; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; align-items: center; }
+.hm-sg-i b { font-weight: 600; grid-column: 1; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.hm-sg-i small { grid-column: 1; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-sg-i .hm-sg-add, .hm-sg-i .hm-sg-have { grid-column: 2; grid-row: 1 / span 2; font-size: 12px; color: var(--accent); white-space: nowrap; }
+.hm-sg-i .hm-sg-have { color: var(--muted); }
+.hm-sg-i:hover, .hm-sg-i.on { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.hm-sg-more, .hm-sg-act { color: var(--accent); display: block; font-size: 13px; }
+.hm-sg-m { padding: 8px 10px; font-size: 13px; } .hm-sg-m.err { color: var(--danger); }
+.hm-hero { position: relative; z-index: 5; }
+.hm-sug { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+@media (prefers-color-scheme: dark) { .hm-sug { background: #202226; } }

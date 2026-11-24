@@ -446,6 +446,8 @@ function emptyHtml() {
     <li>publisher, PubMed or Google Scholar result links</li><li>a paper title, or a whole reference you copied</li></ul>
     <div style="margin-top:14px">You can also drop PDF files onto this window, or add the browser button from ⚙︎ Settings.</div>
     <div style="margin-top:18px"><button class="btn" data-help="start">📘 New here? Read the quick guide</button></div></div>`;
+  if (state.search && state.search.length > 2) return `<div class="empty"><div class="big">🔍</div><h2>Not in your library</h2><div>No paper here matches “${esc(truncate(state.search, 90))}”.</div>
+    <div style="margin-top:14px"><button class="btn primary" data-online-search>🔎 Search online and add it</button></div></div>`;
   return `<div class="empty"><div class="big">🔍</div><h2>Nothing here</h2><div>No papers match this view${state.search || state.keyword ? ' and filter' : ''}.</div></div>`;
 }
 function renderList() {
@@ -462,12 +464,12 @@ function renderList() {
   const chips = [];
   if (state.keyword) {
     const label = list[0]?.keywords.find(k => k.toLowerCase() === state.keyword) || state.keyword;
-    chips.push(`<span class="fchip">Keyword: ${esc(label)} <button data-clear="kw" title="Clear">×</button></span>
+    chips.push(`<span class="fchip"><span class="fc-t">Keyword: ${esc(label)}</span> <button data-clear="kw" title="Clear">×</button></span>
       <button class="btn small" id="kw-to-group" title="Create a label for these papers">Make label from keyword</button>`);
   }
   if (state.search) {
     const fs = state.ftStatus, nft = Object.keys(state.ftQuery === state.search ? state.ftHits || {} : {}).length;
-    chips.push(`<span class="fchip">Search: ${esc(state.search)} <button data-clear="search" title="Clear">×</button></span>`
+    chips.push(`<span class="fchip"><span class="fc-t" title="${esc(state.search)}">Search: ${esc(state.search)}</span> <button data-clear="search" title="Clear">×</button></span>`
       + (state.area === 'reading' ? `<button class="linklike small" data-goto-library title="Search all your papers, read ones included">search the whole library</button>` : '')
       + (fs && fs.with_pdf ? `<span class="muted small" title="The text of your PDFs is searched too (indexed on this computer)">📄 ${nft ? `${nft} found inside PDFs · ` : ''}searching the text of ${fs.indexed} of ${fs.with_pdf} PDFs${fs.indexed < fs.with_pdf - fs.unreadable ? ' (indexing…)' : ''}</span>` : ''));
   }
@@ -1936,6 +1938,8 @@ function bind() {
     }
     state.lastIndex = idx; openDetail(id);
   });
+  document.addEventListener('click', e => { if (!e.target.closest('[data-online-search]')) return; e.preventDefault(); const q = state.search; $('#search').value = ''; state.search = ''; renderAll();
+    const i = $('#add-input'); i.value = q; i.focus(); Suggest.show(q); });
   document.addEventListener('click', e => { if (e.target.closest('[data-goto-library]')) { e.preventDefault(); setTab('library'); } });
   document.addEventListener('click', e => { if (e.target.closest('[data-focus-add]')) { e.preventDefault(); if (state.tab === 'library' && !isDiscover()) $('#add-input').focus(); else openAddPaper(); } });
   $('#view-sub').addEventListener('click', e => { if (e.target.closest('[data-gaps]')) setTab('discover', {keepView: true}); });
@@ -2132,5 +2136,5 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 /* a narrow list (details panel open, small window): icons only in the view buttons */
 document.addEventListener('DOMContentLoaded', () => {
   const m = document.querySelector('main.tab-library-only'); if (!m || !window.ResizeObserver) return;
-  new ResizeObserver(() => m.classList.toggle('narrow', m.clientWidth < 760)).observe(m);
+  new ResizeObserver(() => { m.classList.toggle('narrow', m.clientWidth < 760); m.classList.toggle('mid', m.clientWidth < 1060); }).observe(m);
 });

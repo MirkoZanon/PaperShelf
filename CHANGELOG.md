@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.28.3 – 2026-11-24
+
+- **The Home search box looks everywhere** – while you type, it lists matching papers from your library and, below, papers found online (OpenAlex, Crossref); click one to add it (only the words you type are sent). A DOI, arXiv number or link is still added directly, and “Search by topic” is one click away.
+- **A search with no match offers the web** – the empty Library page now has a “Search online and add it” button.
+- **Search chips no longer overlap the buttons** – a long search or keyword sits on its own row (and is shortened with …), and the List / Map / Table switch moves to its own row sooner when the window is not wide.
+
 ## 2.28.2 – 2026-11-20
 
 - **Delete or archive a document from the Write list** – hover a document and click ⋯. Only the person who created a document can delete it; everyone who can write can archive it.

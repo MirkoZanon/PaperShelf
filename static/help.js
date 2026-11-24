@@ -19,7 +19,7 @@ const Help = (() => {
       ${step(4, '<b>Read &amp; highlight</b> the PDF inside PaperShelf.')}
       ${step(5, '<b>Export references</b> in your journal\'s style, or move everything to Zotero.')}
       <h4>Where things are</h4>
-      <table class="h-table"><tr><td><b>Logo</b></td><td>Home: search or add from one box, continue reading, and every tool.</td></tr>
+      <table class="h-table"><tr><td><b>Logo</b></td><td>Home: one box searches your library <i>and</i> the web, and adds papers; continue reading; every tool.</td></tr>
         <tr><td><b>Library</b></td><td>Your papers: reading list, all papers, and <i>Discover</i> for new ones.</td></tr>
         <tr><td><b>Write</b></td><td>Documents you write alone or with a group.</td></tr>
         <tr><td><b>Lab</b></td><td>Ideas, plans and tasks of your groups.</td></tr>
