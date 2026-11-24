@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.29.1 – 2026-11-24
+
+- **Tables with merged cells and two header rows** – write a cell as `||` (no space between the bars) to merge it with the cell before it, e.g. `| Monday|| Tuesday||` gives two days spanning two columns each. A second dashed line under the first body row turns that row into a header row too (for example M / N under each day). Works in the document, the preview and Word export, and the table buttons keep the merges when you tidy.
+
 ## 2.29 – 2026-11-24
 
 - **Documents now stay identical on all your computers and for everybody in the group.** Until now your Mac and your PC wrote into the same edit log under your name, so edits made on one could overwrite or differ from edits made on the other (some words ended up different). Every computer now has its own log, and all logs are merged in the same order everywhere. **Everyone in the group must update to 2.29** (older versions don't see the new logs). If two computers had already drifted apart, they settle on one version after updating; open History to check, and re-type anything that went missing.

@@ -31,17 +31,26 @@ const Notes = (() => {
     const fPara = () => { if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; } };
     const fList = () => { if (list) { out.push(`<${list.k}>${list.items.join('')}</${list.k}>`); list = null; } };
     const fQuote = () => { if (quote.length) { out.push('<blockquote>' + md(quote.join('\n').replace(/&gt;/g, '>').replace(/&lt;/g, '<').replace(/&amp;/g, '&')) + '</blockquote>'); quote = []; } };
-    const cells = r => r.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/).map(c => c.trim().replace(/\\\|/g, '|'));
+    const raw = r => r.trim().replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(/(?<!\\)\|/);
+    const cells = r => raw(r).map(c => c.trim().replace(/\\\|/g, '|'));
     const SEP = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
     for (let i = 0; i < lines.length; i++) {
       const ln = lines[i];
       if (!inCode && ln.includes('|') && i + 1 < lines.length && lines[i + 1].includes('|') && SEP.test(lines[i + 1])) {   // a table
         fPara(); fList(); fQuote();
         const al = cells(lines[i + 1]).map(c => /^:-*:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:-/.test(c) ? 'left' : '');
-        const row = (r, tag) => '<tr>' + cells(r).map((c, k) => `<${tag}${al[k] ? ` style="text-align:${al[k]}"` : ''}>${inline(c)}</${tag}>`).join('') + '</tr>';
-        let html = `<div class="dx-tbl"><table><thead>${row(ln, 'th')}</thead><tbody>`; i += 2;
-        while (i < lines.length && lines[i].trim() && lines[i].includes('|')) { html += row(lines[i], 'td'); i++; }
-        out.push(html + '</tbody></table></div>'); i--; continue;
+        // a cell written as "||" (no space between the bars) is merged with the one before it (colspan)
+        const row = (r, tag) => { const cs = raw(r), out = []; let col = 0;
+          cs.forEach((c, k) => { if (k > 0 && c === '') { out[out.length - 1].span++; col++; return; } out.push({c: c.trim().replace(/\\\|/g, '|'), span: 1, col}); col++; });
+          return '<tr>' + out.map(o => `<${tag}${o.span > 1 ? ` colspan="${o.span}"` : ''}${al[o.col] ? ` style="text-align:${al[o.col]}"` : ''}>${inline(o.c)}</${tag}>`).join('') + '</tr>'; };
+        const MID = /^\s*\|(\s*:?-{3,}:?\s*\|?)+\s*$/;
+        let head = row(ln, 'th'), body = ''; i += 2;
+        while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
+          if (MID.test(lines[i]) && body) { head += body.replace(/<td/g, '<th').replace(/<\/td>/g, '</th>'); body = ''; }   // a second dashed line makes the rows above it header rows too
+          else if (!MID.test(lines[i])) body += row(lines[i], 'td');
+          i++;
+        }
+        out.push(`<div class="dx-tbl"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`); i--; continue;
       }
       if (/^\s*```/.test(ln)) {
         if (inCode) { out.push('<pre><code>' + code.join('\n') + '</code></pre>'); code = []; inCode = false; }

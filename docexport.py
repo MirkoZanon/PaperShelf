@@ -174,8 +174,25 @@ def _cells(line: str) -> list:
     return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", t)]
 
 
-def _table(rows: list, align: list) -> str:
-    n = max(len(r) for r in rows)
+_MID_RE = re.compile(r"^\s*\|(\s*:?-{3,}:?\s*\|?)+\s*$")
+
+
+def _spans(line: str) -> list:
+    """[(text, colspan)]: a cell written '||' (no space between the bars) is merged into the one before it."""
+    t = line.strip()
+    t = t[1:] if t.startswith("|") else t
+    t = t[:-1] if t.endswith("|") and not t.endswith("\\|") else t
+    out = []
+    for k, c in enumerate(re.split(r"(?<!\\)\|", t)):
+        if k and c == "" and out:
+            out[-1][1] += 1
+        else:
+            out.append([c.strip().replace("\\|", "|"), 1])
+    return out
+
+
+def _table(rows: list, align: list, nhead: int = 1) -> str:
+    n = max(sum(sp for _t, sp in r) for r in rows)
     w = 9298 // n
     jc = {"c": "center", "r": "right"}
     out = ['<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/><w:tblBorders>'
@@ -183,15 +200,18 @@ def _table(rows: list, align: list) -> str:
            + '</w:tblBorders><w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>'
            + f'<w:gridCol w:w="{w}"/>' * n + "</w:tblGrid>"]
     for ri, r in enumerate(rows):
-        out.append("<w:tr>" + ("<w:trPr><w:tblHeader/></w:trPr>" if ri == 0 else ""))
-        for ci in range(n):
-            txt = r[ci] if ci < len(r) else ""
+        head = ri < nhead
+        out.append("<w:tr>" + ("<w:trPr><w:tblHeader/></w:trPr>" if head else ""))
+        ci = 0
+        for txt, sp in r:
             runs = _runs(txt)
-            if ri == 0:
+            if head:
                 runs = runs.replace("<w:r>", "<w:r><w:rPr><w:b/></w:rPr>").replace("<w:r><w:rPr><w:b/></w:rPr><w:rPr>", "<w:r><w:rPr><w:b/>")
             al = align[ci] if ci < len(align) else ""
-            out.append(f'<w:tc><w:tcPr><w:tcW w:w="{w}" w:type="dxa"/>' + ('<w:shd w:val="clear" w:color="auto" w:fill="EEEEEE"/>' if ri == 0 else "") + "</w:tcPr>"
+            out.append(f'<w:tc><w:tcPr><w:tcW w:w="{w * sp}" w:type="dxa"/>' + (f'<w:gridSpan w:val="{sp}"/>' if sp > 1 else "")
+                       + ('<w:shd w:val="clear" w:color="auto" w:fill="EEEEEE"/>' if head else "") + "</w:tcPr>"
                        f'<w:p><w:pPr><w:spacing w:after="40"/>{f"<w:jc w:val=\"{jc[al]}\"/>" if al in jc else ""}</w:pPr>{runs}</w:p></w:tc>')
+            ci += sp
         out.append("</w:tr>")
     out.append("</w:tbl><w:p/>")
     return "".join(out)
@@ -222,13 +242,15 @@ def docx_bytes(md: str, title: str = "", images: dict | None = None) -> bytes:
     while i < len(lines):
         ln = lines[i]
         if "|" in ln and i + 1 < len(lines) and SEP_RE.match(lines[i + 1]) and "|" in lines[i + 1]:
-            head = _cells(ln)
             al = ["c" if c.startswith(":") and c.endswith(":") else "r" if c.endswith(":") else "" for c in _cells(lines[i + 1])]
-            rows, i = [head], i + 2
+            rows, nhead, i = [_spans(ln)], 1, i + 2
             while i < len(lines) and lines[i].strip() and "|" in lines[i]:
-                rows.append(_cells(lines[i]))
+                if _MID_RE.match(lines[i]):
+                    nhead = len(rows)       # a second dashed line: the rows above it are header rows too
+                else:
+                    rows.append(_spans(lines[i]))
                 i += 1
-            body.append(_table(rows, al))
+            body.append(_table(rows, al, nhead))
             continue
         m = IMG_RE.fullmatch(ln.strip())
         if m and m.group(2) in images:

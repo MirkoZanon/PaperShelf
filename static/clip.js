@@ -38,9 +38,11 @@ const Clip = (() => {
   }
   function render(rows) {
     const n = Math.max(...rows.map(r => r.length)); rows = rows.map(r => { r = r.slice(); while (r.length < n) r.push(''); return r; });
-    const w = Array.from({length: n}, (_, i) => Math.max(3, ...rows.map(r => r[i].length)));
-    const line = r => '| ' + r.map((c, i) => c.padEnd(w[i])).join(' | ') + ' |';
-    return [line(rows[0]), '|' + w.map(x => '-'.repeat(x + 2)).join('|') + '|', ...rows.slice(1).map(line)].join('\n');
+    const isDash = r => r.some(c => c !== MERGE) && r.every(c => c === MERGE || c === '' || /^:?-{3,}:?$/.test(c)) && r.some(c => /-/.test(c));
+    const w = Array.from({length: n}, (_, i) => Math.max(3, ...rows.filter(r => !isDash(r)).map(r => r[i] === MERGE ? 0 : r[i].length)));
+    const dash = '|' + w.map(x => '-'.repeat(x + 2)).join('|') + '|';
+    const line = r => isDash(r) ? dash : '|' + r.map((c, i) => c === MERGE ? '' : ' ' + c.padEnd(w[i]) + ' ').join('|') + '|';
+    return [line(rows[0]), dash, ...rows.slice(1).map(line)].join('\n');
   }
 
   function blocks(root) {
@@ -108,9 +110,10 @@ const Clip = (() => {
   }
 
   /* ---------- tables in the Markdown source ---------- */
+  const MERGE = '\u0001';   // a cell written as '||' (no space between the bars) is merged into the one before it
   const isRow = l => /^\s*\|.*\|\s*$/.test(l);
   const isSep = l => /^\s*\|[\s:|-]+\|\s*$/.test(l) && l.includes('-');
-  const cells = l => { const s = l.trim().replace(/^\|/, '').replace(/\|$/, ''); const out = []; let cur = ''; for (let i = 0; i < s.length; i++) { if (s[i] === '\\' && s[i + 1] === '|') { cur += '\\|'; i++; } else if (s[i] === '|') { out.push(cur.trim()); cur = ''; } else cur += s[i]; } out.push(cur.trim()); return out; };
+  const cells = l => { const s = l.trim().replace(/^\|/, '').replace(/\|$/, ''); const out = []; let cur = ''; for (let i = 0; i < s.length; i++) { if (s[i] === '\\' && s[i + 1] === '|') { cur += '\\|'; i++; } else if (s[i] === '|') { out.push(cur === '' && out.length ? MERGE : cur.trim()); cur = ''; } else cur += s[i]; } out.push(cur === '' && out.length ? MERGE : cur.trim()); return out; };
   /* the table around position `pos` of `text`, or null */
   function tableAt(text, pos) {
     const starts = []; let o = 0; const lines = text.split('\n'); lines.forEach(l => { starts.push(o); o += l.length + 1; });
