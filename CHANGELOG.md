@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.29.6 – 2026-11-24
+
+- **Tables look the same everywhere and keep every cell line** – the extra styling of tables with merged headers (rounded corners, gaps in the lines) came from a clash with another style and is gone. Cells are only merged in header rows (`| Monday|| Tuesday||`); in the body, `||` is simply an empty cell, so all the separations stay visible. Also in Word export.
+
 ## 2.29.5 – 2026-11-24
 
 - **Fixed: answering a comment** – the reply box disappeared (with your text) whenever the document refreshed in the background. It now stays, keeps what you typed and the cursor, and **⌘/Ctrl + Enter** sends the reply.

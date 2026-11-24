@@ -39,24 +39,18 @@ const Notes = (() => {
       if (!inCode && ln.includes('|') && i + 1 < lines.length && lines[i + 1].includes('|') && SEP.test(lines[i + 1])) {   // a table
         fPara(); fList(); fQuote();
         const al = cells(lines[i + 1]).map(c => /^:-*:$/.test(c) ? 'center' : /-:$/.test(c) ? 'right' : /^:-/.test(c) ? 'left' : '');
-        // a cell written as "||" (no space between the bars) is merged with the one before it (colspan)
+        // header cells followed by an empty cell ("Monday||") are merged (colspan); in the body an empty cell is just an empty cell
+        const MID = /^\s*\|(\s*:?-{3,}:?\s*\|?)+\s*$/, tl = []; let j = i + 2;
+        while (j < lines.length && lines[j].trim() && lines[j].includes('|')) tl.push(lines[j++]);
+        const lastMid = tl.reduce((m, l, k) => MID.test(l) ? k : m, -1);   // a second dashed line makes the rows above it header rows too
         let bounds = null;     // column edges of the first header row: the main separation lines, kept visible all the way down
-        const row = (r, tag) => { const cs = raw(r), out = []; let col = 0;
-          cs.forEach((c, k) => { if (k > 0 && c === '') { out[out.length - 1].span++; col++; return; } out.push({c: c.trim().replace(/\\\|/g, '|'), span: 1, col}); col++; });
+        const row = (r, tag, merge) => { const cs = raw(r), out = []; let col = 0;
+          cs.forEach((c, k) => { if (merge && k > 0 && c === '') { out[out.length - 1].span++; col++; return; } out.push({c: c.trim().replace(/\\\|/g, '|'), span: 1, col}); col++; });
           if (!bounds) { const e = new Set(); out.forEach(o => e.add(o.col + o.span)); bounds = out.some(o => o.span > 1) ? e : new Set(); }
-          const cells = [];
-          out.forEach(o => {   // a merged cell that crosses a main line is cut there, so the line stays visible (the text stays in the first part)
-            let from = o.col, first = true;
-            while (from < o.col + o.span) { const cut = [...bounds].filter(x => x > from && x < o.col + o.span).sort((x, y) => x - y)[0], to = first ? (cut || o.col + o.span) : from + 1; cells.push({c: first ? o.c : '', span: to - from, col: from, grp: bounds.has(to)}); first = false; from = to; }
-          });
-          return '<tr>' + cells.map(o => `<${tag}${o.span > 1 ? ` colspan="${o.span}"` : ''}${o.grp ? ' class="grp"' : ''}${al[o.col] ? ` style="text-align:${al[o.col]}"` : ''}>${inline(o.c)}</${tag}>`).join('') + '</tr>'; };
-        const MID = /^\s*\|(\s*:?-{3,}:?\s*\|?)+\s*$/;
-        let head = row(ln, 'th'), body = ''; i += 2;
-        while (i < lines.length && lines[i].trim() && lines[i].includes('|')) {
-          if (MID.test(lines[i]) && body) { head += body.replace(/<td/g, '<th').replace(/<\/td>/g, '</th>'); body = ''; }   // a second dashed line makes the rows above it header rows too
-          else if (!MID.test(lines[i])) body += row(lines[i], 'td');
-          i++;
-        }
+          return '<tr>' + out.map(o => `<${tag}${o.span > 1 ? ` colspan="${o.span}"` : ''}${bounds.has(o.col + o.span) ? ' class="tg"' : ''}${al[o.col] ? ` style="text-align:${al[o.col]}"` : ''}>${inline(o.c)}</${tag}>`).join('') + '</tr>'; };
+        let head = row(ln, 'th', true), body = '';
+        tl.forEach((l, k) => { if (MID.test(l)) return; if (k < lastMid) head += row(l, 'th', true); else body += row(l, 'td', false); });
+        i = j;
         out.push(`<div class="dx-tbl"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>`); i--; continue;
       }
       if (/^\s*```/.test(ln)) {

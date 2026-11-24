@@ -177,14 +177,14 @@ def _cells(line: str) -> list:
 _MID_RE = re.compile(r"^\s*\|(\s*:?-{3,}:?\s*\|?)+\s*$")
 
 
-def _spans(line: str) -> list:
-    """[(text, colspan)]: a cell written '||' (no space between the bars) is merged into the one before it."""
+def _spans(line: str, merge: bool = True) -> list:
+    """[(text, colspan)]. In header rows a cell followed by an empty cell ('Monday||') is merged with it; elsewhere empty cells stay empty."""
     t = line.strip()
     t = t[1:] if t.startswith("|") else t
     t = t[:-1] if t.endswith("|") and not t.endswith("\\|") else t
     out = []
     for k, c in enumerate(re.split(r"(?<!\\)\|", t)):
-        if k and c == "" and out:
+        if merge and k and c == "" and out:
             out[-1][1] += 1
         else:
             out.append([c.strip().replace("\\|", "|"), 1])
@@ -262,13 +262,14 @@ def docx_bytes(md: str, title: str = "", images: dict | None = None) -> bytes:
         ln = lines[i]
         if "|" in ln and i + 1 < len(lines) and SEP_RE.match(lines[i + 1]) and "|" in lines[i + 1]:
             al = ["c" if c.startswith(":") and c.endswith(":") else "r" if c.endswith(":") else "" for c in _cells(lines[i + 1])]
-            rows, nhead, i = [_spans(ln)], 1, i + 2
-            while i < len(lines) and lines[i].strip() and "|" in lines[i]:
-                if _MID_RE.match(lines[i]):
-                    nhead = len(rows)       # a second dashed line: the rows above it are header rows too
-                else:
-                    rows.append(_spans(lines[i]))
-                i += 1
+            tl, j = [], i + 2
+            while j < len(lines) and lines[j].strip() and "|" in lines[j]:
+                tl.append(lines[j])
+                j += 1
+            last_mid = max([k for k, l in enumerate(tl) if _MID_RE.match(l)] or [-1])   # a second dashed line: the rows above it are header rows too
+            rows = [_spans(ln)] + [_spans(l, merge=k < last_mid) for k, l in enumerate(tl) if not _MID_RE.match(l)]
+            nhead = 1 + sum(1 for k, l in enumerate(tl) if k < last_mid and not _MID_RE.match(l))
+            i = j
             body.append(_table(rows, al, nhead))
             continue
         m = IMG_RE.fullmatch(ln.strip())

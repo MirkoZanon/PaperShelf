@@ -2406,7 +2406,7 @@ body .view-head.vh-mid > .filters { grid-row: 3; }
 body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { background: #3a2a12; color: #ffd9a8; }
 @media print { .dx-float { display: none; } }
 /* 2.29.2 – main separation lines of a table with merged header cells stay visible all the way down */
-.md th.grp, .md td.grp, .dx-prev th.grp, .dx-prev td.grp { border-right: 2px solid color-mix(in srgb, currentColor 38%, transparent); }
+.md th.tg, .md td.tg, .dx-prev th.tg, .dx-prev td.tg { border-right: 2px solid color-mix(in srgb, currentColor 38%, transparent); }
 
 /* 2.29.4 – other people's cursors and latest changes over the text (Edit mode) */
 .dx-page { position: relative; }
