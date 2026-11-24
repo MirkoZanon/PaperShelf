@@ -103,11 +103,15 @@ def plain(md: str) -> str:
 # ---- Word (.docx) written by hand: a zip of a few XML files
 def _runs(s: str) -> str:
     out = []
-    for part in re.split(r"(\*\*.+?\*\*|(?<![\w*])\*(?!\s).+?(?<!\s)\*(?![\w*])|`[^`]+`)", s):
+    for part in re.split(r"(==(?:\{\w+\})?.+?==|\*\*.+?\*\*|(?<![\w*])\*(?!\s).+?(?<!\s)\*(?![\w*])|`[^`]+`)", s):
         if not part:
             continue
         rp = ""
-        if part.startswith("**") and part.endswith("**") and len(part) > 4:
+        hm = re.match(r"^==(?:\{(yellow|green|blue|pink|orange)\})?(.+?)==$", part)
+        if hm:
+            fill = {"yellow": "FFF59D", "green": "BFF0C2", "blue": "BFE0FF", "pink": "FFC9E3", "orange": "FFD3A1"}[hm.group(1) or "yellow"]
+            part, rp = hm.group(2), f'<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>'
+        elif part.startswith("**") and part.endswith("**") and len(part) > 4:
             part, rp = part[2:-2], "<w:b/>"
         elif part.startswith("*") and part.endswith("*") and len(part) > 2:
             part, rp = part[1:-1], "<w:i/>"

@@ -21,7 +21,7 @@ const Notes = (() => {
     t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/__(.+?)__/g, '<strong>$1</strong>');
     t = t.replace(/(^|[^\w*])\*(?!\s)(.+?)(?<!\s)\*(?!\w)/g, '$1<em>$2</em>');
     t = t.replace(/(^|[^\w_/])_(?!\s)(.+?)(?<!\s)_(?![\w_])/g, '$1<em>$2</em>');
-    t = t.replace(/~~(.+?)~~/g, '<del>$1</del>').replace(/==(.+?)==/g, '<mark>$1</mark>');
+    t = t.replace(/~~(.+?)~~/g, '<del>$1</del>').replace(/==(?:\{(yellow|green|blue|pink|orange)\})?(.+?)==/g, (_, c, x) => c ? `<mark class="hl-${c}">${x}</mark>` : `<mark>${x}</mark>`);
     t = t.replace(/\{(red|orange|green|blue|purple|grey|gray)\}([\s\S]+?)\{\/\}/g, (_, c, x) => `<span style="color:${COLORS[c]}">${x}</span>`);
     return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`).replace(/\u0001(\d+)\u0001/g, (_, i) => imgs[+i]);
   }

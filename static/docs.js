@@ -83,13 +83,60 @@ const Docs = (() => {
     let s = 0; while (s < n - p && old.charCodeAt(old.length - 1 - s) === newText.charCodeAt(newText.length - 1 - s)) s++;
     if (s && /[\udc00-\udfff]/.test(old[old.length - s])) s--;
     const i0 = offToIdx(B, p), i1 = offToIdx(B, old.length - s), ins = newText.slice(p, newText.length - s);
+    const entry = {del: [], ins: []};      // what this edit did, by character ids: it is what Undo takes back
     if (i1 > i0) {
       const r = [];
       for (let i = i0; i < i1; i++) { const x = B.vis[i], l = r[r.length - 1]; if (l && l[1] === x.a && l[0] + l[2] === x.c) l[2]++; else r.push([x.c, x.a, 1]); }
-      pushOp({k: 'd', c: R.max + 1, r: r.slice(0, 399), at: nowIso()});
+      entry.del = r.slice(0, 399); pushOp({k: 'd', c: R.max + 1, r: entry.del, at: nowIso()});
     }
-    if (ins) { const a = i0 ? [B.vis[i0 - 1].c, B.vis[i0 - 1].a] : null; pushOp({k: 'i', c: R.max + 1, a, t: ins, at: nowIso(), ...(pasted && ins.length >= 20 ? {p: 1} : {})}); }
-    rebuild(); schedule(); return true;
+    if (ins) { const a = i0 ? [B.vis[i0 - 1].c, B.vis[i0 - 1].a] : null; entry.ins.push({c: R.max + 1, a: R.ok, n: Array.from(ins).length}); pushOp({k: 'i', c: R.max + 1, a, t: ins, at: nowIso(), ...(pasted && ins.length >= 20 ? {p: 1} : {})}); }
+    rebuild(); schedule(); if (!D.histBusy) recordHist(entry); return true;
+  }
+  /* ---- Undo / Redo of MY changes (by character, so other people's changes in between stay) */
+  function recordHist(entry) {
+    const h = D.hist || (D.hist = {undo: [], redo: []}), now = Date.now(), g = h.undo[h.undo.length - 1], last = g && g.e[g.e.length - 1];
+    h.redo.length = 0;
+    if (g && now - g.t < 900 && last && ((!entry.del.length && !last.del.length) || (!entry.ins.length && !last.ins.length))) { g.e.push(entry); g.t = now; }   // typing / backspacing in one go = one step
+    else { h.undo.push({t: now, e: [entry]}); if (h.undo.length > 300) h.undo.shift(); }
+    updUndoBtns();
+  }
+  function updUndoBtns() {
+    const h = D.hist || {undo: [], redo: []}, on = !!D.can && D.mode === 'write' && !D.view;
+    const u = $('#dx-undo', D.host), r = $('#dx-redo', D.host); if (u) u.disabled = !on || !h.undo.length; if (r) r.disabled = !on || !h.redo.length;
+  }
+  function invertEntry(en) {
+    const R = D.R, inv = {del: [], ins: []}; let caret = null;
+    for (const {c, a, n} of en.ins) {                       // take back what was typed: delete the characters that are still there
+      const B = R.B, r = [];
+      for (let j = 0; j < n; j++) { const i = B.idx.get((c + j) + '|' + a); if (i == null || B.nodes[i].dead) continue; const l = r[r.length - 1]; if (l && l[0] + l[2] === c + j) l[2]++; else r.push([c + j, a, 1]); }
+      if (r.length) { const at = visBefore(B, [r[0][0], r[0][1]]); pushOp({k: 'd', c: R.max + 1, r, at: nowIso()}); rebuild(); inv.del.push(...r); caret = R.B.off[Math.min(at, R.B.vis.length)]; }
+    }
+    if (en.del.length) {                                     // bring back what was deleted, where it was
+      const B0 = R.B, idxs = [];
+      for (const [c, a, n] of en.del) for (let j = 0; j < n; j++) { const i = B0.idx.get((c + j) + '|' + a); if (i != null && B0.nodes[i].dead) idxs.push(i); }
+      idxs.sort((x, y) => x - y);
+      const runs = []; for (const i of idxs) { const l = runs[runs.length - 1]; if (l && l[l.length - 1] + 1 === i) l.push(i); else runs.push([i]); }
+      const ids = runs.map(run => run.map(i => ({c: B0.nodes[i].c, a: B0.nodes[i].a, ch: B0.nodes[i].ch})));
+      for (const run of ids) {
+        const B = R.B; let k = B.idx.get(run[0].c + '|' + run[0].a) - 1; while (k >= 0 && B.nodes[k].dead) k--;
+        const anchor = k >= 0 ? [B.nodes[k].c, B.nodes[k].a] : null, text = run.map(x => x.ch).join(''), c = R.max + 1;
+        pushOp({k: 'i', c, a: anchor, t: text, at: nowIso()}); rebuild();
+        const n = Array.from(text).length; inv.ins.push({c, a: R.ok, n}); caret = R.B.off[visAfter(R.B, [c + n - 1, R.ok]) ?? 0];
+      }
+    }
+    return {entry: inv, caret};
+  }
+  function undo(redo) {
+    const R = D.R, h = D.hist; if (!R || !h || !D.can || D.view || D.composing) return;
+    const ta = $('#dx-text', D.host); if (!ta || D.mode !== 'write') return;
+    const from = redo ? h.redo : h.undo, to = redo ? h.undo : h.redo, g = from.pop();
+    if (!g) { toast(redo ? 'Nothing to redo.' : 'Nothing to undo.'); return; }
+    D.histBusy = true; let caret = null; const inv = [];
+    try { for (let k = g.e.length - 1; k >= 0; k--) { const r = invertEntry(g.e[k]); if (r.entry.del.length || r.entry.ins.length) inv.push(r.entry); if (r.caret != null) caret = r.caret; } }
+    finally { D.histBusy = false; }
+    if (inv.length) to.push({t: 0, e: inv}); else { updUndoBtns(); return undo(redo); }   // nothing of it was left (somebody removed it already): go on to the step before
+    schedule(); ta.value = R.B.text; autosize(ta); if (caret != null) ta.setSelectionRange(caret, caret); ta.focus({preventScroll: true});
+    paintSide(); remoteSoon(); updUndoBtns(); D.sel = selection();
   }
   function rebuild(upto) { const R = D.R; R.B = build(R.ops, upto); R.max = Math.max(R.max || 0, maxCtr(R.ops)); }
 
@@ -223,6 +270,7 @@ const Docs = (() => {
     try {
       const r = await api(`${base()}/${q(id)}`);
       D.id = id; D.can = r.can_write; D.sq = new Map(); D.mode = keep ? D.mode : 'write'; D.view = null; D.selCm = null;
+      D.hist = {undo: [], redo: []};
       D.R = {me: r.me, ok: r.ok || r.me, ops: {}, have: {}, sent: 0, max: 0, B: null, title: r.title, arch: r.arch, gone: r.gone, canDelete: r.can_delete, byName: r.by_name, comments: [], snaps: [], papers: [], people: [], text0: ''};
       for (const [a, o] of Object.entries(r.ops)) { D.R.ops[a] = o.ops; D.R.have[a] = o.n; }
       D.R.sent = (D.R.ops[D.R.ok] || []).length; absorb({...r, ops: {}}); rebuild();
@@ -282,8 +330,9 @@ const Docs = (() => {
       </div>
       ${R.gone ? `<div class="dx-gonebar">${ic('alert')}<span><b>${esc(R.byName)}</b> deleted this document for the group. It is no longer shared or updated: this copy stays on your computer only.</span><span class="grow"></span><button class="btn small" data-dx-exp="docx">Export</button><button class="btn small danger" data-dx="purge">Remove from this computer</button></div>` : ''}
       ${W && D.mode === 'write' ? `<div class="dx-tools" role="toolbar" aria-label="Formatting">
+        <button data-dx="undo" id="dx-undo" title="Undo (${MOD}+Z): takes back your last changes, not the ones of others" disabled>↶</button><button data-dx="redo" id="dx-redo" title="Redo (${MOD}+Shift+Z)" disabled>↷</button><span class="dx-sep"></span>
         <button data-fmt="h1" title="Heading 1"><b>H1</b></button><button data-fmt="h2" title="Heading 2"><b>H2</b></button><button data-fmt="h3" title="Heading 3"><b>H3</b></button><span class="dx-sep"></span>
-        <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><span class="dx-sep"></span>
+        <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><button data-dx="hl-menu" title="Highlight the selected text in a color">Highlight</button><span class="dx-sep"></span>
         <button data-fmt="ul" title="Bulleted list">• List</button><button data-fmt="ol" title="Numbered list">1. List</button><button data-fmt="quote" title="Quote">❝</button><button data-fmt="link" title="Link">${ic('link')}</button><span class="dx-sep"></span>
         <button data-fmt="table" title="Insert a table">${ic('table')}Table</button><span class="dx-tt" id="dx-tt" hidden><button data-tbl="addrow" title="Add a row below the cursor">+ Row</button><button data-tbl="addcol" title="Add a column after the cursor">+ Column</button><button data-tbl="delrow" title="Delete the row with the cursor">− Row</button><button data-tbl="delcol" title="Delete the column with the cursor">− Column</button><button data-tbl="fmt" title="Line up the columns">Tidy</button></span><button data-fmt="image" title="Insert a picture (or paste / drop one into the text)">${ic('image')}Picture</button><span class="dx-sep"></span>
         <button data-fmt="cite" title="Cite a paper of the group">${ic('book')}Cite</button>
@@ -311,6 +360,7 @@ const Docs = (() => {
   }
   function paintFloat() {
     const el = $('#dx-float', D.host); if (!el || !D.R) return;
+    updUndoBtns();
     if (D.view) { el.innerHTML = ''; return; }
     const R = D.R, B = R.B, ta = $('#dx-text', D.host), mine = ta && D.mode === 'write' && ta.value === B.text ? paraRange(B.text, ta.selectionStart) : null;
     let warn = null;
@@ -357,7 +407,9 @@ const Docs = (() => {
       const a = visBefore(B, c.anchor[0]), b = visAfter(B, c.anchor[1]); if (a == null || b == null || b <= a) continue;
       (D.selCm === c.id ? cmr.sel : c.rep != null ? cmr.sg : cmr.cm).push({s: B.off[a], e: B.off[b]});
     }
-    if (!marks.length && !cmr.cm.length && !cmr.sg.length && !cmr.sel.length) { lay && lay.remove(); return; }
+    const hls = []; { HL_RE.lastIndex = 0; let m; while ((m = HL_RE.exec(B.text))) hls.push({s: m.index, e: m.index + m[0].length, c: m[1] || 'yellow'}); }
+    if (!marks.length && !cmr.cm.length && !cmr.sg.length && !cmr.sel.length && !hls.length) { lay && lay.remove(); return; }
+    const hlHtml = hls.length ? measure(ta, hls).map((rs, i) => rs.map(r => `<i class="hl hl-${hls[i].c}" style="left:${r.x}px;top:${r.y}px;height:${r.h}px;width:${r.w}px"></i>`).join('')).join('') : '';
     const merge = list => { const out = []; for (const x of list.sort((p, q) => p.s - q.s)) { const l = out[out.length - 1]; if (l && x.s <= l.e) l.e = Math.max(l.e, x.e); else out.push({s: x.s, e: x.e}); } return out; };
     const cmHtml = Object.entries(cmr).map(([k, list]) => { const iv = merge(list); return iv.length ? measure(ta, iv).map(rs => rs.map(r => `<i class="${k}" style="left:${r.x}px;top:${r.y}px;height:${r.h}px;width:${r.w}px"></i>`).join('')).join('') : ''; }).join('');
     // measure in one pass: ranges first (clipped so that they do not overlap), then every cursor/deletion point
@@ -369,7 +421,7 @@ const Docs = (() => {
     pts.forEach(p => { const r = measure(ta, [{s: p.s, e: p.s}])[0]; rects.set(p, r); });
     if (!lay) { lay = document.createElement('div'); lay.id = 'dx-rem'; lay.className = 'dx-rem'; pg.appendChild(lay); }
     lay.style.cssText = `left:${ta.offsetLeft + ta.clientLeft}px;top:${ta.offsetTop + ta.clientTop}px;width:${ta.clientWidth}px;height:${ta.offsetHeight}px`;
-    lay.innerHTML = cmHtml + marks.map(m => (rects.get(m) || []).map((r, i) => {
+    lay.innerHTML = hlHtml + cmHtml + marks.map(m => (rects.get(m) || []).map((r, i) => {
       const c = `--c:${auHue(m.a)};left:${r.x}px;top:${r.y}px;height:${r.h}px;`;
       if (m.kind === 'add') return `<i class="add" style="${c}width:${r.w}px;animation-delay:-${m.age.toFixed(2)}s"></i>`;
       if (m.kind === 'del') return `<i class="del" style="${c}animation-delay:-${m.age.toFixed(2)}s"></i>`;
@@ -620,6 +672,27 @@ const Docs = (() => {
       case 'table': { const T = '| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n|          |          |          |\n|          |          |          |'; const pre = s && v[s - 1] !== '\n' ? '\n\n' : s && v[s - 2] !== '\n' ? '\n' : '', post = v[e] === '\n' ? '\n' : '\n\n'; out = v.slice(0, s) + pre + T + post + v.slice(e); from = s + pre.length + 2; to = from + 8; break; }
       case 'quote': prefixLine(l => l.startsWith('> ') ? l.slice(2) : '> ' + l); break;
       default: return;
+    }
+    ta.value = out; ta.setSelectionRange(from, to); ta.focus(); editTo(out); autosize(ta); paintSide();
+  }
+  const HL_RE = /==(?:\{(yellow|green|blue|pink|orange)\})?([^\n=][^\n]*?)==/g;
+  const hlMk = (color, t) => color === 'yellow' ? `==${t}==` : `=={${color}}${t}==`;
+  function hlMenu(btn) {
+    $('.dx-pop')?.remove(); if (!$('#dx-text', D.host) || !D.can) { toast('Switch to Edit to highlight text.'); return; }
+    const pop = document.createElement('div'); pop.className = 'dx-pop dx-hlpop';
+    pop.innerHTML = ['yellow', 'green', 'blue', 'pink', 'orange'].map(c => `<button data-hl="${c}" title="${c}" style="background:${{yellow: '#ffe14d', green: '#7fdc85', blue: '#7ec0ff', pink: '#ff8cc5', orange: '#ffae5c'}[c]}"></button>`).join('') + '<button data-hl="none">None</button>';
+    btn.parentElement.style.position = 'relative'; btn.after(pop);
+    pop.style.cssText = 'position:absolute;top:100%;left:0;z-index:60'; setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
+  }
+  function highlight(color) {      // ==text== (yellow) or =={green}text==; again on a highlighted piece changes its color, "none" removes it
+    const ta = $('#dx-text', D.host); if (!ta || !D.can) return;
+    const v = ta.value, s0 = ta.selectionStart, e0 = ta.selectionEnd; let out, from, to, m; HL_RE.lastIndex = 0;
+    while ((m = HL_RE.exec(v))) if (s0 >= m.index && e0 <= m.index + m[0].length) break;
+    if (m) { const rep = color === 'none' ? m[2] : hlMk(color, m[2]); out = v.slice(0, m.index) + rep + v.slice(m.index + m[0].length); from = m.index; to = m.index + rep.length; }
+    else {
+      if (color === 'none') return;
+      const sel = v.slice(s0, e0) || 'highlighted text', rep = sel.split('\n').map(l => l.trim() ? hlMk(color, l) : l).join('\n');
+      out = v.slice(0, s0) + rep + v.slice(e0); from = s0; to = s0 + rep.length;
     }
     ta.value = out; ta.setSelectionRange(from, to); ta.focus(); editTo(out); autosize(ta); paintSide();
   }
@@ -1065,6 +1138,7 @@ const Docs = (() => {
       e.preventDefault(); pasteMd(e.target, c.md);
     });
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
+    host.addEventListener('beforeinput', e => { if (e.target.id === 'dx-text' && (e.inputType === 'historyUndo' || e.inputType === 'historyRedo')) { e.preventDefault(); undo(e.inputType === 'historyRedo'); } });
     host.addEventListener('input', e => { if (e.target.id === 'dx-text') remoteSoon(); if (e.target.matches?.('[data-rbox]')) D.repDraft = e.target.value; });
     host.addEventListener('keydown', e => { if (e.target.matches?.('[data-rbox]') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-dx-rsend]', host)?.click(); } });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
@@ -1110,6 +1184,7 @@ const Docs = (() => {
       if (e.target.id === 'dx-text' && (e.metaKey || e.ctrlKey) && !e.altKey) {
         const k = e.key.toLowerCase(); if (k === 'b') { e.preventDefault(); wrap('bold'); } else if (k === 'i') { e.preventDefault(); wrap('italic'); }
       }
+      if (e.target.id === 'dx-text' && (e.metaKey || e.ctrlKey) && !e.altKey && (e.code === 'KeyZ' || (e.code === 'KeyY' && e.ctrlKey && !e.metaKey))) { e.preventDefault(); undo(e.code === 'KeyY' || e.shiftKey); return; }
       if (D.R && !D.view && (e.metaKey || e.ctrlKey) && e.altKey && e.code === 'KeyP') { e.preventDefault(); togglePreview(); return; }
       if (e.target.id === 'dx-text' && (e.metaKey || e.ctrlKey) && e.altKey && e.key.toLowerCase() === 'm') { e.preventDefault(); D.side = 'comments'; paintSide(); $('#dx-cnew', host)?.focus(); }
       if (e.target.id === 'dx-text' && e.key === 'Enter' && D.can && !e.shiftKey && !e.metaKey && !e.ctrlKey) {   // continue a list
@@ -1127,6 +1202,10 @@ const Docs = (() => {
       const open = t.closest('[data-dx-open]'); if (open) { await openDoc(open.dataset.dxOpen); return; }
       const dx = t.closest('[data-dx]')?.dataset.dx;
       if (dx === 'fab') return togglePreview();
+      if (dx === 'hl-menu') { e.stopPropagation(); return hlMenu(t.closest('button')); }
+      const hlc = t.closest('[data-hl]')?.dataset.hl; if (hlc) { $('.dx-pop')?.remove(); return highlight(hlc); }
+      if (dx === 'undo') return undo(false);
+      if (dx === 'redo') return undo(true);
       const pres = t.closest('[data-dx-pres]')?.dataset.dxPres; if (pres != null) return jumpToOffset(+pres);
       if (dx === 'new') return newDialog();
       if (dx === 'toggle-arch') { D.showArch = !D.showArch; return paintList(); }

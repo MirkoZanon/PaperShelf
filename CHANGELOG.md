@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.30 – 2026-11-24
+
+- **Highlight text in color** – select a sentence and use **Highlight** in the toolbar: yellow, green, blue, pink or orange (or **None** to remove it). It is written `==text==` / `=={green}text==`, shows in color in the text while you edit, in Preview and in the Word export.
+- **Undo and Redo** – **⌘/Ctrl + Z** takes back your last change, **⇧⌘Z / Ctrl + Y** redoes it, also with the new ↶ ↷ buttons in the toolbar. It undoes only *your* changes, character by character, so what your collaborators wrote in the meantime stays. Typing in one go counts as one step. (Edit mode; in Suggest mode reject the suggestion instead.)
+
 ## 2.29.6 – 2026-11-24
 
 - **Tables look the same everywhere and keep every cell line** – the extra styling of tables with merged headers (rounded corners, gaps in the lines) came from a clash with another style and is gone. Cells are only merged in header rows (`| Monday|| Tuesday||`); in the body, `||` is simply an empty cell, so all the separations stay visible. Also in Word export.
