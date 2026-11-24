@@ -681,8 +681,9 @@ const Docs = (() => {
     $('.dx-pop')?.remove(); if (!$('#dx-text', D.host) || !D.can) { toast('Switch to Edit to highlight text.'); return; }
     const pop = document.createElement('div'); pop.className = 'dx-pop dx-hlpop';
     pop.innerHTML = ['yellow', 'green', 'blue', 'pink', 'orange'].map(c => `<button data-hl="${c}" title="${c}" style="background:${{yellow: '#ffe14d', green: '#7fdc85', blue: '#7ec0ff', pink: '#ff8cc5', orange: '#ffae5c'}[c]}"></button>`).join('') + '<button data-hl="none">None</button>';
-    btn.parentElement.style.position = 'relative'; btn.after(pop);
-    pop.style.cssText = 'position:absolute;top:100%;left:0;z-index:60'; setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
+    document.body.appendChild(pop); const r = btn.getBoundingClientRect();
+    pop.style.cssText = `position:fixed;z-index:200;top:${Math.round(r.bottom + 6)}px;left:${Math.round(Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)))}px`;
+    setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
   }
   function highlight(color) {      // ==text== (yellow) or =={green}text==; again on a highlighted piece changes its color, "none" removes it
     const ta = $('#dx-text', D.host); if (!ta || !D.can) return;

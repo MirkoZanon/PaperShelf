@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.30.1 – 2026-11-24
+- Highlight colors now open as a compact row of round swatches (plus "None") right under the button, never stacked or over the text.
+- The formatting toolbar has a solid background and stays pinned at the top of the visible page while you scroll.
+
 ## 2.30 – 2026-11-24
 
 - **Highlight text in color** – select a sentence and use **Highlight** in the toolbar: yellow, green, blue, pink or orange (or **None** to remove it). It is written `==text==` / `=={green}text==`, shows in color in the text while you edit, in Preview and in the Word export.
