@@ -276,7 +276,7 @@ const Docs = (() => {
         <button data-fmt="h1" title="Heading 1"><b>H1</b></button><button data-fmt="h2" title="Heading 2"><b>H2</b></button><button data-fmt="h3" title="Heading 3"><b>H3</b></button><span class="dx-sep"></span>
         <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><span class="dx-sep"></span>
         <button data-fmt="ul" title="Bulleted list">• List</button><button data-fmt="ol" title="Numbered list">1. List</button><button data-fmt="quote" title="Quote">❝</button><button data-fmt="link" title="Link">${ic('link')}</button><span class="dx-sep"></span>
-        <button data-fmt="table" title="Insert a table">${ic('table')}Table</button><button data-fmt="image" title="Insert a picture (or paste / drop one into the text)">${ic('image')}Picture</button><span class="dx-sep"></span>
+        <button data-fmt="table" title="Insert a table">${ic('table')}Table</button><span class="dx-tt" id="dx-tt" hidden><button data-tbl="addrow" title="Add a row below the cursor">+ Row</button><button data-tbl="addcol" title="Add a column after the cursor">+ Column</button><button data-tbl="delrow" title="Delete the row with the cursor">− Row</button><button data-tbl="delcol" title="Delete the column with the cursor">− Column</button><button data-tbl="fmt" title="Line up the columns">Tidy</button></span><button data-fmt="image" title="Insert a picture (or paste / drop one into the text)">${ic('image')}Picture</button><span class="dx-sep"></span>
         <button data-fmt="cite" title="Cite a paper of the group">${ic('book')}Cite</button>
         <button data-fmt="comment" title="Comment on the selected text (${MOD}+Alt+M)">${ic('chat')}Comment</button>
         <button data-fmt="suggest" title="Suggest a change to the selected text">${ic('pen')}Suggest</button>
@@ -802,7 +802,7 @@ const Docs = (() => {
     if (t.startsWith('delete')) applyEdit(s, en, '', {after: t.includes('Forward')});
     else if (t === 'insertText' || t === 'insertReplacementText') applyEdit(s, en, clean(e.data || (e.dataTransfer && e.dataTransfer.getData('text/plain')) || ''));
     else if (t === 'insertParagraph' || t === 'insertLineBreak') applyEdit(s, en, '\n');
-    else if (t.startsWith('insertFromPaste') || t === 'insertFromYank') applyEdit(s, en, clean((e.dataTransfer && e.dataTransfer.getData('text/plain')) || ''));
+    else if (t.startsWith('insertFromPaste') || t === 'insertFromYank') applyEdit(s, en, clean(e.dataTransfer ? (Clip.fromClipboard(e.dataTransfer).md || e.dataTransfer.getData('text/plain') || '') : ''));
   }
 
   /* ------------------------------------------------------------- selecting text in Review: comment / suggest, like Google Docs */
@@ -912,8 +912,30 @@ const Docs = (() => {
   }
 
   /* ------------------------------------------------------------- events */
+  function pasteMd(ta, md) {
+    const v = ta.value, s = ta.selectionStart, e = ta.selectionEnd, multi = /\n/.test(md) || /^(\||- |\d+\. |#)/.test(md);
+    let pre = '', post = '';
+    if (multi) { if (s && v[s - 1] !== '\n') pre = '\n\n'; else if (s > 1 && v[s - 2] !== '\n') pre = '\n'; if (e < v.length && v[e] !== '\n') post = '\n\n'; else if (e < v.length - 1 && v[e + 1] !== '\n' && /^(\||- |\d+\. )/.test(md) === false) post = '\n'; }
+    const ins = pre + md + post; ta.setRangeText(ins, s, e, 'end');
+    editTo(ta.value, true); autosize(ta); paintNow(); D.sel = selection(); refsSoon(); tblTools();
+    toast('Pasted with its formatting (headings, lists, tables).');
+  }
+  function tblTools() { const ta = $('#dx-text', D.host), tt = $('#dx-tt', D.host); if (tt) tt.hidden = !(ta && Clip.tableAt(ta.value, ta.selectionStart)); }
+  function tblOp(op) {
+    const ta = $('#dx-text', D.host); if (!ta || !D.can) return;
+    const r = Clip.edit(ta.value, ta.selectionStart, op); if (!r) return toast('Put the cursor inside a table first.', 'info'); if (r.error) return toast(r.error, 'info');
+    ta.value = r.text; ta.setSelectionRange(r.caret, r.caret); ta.focus(); editTo(r.text); autosize(ta); paintSide(); tblTools();
+  }
   function bind(host) {
-    host.addEventListener('paste', e => { const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith('image/')); if (f && e.target.id === 'dx-text') { e.preventDefault(); insertImage(f); } });
+    host.addEventListener('paste', e => {                 // formatted text (Word, web, Excel) becomes Markdown; a picture only when there is no text with it
+      if (e.target.id !== 'dx-text' || !D.can) return;
+      const c = Clip.fromClipboard(e.clipboardData);
+      if (c.image) { e.preventDefault(); return insertImage(c.image); }
+      if (!c.md || c.md === (e.clipboardData.getData('text/plain') || '')) return;          // plain text: the browser does it
+      e.preventDefault(); pasteMd(e.target, c.md);
+    });
+    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') tblTools(); });
+    host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') tblTools(); });
     host.addEventListener('dragover', e => { if (e.target.id === 'dx-text' && [...(e.dataTransfer?.items || [])].some(x => x.type.startsWith('image/'))) e.preventDefault(); });
     host.addEventListener('drop', e => { const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('image/')); if (f && e.target.id === 'dx-text') { e.preventDefault(); insertImage(f); } });
     host.addEventListener('input', e => {
@@ -989,6 +1011,7 @@ const Docs = (() => {
       const mode = t.closest('[data-dx-mode]')?.dataset.dxMode;
       if (mode) { D.sel = selection(); if (D.mode === 'suggest') await flushAll(); D.mode = mode; D.view = null; D.focusSrc = mode === 'suggest'; paint(); if (mode === 'write') $('#dx-text', host)?.focus(); return; }
       const side = t.closest('[data-dx-side]')?.dataset.dxSide; if (side) { D.side = side; return paintSide(); }
+      const tb = t.closest('[data-tbl]')?.dataset.tbl; if (tb) return tblOp(tb);
       const fmt = t.closest('[data-fmt]')?.dataset.fmt;
       if (fmt) { if (fmt === 'comment' || fmt === 'suggest') { D.sel = selection(); D.side = 'comments'; paintSide(); if (fmt === 'suggest') return addComment(true); $('#dx-cnew', host)?.focus(); return; } if (fmt === 'cite') { D.side = 'cite'; return paintSide(); } if (fmt === 'image') return pickImage(); return wrap(fmt); }
       const imi = t.closest('[data-dx-imgins]')?.dataset.dxImgins; if (imi) { const [id, nm] = imi.split('|'); const ta = $('#dx-text', host); if (ta) { const v = ta.value, s2 = ta.selectionStart; insertAtCursor(`${s2 && v[s2 - 1] !== '\n' ? '\n\n' : ''}![${nm}](img:${id})\n\n`); } return; }

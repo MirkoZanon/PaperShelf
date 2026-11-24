@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.28.5 – 2026-11-24
+
+- **Pasting from Word, web pages and Excel keeps the formatting** – headings, bold/italic, links, bullet and numbered lists (also nested) and tables are converted to Markdown instead of being treated as a picture. A pasted picture is inserted only when the clipboard holds no text.
+- **Editable tables** – put the cursor in any table in a document and the toolbar shows **+ Row, + Column, − Row, − Column** and **Tidy** (aligns the columns). Cells are plain text you can edit directly. Cells copied from Excel (tab-separated) also become a table.
+- Works in both Edit and Suggest mode; pasted text is still marked in "Show pasted text".
+
 ## 2.28.4 – 2026-11-24
 
 - **No more overlaps in the Library header** – it now adapts to its own width (also when the paper panel is open beside the list): the List / Map / Table switch moves to its own row sooner, and when there is very little room the buttons show only their icons (the names appear as tooltips).

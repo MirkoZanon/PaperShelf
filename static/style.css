@@ -2387,3 +2387,7 @@ body .view-head.vh-mid > .filters { grid-row: 3; }
 .view-head.vh-tiny .search-box { flex: 1 1 120px; min-width: 90px; width: auto; }
 .view-head .scope-seg, .view-head .mode-seg { flex-shrink: 0; }
 .view-head.vh-mid .vh-left { flex-wrap: wrap; row-gap: 8px; }
+
+.dx-tt { display: inline-flex; gap: 2px; align-items: center; padding-left: 6px; margin-left: 2px; border-left: 1px solid var(--border-soft); }
+.dx-tt[hidden] { display: none; }
+.dx-tt button { font-size: 12px; color: var(--accent); }
