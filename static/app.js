@@ -2136,5 +2136,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 /* a narrow list (details panel open, small window): icons only in the view buttons */
 document.addEventListener('DOMContentLoaded', () => {
   const m = document.querySelector('main.tab-library-only'); if (!m || !window.ResizeObserver) return;
-  new ResizeObserver(() => { m.classList.toggle('narrow', m.clientWidth < 760); m.classList.toggle('mid', m.clientWidth < 1060); }).observe(m);
+  new ResizeObserver(() => m.classList.toggle('narrow', m.clientWidth < 760)).observe(m);
+  { const vh = document.querySelector('.view-head');   // the header adapts to ITS OWN width (the detail panel takes space from the list, not from the window)
+    if (vh) new ResizeObserver(() => { const w = vh.clientWidth; vh.classList.toggle('vh-mid', w < 1300); vh.classList.toggle('vh-tiny', w < 680); }).observe(vh); }
 });

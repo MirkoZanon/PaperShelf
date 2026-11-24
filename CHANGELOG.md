@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.28.4 – 2026-11-24
+
+- **No more overlaps in the Library header** – it now adapts to its own width (also when the paper panel is open beside the list): the List / Map / Table switch moves to its own row sooner, and when there is very little room the buttons show only their icons (the names appear as tooltips).
+
 ## 2.28.3 – 2026-11-24
 
 - **The Home search box looks everywhere** – while you type, it lists matching papers from your library and, below, papers found online (OpenAlex, Crossref); click one to add it (only the words you type are sent). A DOI, arXiv number or link is still added directly, and “Search by topic” is one click away.

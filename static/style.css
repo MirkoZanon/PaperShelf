@@ -2360,10 +2360,10 @@ body.look-glass .p-card > .dash-head h3, body.look-glass .p-card > .sum-head h3 
 .view-head > .vh-left { grid-column: 1; grid-row: 1; } .view-head > .vh-center { grid-column: 2; grid-row: 2; } .view-head > .head-right { grid-column: 3; grid-row: 1; }
 .view-head > .vh-center { grid-row: 1; }
 .view-head > .filters { grid-row: 2; }
-main.mid .view-head { grid-template-columns: minmax(0, 1fr) auto; }
-main.mid .view-head > .vh-left { grid-column: 1; grid-row: 1; } main.mid .view-head > .head-right { grid-column: 2; grid-row: 1; }
-main.mid .view-head > .vh-center { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
-main.mid .view-head > .filters { grid-row: 3; }
+body .view-head.vh-mid { grid-template-columns: minmax(0, 1fr) auto; }
+body .view-head.vh-mid > .vh-left { grid-column: 1; grid-row: 1; } body .view-head.vh-mid > .head-right { grid-column: 2; grid-row: 1; }
+body .view-head.vh-mid > .vh-center { grid-column: 1 / -1; grid-row: 2; justify-content: flex-start; }
+body .view-head.vh-mid > .filters { grid-row: 3; }
 
 /* Home search suggestions */
 .hm-sug { position: absolute; left: 0; right: 0; top: calc(100% + 8px); z-index: 40; text-align: left; max-height: 62vh; overflow: auto; padding: 6px; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); }
@@ -2380,3 +2380,10 @@ main.mid .view-head > .filters { grid-row: 3; }
 .hm-hero { position: relative; z-index: 5; }
 .hm-sug { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
 @media (prefers-color-scheme: dark) { .hm-sug { background: #202226; } }
+
+/* very little room: icons only (the names show as tooltips) */
+.view-head.vh-tiny .scope-seg button span:not(.tab-n), .view-head.vh-tiny .mode-seg button .ml { display: none; }
+.view-head.vh-tiny .mode-seg button, .view-head.vh-tiny .scope-seg button { padding: 0 10px; }
+.view-head.vh-tiny .search-box { flex: 1 1 120px; min-width: 90px; width: auto; }
+.view-head .scope-seg, .view-head .mode-seg { flex-shrink: 0; }
+.view-head.vh-mid .vh-left { flex-wrap: wrap; row-gap: 8px; }
