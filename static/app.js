@@ -260,7 +260,12 @@ function applyLook(look, accent) {
   if (a && a !== 'green') document.body.dataset.accent = a; else delete document.body.dataset.accent;
   try {   // the tab icon follows the accent colour too
     const col = (ACCENTS.find(x => x[0] === (a || 'green')) || ACCENTS[0])[1], fav = document.getElementById('fav-svg');
-    if (fav) fav.href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><rect width="28" height="28" rx="7.5" fill="${col}"/><g transform="translate(2 2)" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 4.5h3.2v15H4.5zM9.6 4.5h3.2v15H9.6zM14.6 5.6l3.1-.8 3.8 14.5-3.1.8z"/><path d="M4.5 8h3.2M9.6 8h3.2M4.5 16h3.2M9.6 16h3.2"/></g></svg>`);
+    if (fav) {   // PNG (not SVG): Windows app windows and the taskbar show SVG icons as a blank page
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 28"><rect width="28" height="28" rx="7.5" fill="${col}"/><g transform="translate(2 2)" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 4.5h3.2v15H4.5zM9.6 4.5h3.2v15H9.6zM14.6 5.6l3.1-.8 3.8 14.5-3.1.8z"/><path d="M4.5 8h3.2M9.6 8h3.2M4.5 16h3.2M9.6 16h3.2"/></g></svg>`;
+      const img = new Image();
+      img.onload = () => { try { const c = document.createElement('canvas'); c.width = c.height = 64; c.getContext('2d').drawImage(img, 0, 0, 64, 64); fav.type = 'image/png'; fav.href = c.toDataURL('image/png'); } catch { /* keep the PNG file */ } };
+      img.src = 'data:image/svg+xml,' + encodeURIComponent(svg);
+    }
   } catch { /* ignore */ }
   try { localStorage.setItem('papershelf-look', JSON.stringify({look: look || 'glass', accent: a || 'green'})); } catch { /* ignore */ }
 }

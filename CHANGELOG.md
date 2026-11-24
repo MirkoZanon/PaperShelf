@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.28.6 – 2026-11-24
+
+- **Windows: the app window and taskbar icon was a blank page** – the icon is now a PNG in your accent colour instead of an SVG, which Windows app windows can't draw. The Desktop / Start menu shortcut also points to its icon explicitly (create it again from Settings → App icon).
+
 ## 2.28.5 – 2026-11-24
 
 - **Pasting from Word, web pages and Excel keeps the formatting** – headings, bold/italic, links, bullet and numbered lists (also nested) and tables are converted to Markdown instead of being treated as a picture. A pasted picture is inserted only when the clipboard holds no text.

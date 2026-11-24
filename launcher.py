@@ -321,7 +321,7 @@ def _win_shortcuts(port: int) -> list[str]:
             "$s.TargetPath=%s;$s.Arguments=%s;$s.WorkingDirectory=%s;$s.IconLocation=%s;"
             "$s.Description='PaperShelf – your library of scientific papers';$s.Save();Write-Output (Join-Path $f 'PaperShelf.lnk')"
         ) % (folder, _psq(target), _psq(f'"{APP_DIR / "app.py"}" --port {int(port)}'), _psq(APP_DIR),
-             _psq(ICONS / "PaperShelf.ico"))
+             _psq(str(ICONS / "PaperShelf.ico") + ",0"))
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
                            capture_output=True, text=True, timeout=60)
         if r.returncode == 0 and r.stdout.strip():
