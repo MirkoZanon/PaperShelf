@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.29 – 2026-11-24
+
+- **Documents now stay identical on all your computers and for everybody in the group.** Until now your Mac and your PC wrote into the same edit log under your name, so edits made on one could overwrite or differ from edits made on the other (some words ended up different). Every computer now has its own log, and all logs are merged in the same order everywhere. **Everyone in the group must update to 2.29** (older versions don't see the new logs). If two computers had already drifted apart, they settle on one version after updating; open History to check, and re-type anything that went missing.
+- **Comments: the box empties after you post** – the text no longer stays there, so you can write the next comment straight away. A short "Comment added" message confirms it.
+
 ## 2.28.6 – 2026-11-24
 
 - **Windows: the app window and taskbar icon was a blank page** – the icon is now a PNG in your accent colour instead of an SVG, which Windows app windows can't draw. The Desktop / Start menu shortcut also points to its icon explicitly (create it again from Settings → App icon).

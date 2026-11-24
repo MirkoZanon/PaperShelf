@@ -63,8 +63,8 @@ const Docs = (() => {
   const clean = t => String(t).replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '�')
     .replace(/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g, '�');
   function pushOp(op) {
-    const R = D.R, log = R.ops[R.me] || (R.ops[R.me] = []), last = log[log.length - 1], unsent = log.length - 1 >= Math.max(R.sent, R.fl || 0);   // an operation already on its way never grows
-    if (unsent && last && last.k === 'i' && op.k === 'i' && !op.p && !last.p && op.a && op.a[0] === opEnd(last) && op.a[1] === R.me && op.c === R.max + 1 && R.max === opEnd(last)) {
+    const R = D.R, log = R.ops[R.ok] || (R.ops[R.ok] = []), last = log[log.length - 1], unsent = log.length - 1 >= Math.max(R.sent, R.fl || 0);   // an operation already on its way never grows
+    if (unsent && last && last.k === 'i' && op.k === 'i' && !op.p && !last.p && op.a && op.a[0] === opEnd(last) && op.a[1] === R.ok && op.c === R.max + 1 && R.max === opEnd(last)) {
       last.t += op.t; last.at = op.at; R.max = opEnd(last); return;               // typing: one operation grows
     }
     if (unsent && last && last.k === 'd' && op.k === 'd' && last.r.length + op.r.length < 380) {
@@ -103,19 +103,19 @@ const Docs = (() => {
   }
   async function flush() {
     const R = D.R; if (!R || D.flushing) return;
-    const log = R.ops[R.me] || []; if (log.length <= R.sent) { setStatus('saved'); return; }
+    const log = R.ops[R.ok] || []; if (log.length <= R.sent) { setStatus('saved'); return; }
     D.flushing = true; D.firstEdit = 0;
     const sendTo = log.length, from = R.sent, payload = JSON.parse(JSON.stringify(log.slice(from))); R.fl = sendTo;
     try {
       const r = await api(`${base()}/${q(D.id)}/ops`, {method: 'POST', body: {from, ops: payload}});
-      R.sent = Math.max(R.sent, sendTo); R.have[R.me] = r.n;
+      R.sent = Math.max(R.sent, sendTo); R.have[R.ok] = r.n;
       D.flushing = false;
-      if ((R.ops[R.me] || []).length > R.sent) { schedule(); } else setStatus('saved');
+      if ((R.ops[R.ok] || []).length > R.sent) { schedule(); } else setStatus('saved');
     } catch (err) {
       D.flushing = false;
       if (err.data && typeof err.data.n === 'number') {
         const n = err.data.n;
-        if (n >= from && n <= log.length && n !== from) { R.sent = n; R.have[R.me] = n; flush(); return; }  // the answer got lost: they are stored
+        if (n >= from && n <= log.length && n !== from) { R.sent = n; R.have[R.ok] = n; flush(); return; }  // the answer got lost: they are stored
         toast('Your copy of this document was out of date, so it has been reloaded. The last few seconds of typing may need to be written again.', 'error', 9000);
         await openDoc(D.id, {keep: true}); return;
       }
@@ -126,7 +126,7 @@ const Docs = (() => {
   function absorb(r) {
     const R = D.R; let changed = false;
     for (const [a, o] of Object.entries(r.ops || {})) {
-      if (a === R.me) { if (o.n > (R.ops[a] || []).length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.sent = R.ops[a].length; changed = true; } R.have[a] = Math.max(R.have[a] || 0, o.n); continue; }
+      if (a === R.ok) { if (o.n > (R.ops[a] || []).length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.sent = R.ops[a].length; changed = true; } R.have[a] = Math.max(R.have[a] || 0, o.n); continue; }
       if (o.ops.length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.have[a] = o.n; changed = true; }
     }
     R.title = r.title; R.arch = r.arch; R.gone = r.gone; R.canDelete = r.can_delete;
@@ -223,9 +223,9 @@ const Docs = (() => {
     try {
       const r = await api(`${base()}/${q(id)}`);
       D.id = id; D.can = r.can_write; D.sq = new Map(); D.mode = keep ? D.mode : 'write'; D.view = null; D.selCm = null;
-      D.R = {me: r.me, ops: {}, have: {}, sent: 0, max: 0, B: null, title: r.title, arch: r.arch, gone: r.gone, canDelete: r.can_delete, byName: r.by_name, comments: [], snaps: [], papers: [], people: [], text0: ''};
+      D.R = {me: r.me, ok: r.ok || r.me, ops: {}, have: {}, sent: 0, max: 0, B: null, title: r.title, arch: r.arch, gone: r.gone, canDelete: r.can_delete, byName: r.by_name, comments: [], snaps: [], papers: [], people: [], text0: ''};
       for (const [a, o] of Object.entries(r.ops)) { D.R.ops[a] = o.ops; D.R.have[a] = o.n; }
-      D.R.sent = (D.R.ops[D.R.me] || []).length; absorb({...r, ops: {}}); rebuild();
+      D.R.sent = (D.R.ops[D.R.ok] || []).length; absorb({...r, ops: {}}); rebuild();
       if (D.standalone) document.title = r.title + ' – PaperShelf';
       paint(); if (!r.gone) { startPoll(); setTimeout(pull, 600); }
     } catch (err) { toast(err.message, 'error'); D.id = null; await loadList(); paintList(); }
@@ -233,14 +233,15 @@ const Docs = (() => {
   function closeDoc() {
     flushAll().finally(() => { stopPoll(); D.id = null; D.R = null; D.view = null; hideBubble(); if (D.onBack) { const f = D.onBack; D.onBack = null; D.host = null; f(); return; } loadList().then(paintList); });
   }
-  async function flushNow() { clearTimeout(D.flushT); for (let i = 0; i < 3 && D.R && ((D.R.ops[D.R.me] || []).length > D.R.sent || D.flushing); i++) { if (!D.flushing) await flush(); else await new Promise(r => setTimeout(r, 300)); } }
+  async function flushNow() { clearTimeout(D.flushT); for (let i = 0; i < 3 && D.R && ((D.R.ops[D.R.ok] || []).length > D.R.sent || D.flushing); i++) { if (!D.flushing) await flush(); else await new Promise(r => setTimeout(r, 300)); } }
 
   // writers get well-separated colours (the n-th writer: golden-angle steps around the colour wheel)
-  const auHue = a => { const ids = [...new Set([...(D.R.people || []).map(p => p.id), ...Object.keys(D.R.ops)])].sort(); const i = Math.max(0, ids.indexOf(a)); return Math.round((i * 137.508 + 150) % 360); };
-  function peopleName(a) { return (D.R.people.find(p => p.id === a) || {}).name || a; }
+  const auHue = a => { a = String(a).split('~')[0]; const ids = [...new Set([...(D.R.people || []).map(p => p.id), ...Object.keys(D.R.ops).map(k => k.split('~')[0])])].sort(); const i = Math.max(0, ids.indexOf(a)); return Math.round((i * 137.508 + 150) % 360); };
+  function au(a) { return String(a).split('~')[0]; }   // the person behind an operation log ('name~computer')
+  function peopleName(a) { a = au(a); return (D.R.people.find(p => p.id === a) || {}).name || a; }
   function activeAuthors(ms = 150000) {
     const R = D.R, out = [];
-    for (const [a, log] of Object.entries(R.ops)) { const last = log[log.length - 1]; if (a !== R.me && last && Date.now() - Date.parse(last.at) < ms) out.push(a); }
+    for (const [a, log] of Object.entries(R.ops)) { const last = log[log.length - 1]; if (a !== R.ok && au(a) !== R.me && last && Date.now() - Date.parse(last.at) < ms) out.push(a); }
     return out;
   }
   // where somebody wrote last: a visible index in the text
@@ -627,7 +628,9 @@ const Docs = (() => {
     if (suggest) { rep = await askText('Suggest a change', 'New wording for the selected text (leave empty to suggest deleting it).', selText(sel)); if (rep === null) return; }
     else if (!body) { toast('Write your comment first.'); box?.focus(); return; }
     if (!suggest && !sel) { toast('Select the text this comment is about first.'); return; }
-    if (await createComment({a: sel.a, b: sel.b, body, rep}) && box) box.value = '';
+    if (box) box.value = '';     // emptied before the panel is redrawn (it keeps the draft otherwise), put back only if it fails
+    if (await createComment({a: sel.a, b: sel.b, body, rep})) { toast(suggest ? 'Suggestion added' : 'Comment added'); $('#dx-cnew', D.host)?.focus(); }
+    else { const nb = $('#dx-cnew', D.host); if (nb && !nb.value) nb.value = body; }
   }
   const selText = S => D.R.B.text.slice(D.R.B.off[S.a], D.R.B.off[S.b]);
   function askText(title, hint, value) {
@@ -1033,7 +1036,7 @@ const Docs = (() => {
   }
   let sideT = null; const paintSideSoon = () => { clearTimeout(sideT); sideT = setTimeout(paintSide, 400); };
 
-  window.addEventListener('beforeunload', () => { if (D.R && (D.R.ops[D.R.me] || []).length > D.R.sent) { try { navigator.sendBeacon?.(`${base()}/${q(D.id)}/ops`, new Blob([JSON.stringify({from: D.R.sent, ops: D.R.ops[D.R.me].slice(D.R.sent)})], {type: 'application/json'})); } catch (e) { /* ignore */ } } });
+  window.addEventListener('beforeunload', () => { if (D.R && (D.R.ops[D.R.ok] || []).length > D.R.sent) { try { navigator.sendBeacon?.(`${base()}/${q(D.id)}/ops`, new Blob([JSON.stringify({from: D.R.sent, ops: D.R.ops[D.R.ok].slice(D.R.sent)})], {type: 'application/json'})); } catch (e) { /* ignore */ } } });
 
   /* ------------------------------------------------------------- mounting inside the Lab (or in a window of its own) */
   function paintList() { if (D.host) root().innerHTML = listHtml(); }

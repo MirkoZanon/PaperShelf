@@ -3155,7 +3155,7 @@ def share_identity(db) -> dict:
     token = s.get("share_token") or s.get("sync_token") or ""
     user, gist = s.get("share_user") or "", s.get("share_gist") or ""
     src = f"gist:{gist}" if gist else ""
-    return {"user": user, "src": src, "repo": src, "token": token, "local": "local-" + s["install_id"],
+    return {"user": user, "src": src, "repo": src, "token": token, "local": "local-" + s["install_id"], "tag": s["install_id"][:8].lower(),
             "can_publish": bool(user and gist and token)}
 
 def _load_share(db, sid):
@@ -3393,7 +3393,7 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
         except sharing.ShareError as exc:
             errors.append(f"{owner}: {exc}")
     for owner, data in authority:  # each member's own copy decides about that member's notes
-        sharing.trust_author_copy(st, owner, data)
+        sharing.trust_author_copy(st, owner, data, logs=owner != me)   # (not about your own document logs: your other computers write there too)
     st = _fold_local(db, sid, st)
     _apply_join_comments(st, sid, ident, joins)
     if row["last_pull"]:   # not on the first update of a group you just joined: everything would be "new"
@@ -3795,6 +3795,11 @@ import refsuggest  # noqa: E402
 _DOC_SYNC = {}   # share id -> time of the last update triggered by an open document
 
 
+def _opkey(author, ident) -> str:
+    """The operation log this computer writes in: one per computer, so two computers of the same person never share one."""
+    return f"{author}~{ident['tag']}" if author and author == ident["user"] else author
+
+
 def _doc_names(db, st, ident):
     names = {p["id"]: p["name"] or p["id"] for p in sharing.people(st)}
     author = _my_author(st, ident)
@@ -3883,7 +3888,7 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
     gone = sharing.is_gone(d)
     return jsonify(id=did, title=d["title"]["v"], arch=bool(d["arch"]["v"]), gone=gone, by=d["by"], by_name=who(d["by"]),
                    can_write=bool(author) and not gone, can_delete=bool(author) and d["by"] in ({ident["user"], ident["local"]} - {""}) and not gone,
-                   me=author or ident["user"],
+                   me=author or ident["user"], ok=_opkey(author, ident) or ident["user"],
                    people=[{"id": a, "name": n} for a, n in names.items()], ops=ops,
                    comments=[{**{k: c.get(k) for k in ("id", "body", "created", "at", "by", "anchor", "quote", "rep", "parent", "state", "ins")},
                               "name": who(c["by"], c.get("name")), "mine": c["by"] in ({ident["user"], ident["local"]} - {""})} for c in cmv["comments"]],
@@ -3947,7 +3952,7 @@ def docs_new(sid):
         did = sharing.new_doc(st, author, b.get("title"))
         text = sharing.clean_text(b.get("text"))
         if text.strip():
-            sharing.doc_append(st, author, did, 0, [{"k": "i", "c": 1, "a": None, "t": text, "at": now()}])
+            sharing.doc_append(st, _opkey(author, share_identity(db)), did, 0, [{"k": "i", "c": 1, "a": None, "t": text, "at": now()}])
     except sharing.ShareError as exc:
         return error(str(exc))
     _doc_saved(db, sid, st)
@@ -4019,9 +4024,10 @@ def doc_ops(sid, did):
         return err
     b = request.get_json(silent=True) or {}
     try:
-        n = sharing.doc_append(st, author, did, b.get("from"), b.get("ops"))
+        ok = _opkey(author, share_identity(db))
+        n = sharing.doc_append(st, ok, did, b.get("from"), b.get("ops"))
     except sharing.ShareError as exc:
-        return error(str(exc), 409, n=len((st["docs"][did].get("ops") or {}).get(author, [])))
+        return error(str(exc), 409, n=len((st["docs"][did].get("ops") or {}).get(_opkey(author, share_identity(db)), [])))
     _doc_saved(db, sid, st)
     return jsonify(ok=True, n=n)
 

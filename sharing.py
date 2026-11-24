@@ -776,7 +776,7 @@ def _validate_lab(raw) -> dict:
     return lab
 
 
-def trust_author_copy(st: dict, owner: str, copy: dict):
+def trust_author_copy(st: dict, owner: str, copy: dict, logs=True):
     """The copy published by `owner` (read from owner's own gist) is the authority on owner's notes:
     a version of one of owner's notes found in someone else's copy but not in owner's is dropped,
     so a member can't forge or change another member's note by editing their own copy by hand."""
@@ -802,7 +802,7 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
                 else:
                     del d[owner]
     if st.get("docs"):
-        _trust_docs(st, owner, copy)
+        _trust_docs(st, owner, copy, logs)
     for key, e in (st.get("items") or {}).items():
         mine = ((copy.get("items") or {}).get(key) or {})
         if not mine:
@@ -834,6 +834,21 @@ def trust_author_copy(st: dict, owner: str, copy: dict):
 DOC_LIMITS = {"docs": 300, "ops": 30000, "insert": 20000, "chars": 2_000_000, "comments": 3000, "body": 5000, "title": 150, "ranges": 400, "img_bytes": 250_000, "imgs": 12, "img_total": 2_000_000}
 DOC_KINDS = ("c", "res", "snap")
 RES_STATES = ("resolved", "open", "accepted", "rejected")
+# Every computer writes its OWN log: "name~<computer tag>" (the same person on a Mac and on a PC must never share
+# one log, or their counters collide and the copies drift apart). Older documents have a plain "name" log.
+DOC_AU_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?:~[a-z0-9]{3,12})?$")
+
+
+def au_ok(a) -> bool:
+    a = str(a)
+    return bool(DOC_AU_RE.match(a)) or a.startswith("local-")
+
+
+def au_base(a: str) -> str:
+    """The person behind an operation log: 'alice~ab12cd' -> 'alice'."""
+    return str(a).split("~", 1)[0]
+
+
 _SURR = re.compile("[\ud800-\udfff]")
 _CTRL = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -850,7 +865,7 @@ def _docs(st) -> dict:
 
 def _id_ok(v):
     return (isinstance(v, (list, tuple)) and len(v) == 2 and isinstance(v[0], int) and not isinstance(v[0], bool)
-            and 0 < v[0] < 10 ** 10 and isinstance(v[1], str) and (NAME_RE.match(v[1]) or v[1].startswith("local-")))
+            and 0 < v[0] < 10 ** 10 and isinstance(v[1], str) and au_ok(v[1]))
 
 
 def _clean_op(op, owner, last_end):
@@ -1181,7 +1196,7 @@ def doc_stats(d) -> dict:
     nodes = doc_nodes(d)
     text = "".join(ch for _i, ch, dead in nodes if not dead)
     ats = [o.get("at") or "" for lg in (d.get("ops") or {}).values() for o in lg]
-    return {"chars": len(text), "words": len(text.split()), "authors": sorted(a for a, lg in (d.get("ops") or {}).items() if lg),
+    return {"chars": len(text), "words": len(text.split()), "authors": sorted({au_base(a) for a, lg in (d.get("ops") or {}).items() if lg}),
             "updated": max(ats or [d.get("created") or ""])}
 
 
@@ -1237,8 +1252,8 @@ def _validate_docs(raw) -> dict:
                 doc[k] = {"v": " ".join(str(v.get("v") or "").split())[:DOC_LIMITS["title"]] or dflt, "s": stp}
             else:
                 doc[k] = {"v": bool(v.get("v")), "s": stp}
-        for au, log in list((d.get("ops") if isinstance(d.get("ops"), dict) else {}).items())[:MAX_MEMBERS]:
-            if not (NAME_RE.match(str(au)) or str(au).startswith("local-")) or not isinstance(log, list):
+        for au, log in list((d.get("ops") if isinstance(d.get("ops"), dict) else {}).items())[:MAX_MEMBERS * 4]:
+            if not au_ok(au) or not isinstance(log, list):
                 continue
             ok, last = [], 0
             for raw_op in log[:DOC_LIMITS["ops"]]:
@@ -1276,17 +1291,22 @@ def _validate_docs(raw) -> dict:
     return out
 
 
-def _trust_docs(st, owner, copy):
+def _trust_docs(st, owner, copy, logs=True):
     their = copy.get("docs") or {}
     for did, d in (st.get("docs") or {}).items():
         t = their.get(did) or {}
         if is_gone(d) or is_gone(t):
             continue        # a deleted document is no longer synchronised: everybody keeps what they have
-        if owner in (d.get("ops") or {}):
-            if owner in (t.get("ops") or {}):
-                d["ops"][owner] = [dict(o) for o in t["ops"][owner]]
-            else:
-                del d["ops"][owner]
+        for k in list((d.get("ops") or {}) if logs else ()):
+            if k == owner:                      # the old shared log of this person: their own copy decides
+                if k in (t.get("ops") or {}):
+                    d["ops"][k] = [dict(o) for o in t["ops"][k]]
+                else:
+                    del d["ops"][k]
+            elif k.startswith(owner + "~"):     # one log per computer: never roll back to an older copy, never drop one
+                mine, theirs = d["ops"][k], (t.get("ops") or {}).get(k)
+                if theirs is not None and (len(theirs) >= len(mine) or mine[:len(theirs)] != theirs):
+                    d["ops"][k] = [dict(o) for o in theirs]
         for iid, e in list((d.get("img") or {}).items()):
             if e.get("by") == owner and iid not in (t.get("img") or {}):
                 del d["img"][iid]
