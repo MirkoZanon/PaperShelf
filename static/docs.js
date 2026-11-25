@@ -683,7 +683,22 @@ const Docs = (() => {
     pop.innerHTML = ['yellow', 'green', 'blue', 'pink', 'orange'].map(c => `<button data-hl="${c}" title="${c}" style="background:${{yellow: '#ffe14d', green: '#7fdc85', blue: '#7ec0ff', pink: '#ff8cc5', orange: '#ffae5c'}[c]}"></button>`).join('') + '<button data-hl="none">None</button>';
     document.body.appendChild(pop); const r = btn.getBoundingClientRect();
     pop.style.cssText = `position:fixed;z-index:200;top:${Math.round(r.bottom + 6)}px;left:${Math.round(Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)))}px`;
+    pop.addEventListener('mousedown', e => e.preventDefault());
+    pop.addEventListener('click', e => { const c = e.target.closest('[data-hl]')?.dataset.hl; if (c) { e.stopPropagation(); pop.remove(); highlight(c); } });
     setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
+  }
+  const COL = {yellow: '#ffe14d', green: '#7fdc85', blue: '#7ec0ff', pink: '#ff8cc5', orange: '#ffae5c'};
+  function selChips() {      // colors next to a selection: click one and the selected text is highlighted
+    document.getElementById('dx-selhl')?.remove();
+    const ta = $('#dx-text', D.host); if (!ta || !D.can || D.mode !== 'write' || ta.selectionStart === ta.selectionEnd || document.activeElement !== ta) return;
+    const r = measure(ta, [{s: ta.selectionStart, e: ta.selectionEnd}])[0]; if (!r || !r.length) return;
+    const b = ta.getBoundingClientRect(), f = r[0], top = b.top + f.y - 40 < 70 ? b.top + f.y + f.h + 6 : b.top + f.y - 40;
+    const el = document.createElement('div'); el.id = 'dx-selhl'; el.className = 'dx-selhl'; el.setAttribute('role', 'toolbar'); el.setAttribute('aria-label', 'Highlight selection');
+    el.innerHTML = Object.keys(COL).map(c => `<button data-hl="${c}" title="Highlight ${c}" style="background:${COL[c]}"></button>`).join('') + '<button data-hl="none" title="Remove highlight" class="none">None</button>';
+    document.body.appendChild(el);
+    el.style.cssText = `top:${Math.round(top)}px;left:${Math.round(Math.max(8, Math.min(b.left + f.x, innerWidth - el.offsetWidth - 8)))}px`;
+    el.addEventListener('mousedown', e => e.preventDefault());
+    el.addEventListener('click', e => { const c = e.target.closest('[data-hl]')?.dataset.hl; if (c) { el.remove(); highlight(c); } });
   }
   function highlight(color) {      // ==text== (yellow) or =={green}text==; again on a highlighted piece changes its color, "none" removes it
     const ta = $('#dx-text', D.host); if (!ta || !D.can) return;
@@ -1138,12 +1153,13 @@ const Docs = (() => {
       if (!c.md || c.md === (e.clipboardData.getData('text/plain') || '')) return;          // plain text: the browser does it
       e.preventDefault(); pasteMd(e.target, c.md);
     });
-    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
+    host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') { setTimeout(selChips, 0); tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
     host.addEventListener('beforeinput', e => { if (e.target.id === 'dx-text' && (e.inputType === 'historyUndo' || e.inputType === 'historyRedo')) { e.preventDefault(); undo(e.inputType === 'historyRedo'); } });
-    host.addEventListener('input', e => { if (e.target.id === 'dx-text') remoteSoon(); if (e.target.matches?.('[data-rbox]')) D.repDraft = e.target.value; });
+    host.addEventListener('mousedown', e => { if (e.target.id === 'dx-text') document.getElementById('dx-selhl')?.remove(); });
+    host.addEventListener('input', e => { if (e.target.id === 'dx-text') { document.getElementById('dx-selhl')?.remove(); remoteSoon(); } if (e.target.matches?.('[data-rbox]')) D.repDraft = e.target.value; });
     host.addEventListener('keydown', e => { if (e.target.matches?.('[data-rbox]') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-dx-rsend]', host)?.click(); } });
-    host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
-    window.addEventListener('scroll', () => { if (D.R && D.host && document.body.contains(D.host)) placeFloat(); }, {passive: true, capture: true});
+    host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { setTimeout(selChips, 0); tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
+    window.addEventListener('scroll', () => { document.getElementById('dx-selhl')?.remove(); if (D.R && D.host && document.body.contains(D.host)) placeFloat(); }, {passive: true, capture: true});
     window.addEventListener('resize', () => { if (D.R && D.host && document.body.contains(D.host)) { placeFloat(); remoteSoon(); } });
     host.addEventListener('dragover', e => { if (e.target.id === 'dx-text' && [...(e.dataTransfer?.items || [])].some(x => x.type.startsWith('image/'))) e.preventDefault(); });
     host.addEventListener('drop', e => { const f = [...(e.dataTransfer?.files || [])].find(x => x.type.startsWith('image/')); if (f && e.target.id === 'dx-text') { e.preventDefault(); insertImage(f); } });

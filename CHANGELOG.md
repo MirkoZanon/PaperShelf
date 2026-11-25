@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.30.2 – 2026-11-25
+- Highlighting now works the way you expect: select text with the mouse (or Shift+arrows) and a small row of colors appears next to the selection; click one and the text is highlighted.
+- Fixed: the color swatches in the toolbar's Highlight menu did nothing after 2.30.1.
+
 ## 2.30.1 – 2026-11-24
 - Highlight colors now open as a compact row of round swatches (plus "None") right under the button, never stacked or over the text.
 - The formatting toolbar has a solid background and stays pinned at the top of the visible page while you scroll.
