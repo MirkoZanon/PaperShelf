@@ -17,6 +17,9 @@ import os
 import hashlib
 import re
 import requests
+import winquiet
+
+winquiet.install()   # Windows: no flashing console windows for git, PowerShell, pip...
 import shutil
 import socket
 import sqlite3

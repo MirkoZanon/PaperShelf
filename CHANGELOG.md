@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.33.6 – 2026-11-26
+- Windows: no more black console windows flashing when PaperShelf starts or updates (git, PowerShell and the like now run hidden).
+
 ## 2.33.5 – 2026-11-26
 - Fixed: with several computers on the same GitHub account, what you did on one computer (accepting or resolving a comment, writing a comment, a note, a lab post) was dropped on your other computers, so they kept showing old open comments. Everything you write on any of your computers now reaches all of them.
 
