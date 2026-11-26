@@ -58,7 +58,7 @@ const Account = (() => {
     const others = (s.accounts || []).filter(a => !a.active);
     body.innerHTML = `<div class="acc-who"><span class="acc-ini big">${esc(initial())}</span><div><b>${esc(s.share_user)}</b><div class="muted small">signed in on this computer</div></div></div>
       <ul class="acc-list">
-        <li><b>Groups:</b> connected ✓ <span class="muted small">(secret gist, your name in groups: ${esc(s.display_name || s.share_user)})</span></li>
+        <li><b>Groups:</b> connected ✓ – <b>${(state.shares || []).length}</b> on this computer <button class="btn small" id="acc-groups">Find my groups</button> <span class="muted small" id="acc-gres"></span></li>
         <li><b>Library sync:</b> ${s.sync_repo && s.has_sync_token ? `on ✓ – private repository <b>${esc(repo)}</b>${s.last_sync ? `, last sync ${esc(new Date(s.last_sync).toLocaleString())}` : ''}${s.last_sync_error ? ` <span style="color:var(--danger)">⚠ ${esc(s.last_sync_error)}</span>` : ''}` : 'not set up – sign out and sign in again'}</li>
         <li><b>Saved on this computer only:</b> your sign-in token. Nothing else about you is stored.</li>
       </ul>
@@ -84,6 +84,7 @@ const Account = (() => {
       }
       if (t.id === 'acc-go') { try { await startCode(await api('/api/github/login/start', {method: 'POST', body: {}})); } catch (err) { msg(`<span style="color:var(--danger)">${esc(err.message)}</span>`); } }
       if (t.id === 'acc-cancel') { polling = null; show(); }
+      if (t.id === 'acc-groups') { await findGroups(t); }
       if (t.id === 'acc-sync') { m.close(); syncNow(); }
       if (t.id === 'acc-out') { if (!await confirmBox('Sign out on this computer?', 'Your groups and library stay on GitHub. You can sign in again any time.', {ok: 'Sign out'})) return;
         const d = await api('/api/shares/setup', {method: 'POST', body: {off: true}}); state.settings = {...state.settings, ...d.settings}; paint(); show(); }
@@ -92,6 +93,18 @@ const Account = (() => {
       if (del) { if (!await confirmBox(`Remove ${del} from this computer?`, 'Its saved token is deleted here.', {ok: 'Remove'})) return;
         const d = await api('/api/shares/setup', {method: 'POST', body: {forget: del}}); state.settings = {...state.settings, ...d.settings}; paint(); show(); }
     });
+    async function findGroups(btn) {
+      if (btn) { btn.disabled = true; }
+      const res = $('#acc-gres', m.el); if (res) res.textContent = 'Looking in your GitHub account…';
+      try {
+        const d = await api('/api/shares/sync', {method: 'POST', body: {}});
+        try { await loadLibrary(); } catch (e) { /* ignore */ }
+        const n = d.result.restored || 0, errs = Object.values(d.result.lists || {}).filter(x => x.error).length;
+        const msgText = n ? `✓ ${n} group${n > 1 ? 's' : ''} restored from your account.` : ((state.shares || []).length ? '✓ Groups are up to date.' : 'No groups found in your GitHub account yet. Groups you created or joined on another computer appear here once that computer has synced (open PaperShelf there and press the update button).');
+        toast(msgText, n || (state.shares || []).length ? 'ok' : 'info', 9000); if (errs) toast(`${errs} group(s) could not be read – see the group for details.`, 'error', 9000);
+      } catch (err) { toast(err.message, 'error'); }
+      if (m.el.isConnected) show();
+    }
     async function startCode(st) {
       polling = st.code; code($('#acc-body', m.el), st);
       const go = () => window.open(st.url, '_blank', 'noopener'); go(); $('#acc-open', m.el).onclick = go;
@@ -100,7 +113,7 @@ const Account = (() => {
         if (polling !== st.code || !m.el.isConnected) return;
         try {
           const r = await api('/api/github/login/poll', {method: 'POST', body: {code: st.code}});
-          if (r.status === 'ok') { state.settings = {...state.settings, ...r.settings}; paint(); show(); toast(`Signed in as ${r.user}.`, 'ok'); try { await loadLibrary(); } catch (e) { /* ignore */ } syncNow(null, true); return; }
+          if (r.status === 'ok') { state.settings = {...state.settings, ...r.settings}; paint(); show(); toast(`Signed in as ${r.user}.`, 'ok'); await findGroups(null); syncNow(null, true); return; }
           if (r.status === 'denied' || r.status === 'expired') { polling = null; show(); msg(r.status === 'denied' ? 'Cancelled on GitHub. Click Sign in to try again.' : 'The code expired. Click Sign in to get a new one.'); return; }
           if (r.status === 'slow') every = (r.interval || 10) * 1000;
         } catch (err) { msg('⚠ ' + esc(err.message)); }

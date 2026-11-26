@@ -4484,7 +4484,7 @@ def share_loop():
         try:
             s = get_settings(db)
             has = db.execute("SELECT COUNT(*) FROM shares").fetchone()[0]
-            if s.get("share_auto") == "1" and (has or (s.get("share_repo") and s.get("share_token"))):
+            if s.get("share_auto") == "1" and (has or (s.get("share_user") and s.get("share_gist") and (s.get("share_token") or s.get("sync_token")))):   # also on a new computer with no groups yet: they are restored from your gist
                 sync_all_shares(db)
         except Exception as exc:  # noqa: BLE001
             logging.getLogger("papershelf").warning("shared lists update failed: %s", exc)

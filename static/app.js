@@ -1561,7 +1561,7 @@ async function setDefaultStyle(style) {
 function updateSyncButton() {
   const b = $('#sync-btn'); const s = state.settings;
   b.style.display = '';
-  const what = [s.sync_repo ? 'sync your library with your other computers' : '', (state.shares || []).length ? 'update your groups' : '', 'check for a new version of PaperShelf'].filter(Boolean);
+  const what = [s.sync_repo ? 'sync your library with your other computers' : '', ((state.shares || []).length || s.share_gist) ? 'update your groups' : '', 'check for a new version of PaperShelf'].filter(Boolean);
   b.title = (s.last_sync_error ? `⚠ Last library sync failed: ${s.last_sync_error}\n` : '') + 'Update now: ' + what.join(', ') +
     (s.last_sync ? `\n(last library sync: ${new Date(s.last_sync).toLocaleString()})` : '');
   b.classList.toggle('warn', !!s.last_sync_error);
@@ -1596,7 +1596,7 @@ async function syncNow() {
       try { const d = await api('/api/settings'); state.settings = d.settings; } catch (e) { /* ignore */ }
     }
   }
-  if ((state.shares || []).length) {
+  if ((state.shares || []).length || state.settings.share_gist) {
     t.set('Updating groups…');
     try {
       const d = await api('/api/shares/sync', {method: 'POST', body: {}});

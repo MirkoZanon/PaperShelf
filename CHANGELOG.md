@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.33.1 – 2026-11-26
+- Fixed: on a new computer, signing in did not bring back your groups (they were only updated if the computer already had some). Signing in now restores all your groups, documents and notes from your GitHub account, and the update button and the automatic update do the same.
+- The account panel has "Find my groups" and shows how many groups are on this computer.
+
 ## 2.33 – 2026-11-26
 - New person icon in the top bar: your account. Signed out, it walks you through signing in with GitHub on screen, step by step (first the one-time GitHub preparation, then the short code), and says exactly what is created: a private "papershelf-library" repository, a secret gist for groups, and a token stored only on this computer.
 - Signed in, the icon shows your initial. Its panel shows what is connected, lets you sync now, sign out, or switch to another saved account.
