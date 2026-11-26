@@ -3426,6 +3426,9 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
                 authority.append((owner, data))
         except sharing.ShareError as exc:
             errors.append(f"{owner}: {exc}")
+    if me and own_remote is not None and authority and authority[0][0] == me:
+        # your other computers write to your gist too: what they wrote is yours as well (otherwise it would be dropped as "not in my copy")
+        authority[0] = (me, sharing.merge(authority[0][1], own_remote))
     for owner, data in authority:  # each member's own copy decides about that member's notes
         sharing.trust_author_copy(st, owner, data, logs=owner != me)   # (not about your own document logs: your other computers write there too)
     st = _fold_local(db, sid, st)

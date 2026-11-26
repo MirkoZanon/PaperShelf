@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.33.5 – 2026-11-26
+- Fixed: with several computers on the same GitHub account, what you did on one computer (accepting or resolving a comment, writing a comment, a note, a lab post) was dropped on your other computers, so they kept showing old open comments. Everything you write on any of your computers now reaches all of them.
+
 ## 2.33.4 – 2026-11-26
 - Fixed: with several computers on the same GitHub account, one computer could overwrite another's newest document edits in your shared gist, and the overwritten one never noticed, so a third computer showed old versions. Each computer now checks whether your gist is missing something it has and publishes it again.
 - Account panel: "Repair" publishes this computer's copy of every group again (use it on the computer that has the newest versions, then update the others).
