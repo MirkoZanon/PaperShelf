@@ -3389,6 +3389,13 @@ def _fold_local(db, sid, st):
     return sharing.merge(st, cur) if cur else st
 
 
+def _ts(iso) -> float:
+    try:
+        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).timestamp()
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
     """Read every member's copy of the list, merge, update the library and publish your copy."""
     ident = ident or share_identity(db)
@@ -3398,6 +3405,7 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
         raise sharing.ShareError("Group not found.")
     me = _my_author(st, ident)
     before = json.loads(json.dumps(st))
+    own_remote = None
     errors, authority = [], [(me, json.loads(json.dumps(st)))] if me else []  # your own copy decides about your notes
     sources = {(n, rp) for n, rp in sharing.members(st).items() if rp}
     o_owner, o_src = _origin(row)
@@ -3411,6 +3419,8 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
                     errors.append(f"{owner} hasn't published this label yet")
                 continue
             data = sharing.validate(data)
+            if src == ident["src"]:
+                own_remote = data      # what your gist holds right now (all your computers write to it)
             st = sharing.merge(st, data)
             if src != ident["src"] and owner:
                 authority.append((owner, data))
@@ -3443,7 +3453,15 @@ def sync_share(db, sid, ident=None, gh=None, joins=()) -> dict:
         st["publisher"] = ident["user"]
         h = uuid.uuid5(uuid.NAMESPACE_OID, json.dumps({k: v for k, v in st.items() if k not in ("updated_at", "publisher")},
                                                        sort_keys=True)).hex
-        if h != row["published_hash"]:
+        def _hh(x): return uuid.uuid5(uuid.NAMESPACE_OID, json.dumps({k: v for k, v in x.items() if k not in ("updated_at", "publisher")}, sort_keys=True)).hex
+        # your computers all write to the same gist: if another one overwrote it and left out something this computer has, publish again
+        lost = False
+        try:
+            if own_remote is not None and (time.time() - _ts(row["last_push"])) > 20:
+                lost = _hh(sharing.merge(own_remote, st)) != _hh(own_remote)
+        except (sharing.ShareError, KeyError, TypeError):
+            lost = False
+        if h != row["published_hash"] or lost:
             try:
                 _publish(db, gh, ident, sid, st)
                 fields.update(published_hash=h, last_push=now())
@@ -4947,6 +4965,9 @@ def share_members(sid):
 def shares_sync():
     db = get_db()
     b = request.get_json(silent=True) or {}
+    if b.get("repair"):      # publish everything again, whatever was published before
+        db.execute("UPDATE shares SET published_hash='', last_push=''")
+        db.commit()
     try:
         res = sync_all_shares(db, only=b.get("id") or None)
     except sharing.ShareError as exc:

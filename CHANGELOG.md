@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.33.4 – 2026-11-26
+- Fixed: with several computers on the same GitHub account, one computer could overwrite another's newest document edits in your shared gist, and the overwritten one never noticed, so a third computer showed old versions. Each computer now checks whether your gist is missing something it has and publishes it again.
+- Account panel: "Repair" publishes this computer's copy of every group again (use it on the computer that has the newest versions, then update the others).
+
 ## 2.33.3 – 2026-11-26
 - The account icon shows your GitHub profile picture (fetched once from GitHub and kept on this computer; your initial is shown if it can't be loaded).
 - Settings: the top-right button is now "Close" instead of "Quit". "Quit PaperShelf" moved to the bottom of the General tab, with a short explanation.
