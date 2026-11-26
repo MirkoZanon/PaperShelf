@@ -2529,3 +2529,9 @@ body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { backgro
 .hc-more { margin: 4px 8px 0; font-size: 12.5px; }
 @media (max-width: 760px) { .hc-body { grid-template-columns: 1fr; } }
 .hc-body { padding: 12px 6px 0; }
+
+/* Document tasks (comments and sections given to someone, with a deadline) */
+.dx-asg { margin-top: 8px; } .dx-asg-f { margin-top: 6px; flex-wrap: nowrap; } .dx-asg-f select { flex: 1; min-width: 0; } .dx-asg-f input { width: 140px; }
+.dx-asg-chip { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 9px; border-radius: 99px; background: color-mix(in srgb, var(--accent, #3b82d9) 13%, transparent); font-size: 12px; width: fit-content; max-width: 100%; }
+.dx-asg-chip .i { width: 13px; height: 13px; flex: none; } .dx-asg-chip.late { background: rgba(214, 69, 69, .15); color: #c0392b; } .dx-asg-chip.done { opacity: .6; }
+.dx-asg-who { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 12px; max-height: 220px; overflow: auto; }

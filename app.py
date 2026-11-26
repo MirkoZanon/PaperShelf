@@ -3830,6 +3830,22 @@ def _cal_items(db, only=None) -> list:
                 out.append({**base, "key": f"task|{r['id']}|{t['id']}", "type": "task", "id": t["id"], "title": t.get("title") or "",
                             "kind": "deadline", "date": t["due"], "start": "", "end": "", "place": "", "desc": "", "people": who(ppl),
                             "status": t.get("status") or "todo", "mine": bool(me & set(ppl)), "remind": -1})
+        for did, d in (st.get("docs") or {}).items():          # comments and sections of documents that were given to someone
+            if sharing.is_gone(d) or (d.get("arch") or {}).get("v"):
+                continue
+            dtitle = (d.get("title") or {}).get("v") or "Document"
+            for c in sharing._cm_view(d)["comments"]:
+                a = c.get("assign")
+                if not a or c.get("parent") or (not a["due"] and not a["to"]):
+                    continue
+                if not a["due"]:
+                    continue
+                txt = (c.get("body") or c.get("quote") or "Comment").strip().replace("\n", " ")
+                out.append({**base, "key": f"note|{r['id']}|{did}~{c['id']}", "type": "note", "id": f"{did}~{c['id']}", "doc": did, "cid": c["id"],
+                            "title": txt[:90], "kind": "deadline", "date": a["due"], "start": "", "end": "", "place": "",
+                            "desc": f"In the document “{dtitle}”" + (f": “{(c.get('quote') or '')[:120]}”" if c.get("quote") and c.get("body") else ""),
+                            "doc_title": dtitle, "people": who(a["to"]), "status": "todo" if c["state"] == "open" else "done",
+                            "mine": bool(me & set(a["to"])), "remind": -1})
         for pl in v["plans"]:
             if pl.get("due") and not pl.get("arch"):
                 own = pl.get("owners") or []
@@ -3936,7 +3952,7 @@ def lab_overview():
     db = get_db()
     ident = share_identity(db)
     me = {ident["user"], ident["local"]} - {""}
-    out, my_tasks, all_for_me, my_plans = [], [], [], []
+    out, my_tasks, all_for_me, my_plans, my_docs = [], [], [], [], []
     for r in db.execute("SELECT id FROM shares ORDER BY rowid").fetchall():
         row, st = _load_share(db, r["id"])
         if not st:
@@ -3971,6 +3987,14 @@ def lab_overview():
                                  "due": t.get("due") or "", "status": t.get("status") or "todo", "prio": t.get("prio") or "normal",
                                  "checks": [sum(1 for c in t.get("checklist") or [] if c["done"]), len(t.get("checklist") or [])],
                                  "notes": len(t.get("remarks") or [])})
+        for did, d in (st.get("docs") or {}).items():       # comments and sections of documents that are for me
+            if sharing.is_gone(d) or (d.get("arch") or {}).get("v"):
+                continue
+            for c in sharing._cm_view(d)["comments"]:
+                a = c.get("assign")
+                if a and not c.get("parent") and c["state"] == "open" and me & set(a["to"]):
+                    my_docs.append({"group": r["id"], "group_name": name, "doc": did, "doc_title": (d.get("title") or {}).get("v") or "Document", "cid": c["id"],
+                                    "text": (c.get("body") or c.get("quote") or "Comment").strip()[:90], "due": a["due"]})
         week = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         out.append({"id": r["id"], "name": name, "can_write": bool(_my_author(st, ident)),
                     "papers": len(sharing.items(st)), "members": len(sharing.people(st)),
@@ -3985,7 +4009,8 @@ def lab_overview():
     all_for_me.sort(key=lambda x: x["created"] or "", reverse=True)
     t0, t1 = date.today().isoformat(), (date.today() + timedelta(days=7)).isoformat()
     upcoming = [i for i in _cal_items(db) if i["mine"] and t0 <= i["date"] <= t1 and not (i["type"] != "event" and i.get("status") == "done")][:8]
-    return jsonify(groups=out, my_tasks=my_tasks, my_plans=my_plans, for_me=all_for_me[:12], today=t0, upcoming=upcoming)
+    return jsonify(groups=out, my_tasks=my_tasks, my_plans=my_plans, for_me=all_for_me[:12], today=t0, upcoming=upcoming,
+                   doc_tasks=sorted(my_docs, key=lambda x: (x["due"] or "9999", x["doc_title"]))[:20])
 
 
 # --------------------------------------------------------------------------- shared documents
@@ -4093,6 +4118,9 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
                    pres=[{"k": k, "at": p.get("at"), "a": p.get("a")} for k, p in (d.get("pres") or {}).items()
                          if k != _opkey(author, ident) and sharing.au_base(k) != (author or ident["user"])],
                    comments=[{**{k: c.get(k) for k in ("id", "body", "created", "at", "by", "anchor", "quote", "rep", "parent", "state", "ins")},
+                              "assign": ({"to": c["assign"]["to"], "due": c["assign"]["due"], "by": c["assign"]["by"], "by_name": who(c["assign"]["by"]),
+                                          "people": [{"id": a, "name": who(a), "me": a in ({ident["user"], ident["local"]} - {""})} for a in c["assign"]["to"]]}
+                                         if c.get("assign") else None),
                               "name": who(c["by"], c.get("name")), "mine": c["by"] in ({ident["user"], ident["local"]} - {""})} for c in cmv["comments"]],
                    snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
                    images=[{"id": k, "name": i.get("name") or "", "n": i["n"], "mine": i["by"] in ({ident["user"], ident["local"]} - {""})}
@@ -4263,8 +4291,19 @@ def _doc_cm_call(sid, did, fn):
 
 @app.post("/api/shares/<sid>/docs/<did>/comments")
 def doc_comment_add(sid, did):
-    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.add_doc_comment(
-        st, au, _display_name(db), did, b.get("body"), b.get("anchor"), b.get("quote"), b.get("rep"), b.get("parent"), bool(b.get("ins")), b.get("id")))
+    def add(db, st, au, b):
+        task = bool(b.get("to") or b.get("due"))
+        cid = sharing.add_doc_comment(st, au, _display_name(db), did, b.get("body"), b.get("anchor"), b.get("quote"), b.get("rep"),
+                                      b.get("parent"), bool(b.get("ins")), b.get("id"), task=task)
+        if task:
+            sharing.assign_doc_comment(st, au, _display_name(db), did, cid, b.get("to"), b.get("due"))
+    return _doc_cm_call(sid, did, add)
+
+
+@app.post("/api/shares/<sid>/docs/<did>/comments/<cid>/assign")
+def doc_comment_assign(sid, did, cid):
+    """Give a comment or a marked section to people of the group, with a deadline (empty = take the assignment away)."""
+    return _doc_cm_call(sid, did, lambda db, st, au, b: sharing.assign_doc_comment(st, au, _display_name(db), did, cid, b.get("to"), b.get("due")))
 
 
 @app.put("/api/shares/<sid>/docs/<did>/comments/<cid>")

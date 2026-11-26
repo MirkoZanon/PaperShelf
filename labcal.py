@@ -65,7 +65,7 @@ def describe(it: dict) -> tuple[str, str]:
         title = {"experiment": "Experiment", "meeting": "Meeting", "deadline": "Deadline"}.get(it.get("kind"), "Event") + ": " + (it.get("title") or "")
         text = f"{when} · {it['group_name']}" + (f" · {it['place']}" if it.get("place") else "")
     else:
-        title = ("Plan due today: " if it["type"] == "plan" else "Task due today: ") + (it.get("title") or "")
+        title = {"plan": "Plan due today: ", "note": "Document task due today: "}.get(it["type"], "Task due today: ") + (it.get("title") or "")
         text = it["group_name"]
     return title[:120], text[:200]
 
@@ -106,7 +106,7 @@ def ics(items: list, name: str = "PaperShelf lab") -> str:
         else:
             L += [f"DTSTART;VALUE=DATE:{d:%Y%m%d}", f"DTEND;VALUE=DATE:{(d + timedelta(days=1)):%Y%m%d}"]
         title = it.get("title") or "Event"
-        if it["type"] == "task":
+        if it["type"] in ("task", "note"):
             title = "Due: " + title
         elif it["type"] == "plan":
             title = "Plan due: " + title

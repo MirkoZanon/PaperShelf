@@ -26,11 +26,11 @@ const Cal = (() => {
     try { const d = await api('/api/calendar' + (C.group ? `?group=${sidQ()}` : '')); C.items = d.items; C.today = d.today; C.notify = d.notify; }
     catch (err) { C.items = []; toast(err.message, 'error'); }
   }
-  const shown = () => C.items.filter(i => C.types[i.type] && (!C.mine || i.mine));
+  const shown = () => C.items.filter(i => C.types[i.type === 'note' ? 'task' : i.type] && (!C.mine || i.mine));
   const byDay = () => { const m = {}; for (const i of shown()) (m[i.date] ||= []).push(i); return m; };
 
   /* ---------------------------------------------------------------- views */
-  const chip = i => `<button class="cal-it k-${i.kind} t-${i.type} ${done(i) ? 'done' : ''}" data-ci="${esc(i.key)}" title="${esc(i.title)}${i.start ? ' · ' + esc(when(i)) : ''}${i.group_name && !C.group ? ' · ' + esc(i.group_name) : ''}">${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : ''}${i.start ? `<b>${esc(i.start)}</b> ` : ''}${esc(i.title)}</button>`;
+  const chip = i => `<button class="cal-it k-${i.kind} t-${i.type} ${done(i) ? 'done' : ''}" data-ci="${esc(i.key)}" title="${esc(i.title)}${i.start ? ' · ' + esc(when(i)) : ''}${i.group_name && !C.group ? ' · ' + esc(i.group_name) : ''}">${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : i.type === 'note' ? '✎ ' : ''}${i.start ? `<b>${esc(i.start)}</b> ` : ''}${esc(i.title)}</button>`;
   function monthHtml() {
     const first = new Date(C.cur.getFullYear(), C.cur.getMonth(), 1, 12), start = monday(first), M = byDay();
     const cells = [];
@@ -57,7 +57,7 @@ const Cal = (() => {
     const days = {}; for (const i of its) (days[i.date] ||= []).push(i);
     return `<div class="cal-agenda">${Object.keys(days).sort().map(s => `<div class="cal-ag-day"><div class="cal-ag-h ${s === C.today ? 'today' : ''}">${esc(fmt(parse(s), {weekday: 'long', day: 'numeric', month: 'long'}))}${s === C.today ? ' · today' : ''}</div>
       ${days[s].sort((a, b) => (a.start || '').localeCompare(b.start || '')).map(i => `<button class="cal-ag-row k-${i.kind}" data-ci="${esc(i.key)}"><span class="cal-ag-t">${esc(when(i) || 'all day')}</span><span class="cal-ag-main"><b>${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : ''}${esc(i.title)}</b>
-        <small>${esc([i.type === 'event' ? (KINDS.find(k => k[0] === i.kind)?.[1] || '') : i.type === 'task' ? 'Task deadline' : 'Plan deadline', C.group ? '' : i.group_name, i.place, i.people.length ? i.people.map(p => p.me ? 'you' : p.name).join(', ') : ''].filter(Boolean).join(' · '))}</small></span></button>`).join('')}</div>`).join('')}</div>`;
+        <small>${esc([i.type === 'event' ? (KINDS.find(k => k[0] === i.kind)?.[1] || '') : i.type === 'task' ? 'Task deadline' : i.type === 'note' ? 'Document task · ' + (i.doc_title || '') : 'Plan deadline', C.group ? '' : i.group_name, i.place, i.people.length ? i.people.map(p => p.me ? 'you' : p.name).join(', ') : ''].filter(Boolean).join(' · '))}</small></span></button>`).join('')}</div>`).join('')}</div>`;
   }
   function title() {
     if (C.view === 'month') return fmt(C.cur, {month: 'long', year: 'numeric'});
@@ -77,7 +77,7 @@ const Cal = (() => {
       <div class="cal-filters">
         <label class="opt small"><input type="checkbox" data-cmine ${C.mine ? 'checked' : ''}> Only mine</label>
         <label class="opt small"><input type="checkbox" data-ctype="event" ${C.types.event ? 'checked' : ''}> Events</label>
-        <label class="opt small"><input type="checkbox" data-ctype="task" ${C.types.task ? 'checked' : ''}> Task deadlines</label>
+        <label class="opt small"><input type="checkbox" data-ctype="task" ${C.types.task ? 'checked' : ''}> Task deadlines <span class="muted">(and document tasks)</span></label>
         <label class="opt small"><input type="checkbox" data-ctype="plan" ${C.types.plan ? 'checked' : ''}> Plan deadlines</label>
         <span class="grow"></span>
         <button class="btn small" data-cnotify title="Reminders for your events and deadlines: a notification while PaperShelf is open (and from the system when it runs in the background)">🔔 Reminders: ${C.notify ? 'on' : 'off'}</button>
@@ -171,7 +171,7 @@ const Cal = (() => {
       const ci = t.closest('[data-ci]');
       if (ci) {
         const i = C.items.find(x => x.key === ci.dataset.ci); if (!i) return;
-        if (i.type === 'event') eventDialog({item: i}); else if (i.type === 'task') Lab.openGroup(i.group, {task: i.id}); else Lab.openGroup(i.group, {plan: i.id});
+        if (i.type === 'event') eventDialog({item: i}); else if (i.type === 'note') { Write.open(i.group, i.doc, {cm: i.cid}); } else if (i.type === 'task') Lab.openGroup(i.group, {task: i.id}); else Lab.openGroup(i.group, {plan: i.id});
         return;
       }
       const cd = t.closest('[data-cd]'); if (cd && (C.canWrite || !C.group)) eventDialog({date: cd.dataset.cd});

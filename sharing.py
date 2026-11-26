@@ -854,7 +854,7 @@ def trust_author_copy(st: dict, owner: str, copy: dict, logs=True):
 # all the logs, always in the same order, whatever the order in which copies are merged. Comments,
 # suggestions and named versions are entries owned by their author, like the notes.
 DOC_LIMITS = {"docs": 300, "ops": 30000, "insert": 20000, "chars": 2_000_000, "comments": 3000, "body": 5000, "title": 150, "ranges": 400, "img_bytes": 250_000, "imgs": 12, "img_total": 2_000_000}
-DOC_KINDS = ("c", "res", "snap")
+DOC_KINDS = ("c", "res", "snap", "asg")
 RES_STATES = ("resolved", "open", "accepted", "rejected")
 # Every computer writes its OWN log: "name~<computer tag>" (the same person on a Mac and on a PC must never share
 # one log, or their counters collide and the copies drift apart). Older documents have a plain "name" log.
@@ -1155,9 +1155,9 @@ def _dcm(st, author, name, did, kind, cid=None, **f) -> str:
     return cid
 
 
-def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None, parent=None, ins=False, cid=None) -> str:
+def add_doc_comment(st, author, name, did, body, anchor=None, quote="", rep=None, parent=None, ins=False, cid=None, task=False) -> str:
     body = str(body or "").strip()[:DOC_LIMITS["body"]]
-    if rep is None and not body:
+    if rep is None and not body and not (task and anchor and quote):     # a marked section can be a task without a note
         raise ShareError("Write a comment first.")
     if not _anchor_ok(anchor):
         raise ShareError("That selection is not valid.")
@@ -1202,6 +1202,34 @@ def resolve_doc_comment(st, author, name, did, cid, state):
     return _dcm(st, author, name, did, "res", on=cid, v=state)
 
 
+def assign_doc_comment(st, author, name, did, cid, to=None, due=""):
+    """Make a comment (or a marked section of the text) a task: for some members of the group, with a deadline.
+    Anyone who can write may do it; the newest assignment of a comment is the one that counts. Empty = no assignment."""
+    d = doc_of(st, did)
+    c = (d.get("cm") or {}).get(cid)
+    if not c or c.get("k") != "c" or c.get("del"):
+        raise ShareError("That comment doesn't exist any more.")
+    ppl = clean_people(to)[:6]
+    due = str(due or "").strip()
+    if due and (not DATE_RE.match(due) or not _valid_date(due)):
+        raise ShareError("That deadline is not a valid date.")
+    for e in d["cm"].values():       # my earlier assignment of this comment is changed in place (the log stays small)
+        if e.get("k") == "asg" and e.get("on") == cid and e.get("by") == author:
+            e.update(to=ppl, due=due, **{"del": False})
+            e["at"] = _now()
+            e["s"] = tick(st, author)
+            return
+    _dcm(st, author, name, did, "asg", on=cid, to=ppl, due=due)
+
+
+def _valid_date(v) -> bool:
+    try:
+        datetime.strptime(v, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
 def add_snap(st, author, name, did, label) -> str:
     d = doc_of(st, did)
     upto = max([_op_end(o) for lg in (d.get("ops") or {}).values() for o in lg] or [0])
@@ -1215,12 +1243,17 @@ def _cm_view(d) -> dict:
     for k, v in sorted(cm.items(), key=lambda kv: (kv[1].get("s") or [0, ""])[0:2]):
         if v.get("k") == "res" and not v.get("del"):
             state[v.get("on")] = v.get("v")
+    asg = {}
+    for k, v in sorted(cm.items(), key=lambda kv: (kv[1].get("s") or [0, ""])[0:2]):
+        if v.get("k") == "asg" and not v.get("del"):
+            asg[v.get("on")] = {"to": v.get("to") or [], "due": v.get("due") or "", "by": v.get("by"), "at": v.get("at")}
     out, snaps = [], []
     for k, v in cm.items():
         if v.get("del"):
             continue
         if v.get("k") == "c":
-            out.append({**v, "id": k, "state": state.get(k) or "open"})
+            a = asg.get(k)
+            out.append({**v, "id": k, "state": state.get(k) or "open", "assign": a if a and (a["to"] or a["due"]) else None})
         elif v.get("k") == "snap":
             snaps.append({**v, "id": k})
     key = lambda x: (x.get("created") or "", x["id"])
@@ -1323,6 +1356,13 @@ def _validate_docs(raw) -> dict:
                          anchor=[list(an[0]), list(an[1])] if _anchor_ok(an) and an else None,
                          rep=None if n.get("rep") is None else clean_text(n.get("rep"))[:DOC_LIMITS["body"]],
                          parent=str(n["parent"]) if OID_RE.match(str(n.get("parent") or "")) else None, ins=bool(n.get("ins")))
+            elif n["k"] == "asg":
+                if not OID_RE.match(str(n.get("on") or "")) or not isinstance(n.get("to"), list):
+                    continue
+                dd = str(n.get("due") or "")
+                if dd and not (DATE_RE.match(dd) and _valid_date(dd)):
+                    continue
+                e.update(on=str(n["on"]), to=clean_people(n["to"])[:6], due=dd)
             elif n["k"] == "res":
                 if n.get("v") not in RES_STATES or not OID_RE.match(str(n.get("on") or "")):
                     continue

@@ -658,7 +658,7 @@ const Lab = (() => {
       const lg = t.closest('[data-lg]'); if (lg) { go(lg.dataset.lg); return; }
       if (t.closest('[data-lnewgroup]')) { Shares.newDialog?.(); return; }
       if (t.closest('[data-ljoin]')) { Shares.joinDialog?.(); return; }
-      const oc = t.closest('[data-ovcal]'); if (oc) { const [sid, ty, id] = oc.dataset.ovcal.split('|'); if (ty === 'event') { await openGroup(sid, {sub: 'cal'}); Cal.eventDialog({item: {group: sid, id}}); } else openGroup(sid, ty === 'task' ? {task: id} : {plan: id}); return; }
+      const oc = t.closest('[data-ovcal]'); if (oc) { const [sid, ty, id] = oc.dataset.ovcal.split('|'); if (ty === 'event') { await openGroup(sid, {sub: 'cal'}); Cal.eventDialog({item: {group: sid, id}}); } else if (ty === 'note') Write.open(sid, id.split('~')[0], {cm: id.split('~')[1]}); else openGroup(sid, ty === 'task' ? {task: id} : {plan: id}); return; }
       const op = t.closest('[data-ovplan]'); if (op) { const [sid, id] = op.dataset.ovplan.split('|'); openGroup(sid, {plan: id}); return; }
       const ov = t.closest('[data-ovtask], [data-ovpost], [data-ovdone]');
       if (ov) {

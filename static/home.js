@@ -33,7 +33,7 @@ const Home = (() => {
   const KIND = {experiment: 'Experiment', meeting: 'Meeting', deadline: 'Deadline', other: 'Event'};
   const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const itemKind = i => i.type === 'event' ? (i.kind || 'other') : 'deadline';
-  const itemLabel = i => (i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : '') + (i.title || 'Event');
+  const itemLabel = i => (i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : i.type === 'note' ? '✎ ' : '') + (i.title || 'Event');
   function dayName(d) {
     if (d === cal.today) return 'Today'; if (d === addDays(cal.today, 1)) return 'Tomorrow';
     return new Date(d + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'});
@@ -60,7 +60,7 @@ const Home = (() => {
       <div class="hc-body"><div class="hc-month"><div class="hc-nav"><button class="hc-b" data-hm="calnav|-1" aria-label="Previous month">‹</button><b>${esc(mon)}</b><button class="hc-b" data-hm="calnav|1" aria-label="Next month">›</button>${cal.month !== cal.today.slice(0, 7) || cal.day ? '<button class="linklike hc-t" data-hm="caltoday">Today</button>' : ''}</div>
         <div class="hc-grid">${cells}</div></div>
         <div class="hc-list"><div class="hc-lh">${cal.day ? esc(dayName(cal.day)) + `<button class="linklike" data-hm="calall">Show upcoming</button>` : 'Coming up · next 2 weeks'}</div>
-          ${list.length ? list.map(i => `<button class="hc-i" data-hm="calitem|${esc(i.group)}|${esc(i.id)}|${i.type}"><span class="hc-dot k-${itemKind(i)}"></span><span class="hc-it"><b>${esc(itemLabel(i))}</b><small>${esc(cal.day ? '' : dayName(i.date) + ' · ')}${i.start ? esc(i.start) + ' · ' : ''}${esc(i.type === 'event' ? KIND[i.kind] || 'Event' : i.type === 'task' ? 'Task due' : 'Plan due')} · ${esc(i.group_name)}</small></span></button>`).join('')
+          ${list.length ? list.map(i => `<button class="hc-i" data-hm="calitem|${esc(i.group)}|${esc(i.id)}|${i.type}"><span class="hc-dot k-${itemKind(i)}"></span><span class="hc-it"><b>${esc(itemLabel(i))}</b><small>${esc(cal.day ? '' : dayName(i.date) + ' · ')}${i.start ? esc(i.start) + ' · ' : ''}${esc(i.type === 'event' ? KIND[i.kind] || 'Event' : i.type === 'task' ? 'Task due' : i.type === 'note' ? 'Document task' : 'Plan due')} · ${esc(i.group_name)}</small></span></button>`).join('')
             : `<p class="hm-empty">${cal.day ? 'Nothing on this day.' : 'Nothing planned in the next two weeks.'} ${cal.day ? '' : 'Plan an experiment or a meeting in the calendar of a group.'}</p>`}
           ${more > 0 ? `<button class="linklike hc-more" data-hm="calopen">+ ${more} more →</button>` : ''}</div></div></section>`;
   }
@@ -78,6 +78,10 @@ const Home = (() => {
     for (const t of (over?.my_tasks || [])) {
       const late = t.due && t.due < (over.today || ''); if (!late && !(t.due && t.due <= addDays(over.today, 7))) continue;
       att.push({k: late ? 0 : 3, icon: 'check', text: t.title || 'Task', sub: `${late ? 'Overdue' : 'Due ' + t.due} · ${esc(t.group_name)}`, tone: late ? 'bad' : 'warn', go: `task|${t.group}`});
+    }
+    for (const d of (over?.doc_tasks || [])) {
+      const late = d.due && d.due < (over.today || '');
+      att.push({k: late ? 0 : 2, icon: 'pen', text: d.text, sub: `${d.due ? (late ? 'Overdue' : 'Due ' + d.due) : 'Assigned to you'} · in “${esc(d.doc_title)}” · ${esc(d.group_name)}`, tone: late ? 'bad' : 'warn', go: `doc|${d.group}|${d.doc}|${d.cid}`});
     }
     if (alerts) att.push({k: 1, icon: 'alert', text: `${alerts} paper${alerts > 1 ? 's' : ''} in your library need a look`, sub: 'Retractions or published versions', tone: 'bad', go: 'feed'});
     for (const d of D.filter(d => d.open > 0).slice(0, 3)) att.push({k: 2, icon: 'chat', text: `${d.open} open comment${d.open > 1 ? 's' : ''} in “${d.title}”`, sub: esc(d.group), tone: 'warn', go: `doc|${d.sid}|${d.id}`});
@@ -149,7 +153,7 @@ const Home = (() => {
       case 'caltoday': cal.month = cal.today.slice(0, 7); cal.day = ''; return redrawCal();
       case 'calall': cal.day = ''; return redrawCal();
       case 'calday': cal.day = cal.day === x ? '' : x; return redrawCal();
-      case 'calitem': if (z === 'event') { await Lab.openGroup(x, {sub: 'cal'}); return Cal.eventDialog({item: {group: x, id: y}}); } return Lab.openGroup(x, z === 'task' ? {task: y} : {plan: y});
+      case 'calitem': if (z === 'event') { await Lab.openGroup(x, {sub: 'cal'}); return Cal.eventDialog({item: {group: x, id: y}}); } if (z === 'note') return Write.open(x, y.split('~')[0], {cm: y.split('~')[1]}); return Lab.openGroup(x, z === 'task' ? {task: y} : {plan: y});
       case 'people': return setTab('people');
       case 'map': return lib('map');
       case 'table': return lib('table');
@@ -163,7 +167,7 @@ const Home = (() => {
       case 'app': return openSettings('general');
       case 'quit': return quitApp();
       case 'paper': { const id = +x, p = paperById(id); if (p?.pdf_exists) { Reader.open(id); } else { setTab('reading'); setTimeout(() => openDetail(id), 80); } return; }
-      case 'doc': return Write.open(x, y);
+      case 'doc': return Write.open(x, y, z ? {cm: z} : {});
       case 'group': case 'post': case 'task': setTab('lab'); return setTimeout(() => Lab.openGroup(x, k === 'task' ? {sub: 'plans'} : {}), 60);
     }
   }

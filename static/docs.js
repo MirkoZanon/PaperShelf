@@ -3,7 +3,7 @@
    rebuilt from all the logs in one fixed order (same rules as sharing.py), so simultaneous typing never overwrites
    anybody. This file: the replay, the editor, comments and suggestions, versions, citations, export. */
 const Docs = (() => {
-  const D = {sid: null, can: false, list: null, id: null, host: null, R: null, mode: 'write', side: 'comments', sel: null, view: null,
+  const D = {asg: {on: false, to: '', due: ''}, sid: null, can: false, list: null, id: null, host: null, R: null, mode: 'write', side: 'comments', sel: null, view: null,
              pending: null, poll: null, flushT: null, flushing: false, status: 'saved', showArch: false, composing: false, selCm: null, filter: 'open', auth: false, sq: new Map(), items: [], caret: null, split: false, standalone: false, ext: new Set(), rsel: null};
   const root = () => $('#dx-root', D.host) || D.host;
   const MOD = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
@@ -593,6 +593,26 @@ const Docs = (() => {
     if (rbSel) { const nb = $('[data-rbox]', el); if (nb) { nb.focus({preventScroll: true}); nb.setSelectionRange(rbSel[0], rbSel[1]); } }
     remoteSoon();
   }
+  const dueTxt = d => d ? new Date(d + 'T12:00:00').toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'}) : '';
+  const asgOptions = sel => `<option value="">Nobody yet</option>` + (D.R.people || []).map(p => `<option value="${esc(p.id)}" ${p.id === sel ? 'selected' : ''}>${p.id === D.R.me ? 'Me' : esc(p.name)}</option>`).join('');
+  function asgChip(c) {
+    const a = c.assign, open = c.state === 'open', late = open && a.due && a.due < new Date().toISOString().slice(0, 10);
+    const who = (a.people || []).length ? (a.people.map(p => p.me ? 'you' : esc(p.name)).join(', ')) : 'nobody yet';
+    return `<div class="dx-asg-chip ${late ? 'late' : ''} ${open ? '' : 'done'}" title="Task in the calendar">${ic('calendar')}<span>For <b>${who}</b>${a.due ? ` · ${late ? 'overdue since' : 'due'} ${esc(dueTxt(a.due))}` : ''}${open ? '' : ' · done'}</span></div>`;
+  }
+  function asgDialog(cid) {
+    const c = D.R.comments.find(x => x.id === cid); if (!c) return;
+    const cur = new Set((c.assign?.to) || []);
+    const m = modal(`<h3>${c.assign ? 'Edit task' : 'Make a task'}</h3>
+      <p class="muted small">${esc(truncate(c.body || c.quote || 'This text', 140))}</p>
+      <div class="dx-asg-who">${(D.R.people || []).map(p => `<label class="opt"><input type="checkbox" name="asg-who" value="${esc(p.id)}" ${cur.has(p.id) ? 'checked' : ''}> ${p.id === D.R.me ? 'Me' : esc(p.name)}</label>`).join('')}</div>
+      <label class="small muted" for="asg-due">Deadline (optional)</label><input type="date" class="input" id="asg-due" value="${esc(c.assign?.due || '')}" style="margin-bottom:6px">
+      <p class="muted small">It appears in the calendar of the group and in “Needs you” on the Home tab of the people it is for. It is done when the comment is resolved.</p>
+      <div class="modal-actions">${c.assign ? '<button class="btn danger" id="asg-clear">Remove task</button>' : ''}<span class="grow"></span><button class="btn" data-close>Cancel</button><button class="btn primary" id="asg-ok">Save</button></div>`);
+    const send = async body => { m.close(); const r = await cmCall('POST', `/${q(cid)}/assign`, body); if (r) toast(body.to.length || body.due ? 'Task saved' : 'Task removed'); };
+    $('#asg-ok', m.el).onclick = () => { const to = $$('[name=asg-who]:checked', m.el).map(x => x.value), due = $('#asg-due', m.el).value; if (!to.length && !due) { toast('Choose who it is for or a deadline.'); return; } send({to, due}); };
+    const cl = $('#asg-clear', m.el); if (cl) cl.onclick = () => send({to: [], due: ''});
+  }
   function commentsHtml() {
     const R = D.R, B = R.B, W = D.can;
     const top = R.comments.filter(c => !c.parent), kids = id => R.comments.filter(c => c.parent === id);
@@ -607,16 +627,19 @@ const Docs = (() => {
             : `<span class="muted small">${c.rep ? 'Replace' : 'Delete'}</span> <del>${esc(truncate(gone ? c.quote : now, 160))}</del>${c.rep ? ` <span class="muted small">with</span> <ins>${esc(truncate(c.rep, 300))}</ins>` : ''}`}</button>`
           : c.anchor ? `<button class="dx-quote ${gone ? 'gone' : ''}" data-dx-goto="${esc(c.id)}" title="${gone ? 'The text was deleted' : 'Show in the text'}">${gone ? `<i>${esc(c.quote || 'Text deleted')}</i>` : esc(truncate(now, 140))}</button>` : ''}
         ${c.body ? `<div class="dx-c-b">${esc(c.body).replace(/\n/g, '<br>')}</div>` : ''}
+        ${c.assign ? asgChip(c) : ''}
         ${kids(c.id).map(k => `<div class="dx-reply"><div class="dx-c-h">${av(k.by, k.name, 18)}<b>${esc(k.name)}</b><span class="muted small">${esc(ago(k.created))}</span>${k.mine && W ? `<button class="dx-x" data-dx-cdel="${esc(k.id)}" title="Delete">✕</button>` : ''}</div><div class="dx-c-b">${esc(k.body).replace(/\n/g, '<br>')}</div></div>`).join('')}
         ${W && D.rep === c.id ? `<div class="dx-rbox"><textarea class="input" rows="2" placeholder="Write a reply…" data-rbox="${esc(c.id)}">${esc(D.repDraft || '')}</textarea><div class="dx-row"><button class="btn small primary" data-dx-rsend="${esc(c.id)}">Reply</button><button class="btn small" data-dx-rcancel="1">Cancel</button></div></div>` : ''}
         ${W ? `<div class="dx-c-a">
           ${c.state === 'open' && sug && !gone ? `<button class="btn small primary" data-dx-accept="${esc(c.id)}">${ic('check')}Accept</button><button class="btn small" data-dx-res="${esc(c.id)}|rejected">Reject</button>`
             : c.state === 'open' ? `<button class="btn small" data-dx-res="${esc(c.id)}|resolved">${ic('check')}Resolve</button>` : `<button class="btn small" data-dx-res="${esc(c.id)}|open">Reopen</button>`}
-          <button class="btn small" data-dx-reply="${esc(c.id)}">Reply</button>${c.mine ? `<button class="dx-x" data-dx-cdel="${esc(c.id)}" title="Delete">✕</button>` : ''}</div>` : ''}
+          <button class="btn small" data-dx-reply="${esc(c.id)}">Reply</button>${!sug ? `<button class="btn small" data-dx-asg="${esc(c.id)}" title="Give this to someone, with a deadline. It shows in the calendar.">${ic('calendar')}${c.assign ? 'Edit task' : 'Make a task'}</button>` : ''}${c.mine ? `<button class="dx-x" data-dx-cdel="${esc(c.id)}" title="Delete">✕</button>` : ''}</div>` : ''}
       </div>`;
     };
     return `${W ? `<div class="dx-cnewbox"><textarea id="dx-cnew" class="input" rows="2" placeholder="${D.sel ? 'Comment on the selected text…' : 'Select some text in the document, then write your comment here'}"></textarea>
-        <div class="dx-row"><button class="btn small primary" data-dx="comment-add">${ic('chat')}Comment</button><button class="btn small" data-dx="suggest-add" title="Propose new wording for the selected text">${ic('pen')}Suggest change</button></div></div>` : ''}
+        <div class="dx-row"><button class="btn small primary" data-dx="comment-add">${ic('chat')}Comment</button><button class="btn small" data-dx="suggest-add" title="Propose new wording for the selected text">${ic('pen')}Suggest change</button></div>
+        <div class="dx-asg"><label class="opt small"><input type="checkbox" data-dx-asgon ${D.asg.on ? 'checked' : ''}> Make it a task <span class="muted">(for someone, with a deadline, in the calendar)</span></label>
+          ${D.asg.on ? `<div class="dx-row dx-asg-f"><select class="input" id="dx-asg-to" aria-label="Who is it for">${asgOptions(D.asg.to)}</select><input type="date" class="input" id="dx-asg-due" aria-label="Deadline" value="${esc(D.asg.due)}"></div>` : ''}</div></div>` : ''}
       <div class="dx-cfilter"><span class="muted small">${shown.length} shown</span><span class="grow"></span>${nDone ? `<button class="dx-link" data-dx="toggle-filter">${D.filter === 'all' ? 'Hide' : 'Show'} ${nDone} done</button>` : ''}</div>
       ${shown.length ? shown.map(card).join('') : `<p class="muted small dx-none">${top.length ? 'Nothing open. Everything is resolved.' : 'No comments yet. Select a piece of text and write what you think.'}</p>`}`;
   }
@@ -824,12 +847,12 @@ const Docs = (() => {
     ta.value = v.slice(0, s) + text + v.slice(e); const p = s + text.length; ta.setSelectionRange(p, p); ta.focus();
     editTo(ta.value); autosize(ta); paintSide();
   }
-  async function createComment({a, b, body = '', rep = null, ins = false}) {
+  async function createComment({a, b, body = '', rep = null, ins = false, to = [], due = ''}) {
     const R = D.R, B = R.B; let anchor = null, quote = '';
     if (ins) { if (a > 0) { anchor = [[B.vis[a - 1].c, B.vis[a - 1].a], [B.vis[a - 1].c, B.vis[a - 1].a]]; quote = B.vis[a - 1].ch; } }
     else if (b > a) { anchor = anchorFor(B, a, b); quote = selText({a, b}).slice(0, 300); }
     try {
-      const r = await api(`${base()}/${q(D.id)}/comments`, {method: 'POST', body: {body, anchor, quote, rep, ins}});
+      const r = await api(`${base()}/${q(D.id)}/comments`, {method: 'POST', body: {body, anchor, quote, rep, ins, to, due}});
       absorb(r); D.side = 'comments'; applyRemote(); paintSide(); return true;
     } catch (err) { toast(err.message, 'error'); return false; }
   }
@@ -840,10 +863,12 @@ const Docs = (() => {
     if (suggest && !sel) { toast('Select the text you want to change first.'); return; }
     let rep = null;
     if (suggest) { rep = await askText('Suggest a change', 'New wording for the selected text (leave empty to suggest deleting it).', selText(sel)); if (rep === null) return; }
-    else if (!body) { toast('Write your comment first.'); box?.focus(); return; }
+    else if (!body && !(D.asg.on && sel)) { toast('Write your comment first.'); box?.focus(); return; }
+    const asg = !suggest && D.asg.on ? {to: D.asg.to ? [D.asg.to] : [], due: D.asg.due} : {to: [], due: ''};
+    if (!suggest && D.asg.on && !asg.to.length && !asg.due) { toast('Choose who the task is for, or a deadline.'); return; }
     if (!suggest && !sel) { toast('Select the text this comment is about first.'); return; }
     if (box) box.value = '';     // emptied before the panel is redrawn (it keeps the draft otherwise), put back only if it fails
-    if (await createComment({a: sel.a, b: sel.b, body, rep})) { toast(suggest ? 'Suggestion added' : 'Comment added'); $('#dx-cnew', D.host)?.focus(); }
+    if (await createComment({a: sel.a, b: sel.b, body, rep, ...asg})) { if (asg.to.length || asg.due) { D.asg = {on: false, to: '', due: ''}; paintSide(); } toast(suggest ? 'Suggestion added' : asg.to.length || asg.due ? 'Task added' : 'Comment added'); $('#dx-cnew', D.host)?.focus(); }
     else { const nb = $('#dx-cnew', D.host); if (nb && !nb.value) nb.value = body; }
   }
   const selText = S => D.R.B.text.slice(D.R.B.off[S.a], D.R.B.off[S.b]);
@@ -1158,6 +1183,11 @@ const Docs = (() => {
     host.addEventListener('mousedown', e => { if (e.target.id === 'dx-text') document.getElementById('dx-selhl')?.remove(); });
     host.addEventListener('input', e => { if (e.target.id === 'dx-text') { document.getElementById('dx-selhl')?.remove(); remoteSoon(); } if (e.target.matches?.('[data-rbox]')) D.repDraft = e.target.value; });
     host.addEventListener('keydown', e => { if (e.target.matches?.('[data-rbox]') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-dx-rsend]', host)?.click(); } });
+    host.addEventListener('change', e => {
+      const t = e.target;
+      if (t.matches('[data-dx-asgon]')) { D.asg.on = t.checked; if (t.checked && !D.asg.to) D.asg.to = D.R.me || ''; paintSide(); }
+      else if (t.id === 'dx-asg-to') D.asg.to = t.value; else if (t.id === 'dx-asg-due') D.asg.due = t.value;
+    });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') { setTimeout(selChips, 0); tblTools(); presSoon(); paintFloat(); caretComment(e.target); } });
     window.addEventListener('scroll', () => { document.getElementById('dx-selhl')?.remove(); if (D.R && D.host && document.body.contains(D.host)) placeFloat(); }, {passive: true, capture: true});
     window.addEventListener('resize', () => { if (D.R && D.host && document.body.contains(D.host)) { placeFloat(); remoteSoon(); } });
@@ -1235,6 +1265,7 @@ const Docs = (() => {
       if (dx === 'split') return setSplit(!D.split);
       const pg = t.closest('[data-dx-purge]')?.dataset.dxPurge; if (pg) return purgeDoc(pg);
       if (dx === 'export-menu') { e.stopPropagation(); return exportMenu(t.closest('button')); }
+      const ag = t.closest('[data-dx-asg]')?.dataset.dxAsg; if (ag) return asgDialog(ag);
       if (dx === 'comment-add') return addComment(false);
       if (dx === 'suggest-add') return addComment(true);
       if (dx === 'toggle-filter') { D.filter = D.filter === 'all' ? 'open' : 'all'; paintPage(); return paintSide(); }
@@ -1285,7 +1316,7 @@ const Docs = (() => {
     if (D.split && !$('iframe', $('#dx-lib', host))) setSplit(true);
     if (D.id && D.R && (!opt.open || opt.open === D.id)) { paint(); startPoll(); return; }
     root().innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
-    if (opt.open) { await loadList(); await openDoc(opt.open); return; }
+    if (opt.open) { await loadList(); await openDoc(opt.open); if (opt.cm && D.R) { D.selCm = opt.cm; D.side = 'comments'; D.filter = 'all'; paintSide(); setTimeout(() => $(`.dx-c[data-cm="${CSS.escape(opt.cm)}"]`, D.host)?.scrollIntoView({block: 'center'}), 80); } return; }
     await loadList(); if (D.host === host && !D.id) paintList();
     if (opt.newDoc && D.can) newDialog();
   }

@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.2 – 2026-11-26
+- **Tasks in shared documents**: a comment, or a marked section of the text, can be given to yourself or to collaborators, with a deadline. Tick "Make it a task" when you comment (a section can be a task without writing a note), or use "Make a task" / "Edit task" on an existing comment.
+- The task is shown on the comment, in the calendar (group and all-groups, with reminders and in the .ics export) and under "Needs you" on the Home tab. Clicking it opens the document at that comment. Resolving the comment completes the task.
+- Fixed the missing calendar icon.
+
 ## 3.1 – 2026-11-26
 - **Calendar on the Home tab**: a month grid with colored dots on days that have something (experiments, meetings, deadlines), plus a "Coming up" list for the next two weeks. Click a day to see what is on it, click an item to open it, and "Open calendar" jumps to the Lab calendar of all your groups.
 
