@@ -10,10 +10,10 @@
    Overview: your tasks in every group, the plans you lead, what was written for you.
    Everything lives in the group's file and travels with it (see sharing.py). Readers only read. */
 const Lab = (() => {
-  const S = {sid: null, sub: 'ideas', data: null, ov: null, open: new Set(), composing: null, cto: {},
+  const S = {sid: null, allcal: false, sub: 'ideas', data: null, ov: null, open: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, focus: null, pn: {}, tw: null};
   const TH = {};   // the note threads being written: {'task:<id>' | 'plan:<id>': {edit, to, draft}}
-  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['plans', 'docs'].includes(p.sub) ? p.sub : 'ideas'; } catch { /* storage unavailable */ }
+  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['plans', 'docs', 'cal'].includes(p.sub) ? p.sub : 'ideas'; } catch { /* storage unavailable */ }
   let ORDER = 'auto'; try { ORDER = localStorage.getItem('papershelf-lab-order') === 'manual' ? 'manual' : 'auto'; } catch { /* ignore */ }
   const PR = {high: 0, normal: 1, low: 2};
   // the board's order: by deadline (the closest first, overdue on top, no date last), then priority
@@ -125,7 +125,7 @@ const Lab = (() => {
     await load(); render();
   }
   async function go(sid, sub) {
-    S.sid = sid || null; if (sub) S.sub = sub; S.composing = null; S.open.clear(); S.f = {kind: 'all', tag: '', q: '', sort: 'new'}; S.plan = 'all';
+    S.sid = sid || null; S.allcal = false; if (sub) S.sub = sub; S.composing = null; S.open.clear(); S.f = {kind: 'all', tag: '', q: '', sort: 'new'}; S.plan = 'all';
     save(); main().innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
     await load(); render(); main().scrollTop = 0;
   }
@@ -158,13 +158,14 @@ const Lab = (() => {
     const G = groups();
     const rail = `<nav class="lab-rail">
         <div class="lab-rail-h">Lab</div>
-        <button class="lab-g ${S.sid ? '' : 'on'}" data-lg=""><span class="lab-g-ico">${ic('home', 17)}</span><span class="lab-g-name">Overview</span></button>
+        <button class="lab-g ${S.sid || S.allcal ? '' : 'on'}" data-lg=""><span class="lab-g-ico">${ic('home', 17)}</span><span class="lab-g-name">Overview</span></button>
+        <button class="lab-g ${!S.sid && S.allcal ? 'on' : ''}" data-lcal title="Experiments, meetings and deadlines of all your groups"><span class="lab-g-ico">${ic('calendar', 17)}</span><span class="lab-g-name">Calendar</span></button>
         <div class="lab-rail-sec">Groups</div>
         ${G.map(g => `<button class="lab-g ${S.sid === g.id ? 'on' : ''}" data-lg="${esc(g.id)}" title="${esc(g.name)}">${gdot(g.id, g.name, g.color)}<span class="lab-g-name">${esc(g.name)}<small>${g.role === 'member' ? 'Editor' : 'Reader'}, ${plural(g.papers, 'paper')}</small></span></button>`).join('')
           || '<div class="muted small lab-rail-empty">No groups yet.</div>'}
         <div class="lab-rail-acts"><button class="btn small" data-lnewgroup>${ic('plus', 14)}New group</button><button class="btn small" data-ljoin>Join</button></div>
       </nav>`;
-    el.innerHTML = `<div class="lab">${rail}<section class="lab-body">${S.sid && S.data ? groupHtml() : overviewHtml()}</section></div>`;
+    el.innerHTML = `<div class="lab">${rail}<section class="lab-body">${S.sid && S.data ? groupHtml() : S.allcal ? `<div class="lab-head"><div><h2>Calendar</h2><div class="muted small">Experiments, meetings and deadlines of all your groups</div></div></div><div id="cal-host" class="cal-host"></div>` : overviewHtml()}</section></div>`;
     el.scrollTop = scroll;
     for (const [pid, v] of Object.entries(drafts)) { const ta = $(`[data-post="${CSS.escape(pid)}"] .lc-text`, el); if (ta) ta.value = v; }
     const q2 = $('.lab-quick', el); if (q2) { q2.value = quickVal; if (quickFoc) q2.focus(); }
@@ -175,6 +176,8 @@ const Lab = (() => {
     S.tw?.paint();
     if (S.sub === 'docs' && S.sid && S.data && typeof Docs !== 'undefined') Docs.mount($('#docs-host', el), S.sid, W());
     else if (typeof Docs !== 'undefined') Docs.leave();
+    const ch = $('#cal-host', el);
+    if (ch && typeof Cal !== 'undefined') Cal.mount(ch, S.sid ? {group: S.sid, canWrite: W(), onChange: () => { if (S.sid) load().then(render); }} : {});
   }
   const grow = ta => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 220) + 'px'; };
 
@@ -193,6 +196,7 @@ const Lab = (() => {
     return `<div class="lab-head"><div><h2>Overview</h2><div class="muted small">What is waiting for you, and what happened in your groups this week</div></div><span class="grow"></span><button class="btn small" data-help="lab">${ic('book', 15)}Guide</button></div>
       <div class="lab-ov">
         <div class="lab-card ov-mine">
+          ${(ov.upcoming || []).length ? sec('calendar', 'Coming up', 0, ov.upcoming.map(i => `<div class="ov-row"><button class="ov-main" data-ovcal="${esc(i.group)}|${esc(i.type)}|${esc(i.id)}"><span class="ov-t">${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : ''}${esc(i.title)}</span><span class="ov-m"><span>${esc(i.date === today() ? 'Today' : new Date(i.date + 'T12:00').toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'}))}${i.start ? ' ' + esc(i.start) : ''}</span><span>${esc(i.group_name)}</span>${i.place ? `<span>${esc(i.place)}</span>` : ''}</span></button></div>`).join('') + '<p class="small"><button class="linklike" data-lcal>Open the calendar</button></p>') : ''}
           ${sec('check', 'My tasks', mt.length, mt.length ? mt.map(t => `<div class="ov-row ${dueCls(t.due, t.status)}"><button class="lab-check" data-ovdone="${esc(t.group)}|${esc(t.id)}" title="Mark it done" aria-label="Mark it done"></button>
               <button class="ov-main" data-ovtask="${esc(t.group)}|${esc(t.id)}"><span class="ov-t">${t.prio === 'high' ? `<span class="lab-prio" title="High priority">${ic('flag', 13)}</span>` : ''}${esc(t.title)}</span>
                 <span class="ov-m"><span>${esc(t.group_name)}</span>${t.status === 'doing' ? '<span class="lab-chip doing">Doing</span>' : ''}${t.checks?.[1] ? `<span class="ov-i">${ic('checks', 13)}${t.checks[0]}/${t.checks[1]}</span>` : ''}${t.notes ? `<span class="ov-i">${ic('message', 13)}${t.notes}</span>` : ''}${dueChip(t.due, t.status)}</span></button></div>`).join('')
@@ -224,8 +228,9 @@ const Lab = (() => {
           <button class="btn small" data-lsync title="Get the latest from the others now">${ic('refresh', 15)}Update</button></div></div>
       <div class="lab-tabs"><button data-lsub="ideas" class="${S.sub === 'ideas' ? 'on' : ''}">${ic('bulb', 16)}Ideas and discussion<span class="lab-n">${d.posts.length || ''}</span></button>
         <button data-lsub="plans" class="${S.sub === 'plans' ? 'on' : ''}">${ic('checks', 16)}Plans and tasks<span class="lab-n">${open || ''}</span></button>
+        <button data-lsub="cal" class="${S.sub === 'cal' ? 'on' : ''}">${ic('calendar', 16)}Calendar<span class="lab-n">${(d.events || []).filter(e => e.date >= today()).length || ''}</span></button>
         <button data-lsub="docs" class="${S.sub === 'docs' ? 'on' : ''}">${ic('file', 16)}Documents</button></div>
-      ${S.sub === 'plans' ? plansHtml() : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : ideasHtml()}`;
+      ${S.sub === 'plans' ? plansHtml() : S.sub === 'cal' ? '<div id="cal-host" class="cal-host"></div>' : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : ideasHtml()}`;
   }
 
   /* ---------------------------------------------------- ideas */
@@ -649,9 +654,11 @@ const Lab = (() => {
     const el = main();
     el.addEventListener('click', async e => {
       const t = e.target;
+      if (t.closest('[data-lcal]')) { S.sid = null; S.allcal = true; S.data = null; save(); render(); return; }
       const lg = t.closest('[data-lg]'); if (lg) { go(lg.dataset.lg); return; }
       if (t.closest('[data-lnewgroup]')) { Shares.newDialog?.(); return; }
       if (t.closest('[data-ljoin]')) { Shares.joinDialog?.(); return; }
+      const oc = t.closest('[data-ovcal]'); if (oc) { const [sid, ty, id] = oc.dataset.ovcal.split('|'); if (ty === 'event') { await openGroup(sid, {sub: 'cal'}); Cal.eventDialog({item: {group: sid, id}}); } else openGroup(sid, ty === 'task' ? {task: id} : {plan: id}); return; }
       const op = t.closest('[data-ovplan]'); if (op) { const [sid, id] = op.dataset.ovplan.split('|'); openGroup(sid, {plan: id}); return; }
       const ov = t.closest('[data-ovtask], [data-ovpost], [data-ovdone]');
       if (ov) {

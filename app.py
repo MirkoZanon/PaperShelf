@@ -53,6 +53,7 @@ import sync as syncmod
 import launcher
 import updater
 import ghlogin
+import labcal
 import watcher as watchermod
 
 # Some systems (notably Windows) map .js/.mjs to the wrong type, which stops the page from loading
@@ -288,7 +289,7 @@ def get_settings(db=None, secrets=True) -> dict:
          "update_auto": "1", "just_updated": "", "own_window": "1",
          "share_repo": "", "share_token": "", "share_accounts": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
          "display_name": "", "list_checkboxes": "", "start_page": "home", "stale_days": "60",
-         "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]", "look": "glass", "accent": "green"}
+         "cal_notify": "1", "cal_done": "{}", "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]", "look": "glass", "accent": "green"}
     for row in db.execute("SELECT key, value FROM settings"):
         if row["value"] != "" or row["key"] in ("email", "sync_repo", "sync_token", "sync_pdfs", "sync_auto",
                                                 "auto_import", "remove_downloads", "openalex_key", "core_key", "sjr_auto",
@@ -3596,8 +3597,11 @@ def _lab_payload(db, sid, st=None):
     for t in tasks:
         t["arch"] = bool(t.get("arch"))
         t["archived"] = t["arch"] or (t.get("plan") or "") in gone
+    events = [{**e, "kind": e.get("kind") or "other", "people": people_of(e.get("people")), "ids": e.get("people") or [],
+               "mine": (not e.get("people")) or bool(me & set(e.get("people") or [])), "by_name": who(e.get("by")),
+               "post_title": titles.get(e.get("post") or "", "")} for e in v["events"] if not e.get("del")]
     return jsonify(group={"id": sid, "name": (st.get("name") or {}).get("v") or "Group"}, can_write=bool(author), me=author or ident["user"],
-                   display_name=_display_name(db, ident), people=people, posts=posts, plans=plans, tasks=tasks,
+                   display_name=_display_name(db, ident), people=people, posts=posts, plans=plans, tasks=tasks, events=events,
                    kinds=LAB_KIND_LABEL)
 
 
@@ -3727,11 +3731,11 @@ def lab_pin(sid, oid):
     return _lab_call(sid, lambda db, st, author, b: sharing.set_pin(st, author, oid, bool(b.get("v"))))
 
 
-LAB_COLLS = ("plans", "tasks", "checks")
+LAB_COLLS = ("plans", "tasks", "checks", "events")
 
 
 def _lab_fields(db, sid, coll, b) -> dict:
-    spec = {"plans": sharing.PLAN_FIELDS, "checks": sharing.CHECK_FIELDS}.get(coll, sharing.TASK_FIELDS)
+    spec = {"plans": sharing.PLAN_FIELDS, "checks": sharing.CHECK_FIELDS, "events": sharing.EVENT_FIELDS}.get(coll, sharing.TASK_FIELDS)
     f = {k: b[k] for k in spec if k in b and k != "paper"}
     if coll == "tasks" and "assignees" in f:      # several people; the old single field follows the first one
         f["assignees"] = sharing.clean_people(f["assignees"])
@@ -3749,11 +3753,20 @@ def lab_obj_add(sid, coll):
     def fn(db, st, author, b):
         f = _lab_fields(db, sid, coll, b)
         if not str(f.get({"plans": "name", "checks": "text"}.get(coll, "title")) or "").strip():
-            return error({"plans": "Give it a name first.", "checks": "Write the item first."}.get(coll, "Write what has to be done."))
+            return error({"plans": "Give it a name first.", "checks": "Write the item first.", "events": "Give the event a title first."}.get(coll, "Write what has to be done."))
+        if coll == "events" and not f.get("date"):
+            return error("Choose the date of the event.")
+        if coll == "events" and f.get("start") and f.get("end") and f["end"] < f["start"]:
+            return error("The event ends before it starts.")
         if coll == "checks" and f.get("task") not in (st.get("lab") or {}).get("tasks", {}):
             return error("That task doesn't exist any more.")
         if coll == "tasks":
             f.setdefault("status", "todo")
+        if coll == "events" and b.get("make_post") and not f.get("post"):     # an experiment or meeting gets its discussion thread
+            body = (f"📅 {f['date']}" + (f" {f['start']}" if f.get("start") else "") + (f" – {f['end']}" if f.get("end") else "")
+                    + (f" · {f['place']}" if f.get("place") else "") + ("\n\n" + f["desc"] if f.get("desc") else ""))
+            f["post"] = sharing.add_post(st, author, _display_name(db), "experiment" if f.get("kind") == "experiment" else "note",
+                                         f.get("title"), body, (), (), f.get("people") or [])
         oid = sharing.set_fields(st, author, coll, None, **f)
         if coll == "tasks":            # the checklist typed with a new task
             for i, c in enumerate([c for c in (b.get("checklist") or []) if isinstance(c, dict) and str(c.get("text") or "").strip()][:40], 1):
@@ -3778,6 +3791,143 @@ def lab_obj_delete(sid, coll, oid):
     if coll not in LAB_COLLS:
         return error("Not found", 404)
     return _lab_call(sid, lambda db, st, author, b: sharing.set_fields(st, author, coll, oid, **{"del": True}))
+
+
+# --------------------------------------------------------------------------- the lab calendar
+_CAL_PING = [0.0]     # last time a PaperShelf page asked for reminders (a page open = it shows them itself)
+
+
+def _cal_items(db, only=None) -> list:
+    """Events, task deadlines and plan deadlines of all your groups (or one), as calendar items."""
+    ident = share_identity(db)
+    me = {ident["user"], ident["local"]} - {""}
+    out = []
+    for r in db.execute("SELECT id FROM shares ORDER BY rowid").fetchall():
+        if only and r["id"] != only:
+            continue
+        row, st = _load_share(db, r["id"])
+        if not st:
+            continue
+        gname = (st.get("name") or {}).get("v") or "Group"
+        names = {p["id"]: p["name"] or p["id"] for p in sharing.people(st)}
+        who = lambda ids: [{"id": a, "name": names.get(a) or a, "me": a in me} for a in ids or []]
+        v = sharing.lab_view(st)
+        gone = {pl["id"] for pl in v["plans"] if pl.get("arch")}
+        can = bool(_my_author(st, ident))
+        base = {"group": r["id"], "group_name": gname, "can_write": can}
+        for e in v["events"]:
+            if e.get("del") or not e.get("date"):
+                continue
+            ppl = e.get("people") or []
+            out.append({**base, "key": f"event|{r['id']}|{e['id']}", "type": "event", "id": e["id"], "title": e.get("title") or "Event",
+                        "kind": e.get("kind") or "other", "date": e["date"], "start": e.get("start") or "", "end": e.get("end") or "",
+                        "place": e.get("place") or "", "desc": e.get("desc") or "", "people": who(ppl),
+                        "remind": e.get("remind", -1) if e.get("remind") is not None else -1, "post": e.get("post") or "",
+                        "mine": (not ppl) or bool(me & set(ppl))})
+        for t in v["tasks"]:
+            if t.get("due") and not t.get("arch") and (t.get("plan") or "") not in gone:
+                ppl = sharing.task_people(t)
+                out.append({**base, "key": f"task|{r['id']}|{t['id']}", "type": "task", "id": t["id"], "title": t.get("title") or "",
+                            "kind": "deadline", "date": t["due"], "start": "", "end": "", "place": "", "desc": "", "people": who(ppl),
+                            "status": t.get("status") or "todo", "mine": bool(me & set(ppl)), "remind": -1})
+        for pl in v["plans"]:
+            if pl.get("due") and not pl.get("arch"):
+                own = pl.get("owners") or []
+                out.append({**base, "key": f"plan|{r['id']}|{pl['id']}", "type": "plan", "id": pl["id"], "title": pl.get("name") or "",
+                            "kind": "deadline", "date": pl["due"], "start": "", "end": "", "place": "", "desc": pl.get("goal") or "",
+                            "people": who(own), "status": "done" if pl.get("done") else "todo", "mine": bool(me & set(own)), "remind": -1})
+    out.sort(key=lambda i: (i["date"], i.get("start") or "99", i["title"].lower()))
+    return out
+
+
+@app.get("/api/calendar")
+def calendar_get():
+    db = get_db()
+    g = request.args.get("group") or None
+    return jsonify(items=_cal_items(db, g), today=date.today().isoformat(), notify=get_settings(db).get("cal_notify") != "0")
+
+
+def _cal_filter(items, mine, kind=None):
+    return [i for i in items if (not mine or i["mine"]) and (not kind or i["type"] == kind)]
+
+
+@app.get("/api/calendar.ics")
+def calendar_ics():
+    db = get_db()
+    g = request.args.get("group")
+    items = _cal_filter(_cal_items(db, None if g in (None, "", "all") else g), request.args.get("mine") == "1")
+    name = "PaperShelf lab" + ("" if g in (None, "", "all") else " – " + next((i["group_name"] for i in items), ""))
+    return Response(labcal.ics(items, name), mimetype="text/calendar",
+                    headers={"Content-Disposition": 'attachment; filename="papershelf-lab.ics"'})
+
+
+@app.get("/api/calendar/item.ics")
+def calendar_item_ics():
+    db = get_db()
+    key = f"{request.args.get('type')}|{request.args.get('group')}|{request.args.get('id')}"
+    items = [i for i in _cal_items(db, request.args.get("group")) if i["key"] == key]
+    if not items:
+        return error("Not found", 404)
+    return Response(labcal.ics(items, items[0]["group_name"]), mimetype="text/calendar",
+                    headers={"Content-Disposition": 'attachment; filename="papershelf-event.ics"'})
+
+
+def _cal_collect_due(db) -> list:
+    """Reminders that are due now and were not shown yet (each is returned once, then remembered for 3 days)."""
+    if get_settings(db).get("cal_notify") == "0":
+        return []
+    try:
+        done = json.loads(get_settings(db).get("cal_done") or "{}")
+    except ValueError:
+        done = {}
+    nowl = datetime.now()
+    due = labcal.due_now(_cal_items(db), nowl, done)
+    changed = bool(due)
+    for d in due:
+        done[d["nkey"]] = nowl.isoformat()
+    cut = (nowl - timedelta(days=3)).isoformat()
+    pruned = {k: v for k, v in done.items() if v >= cut}
+    if due or len(pruned) != len(done):
+        set_setting(db, "cal_done", json.dumps(pruned))
+        db.commit()
+    return due
+
+
+@app.post("/api/calendar/due")
+def calendar_due():
+    """Called every minute by an open PaperShelf page: the reminders to show now."""
+    _CAL_PING[0] = time.time()
+    due = _cal_collect_due(get_db())
+    return jsonify(due=[{**{k: d[k] for k in ("key", "type", "title", "kind", "date", "start", "end", "place", "group", "group_name", "id")},
+                         "text": labcal.describe(d)[1], "head": labcal.describe(d)[0]} for d in due])
+
+
+@app.post("/api/calendar/settings")
+def calendar_settings():
+    db = get_db()
+    b = request.get_json(silent=True) or {}
+    if "notify" in b:
+        set_setting(db, "cal_notify", "1" if b["notify"] else "0")
+        db.commit()
+    return jsonify(notify=get_settings(db).get("cal_notify") != "0")
+
+
+def calendar_loop():
+    """No PaperShelf window open (the app runs in the background): remind through the operating system."""
+    STOP.wait(20)
+    while not STOP.is_set():
+        try:
+            if time.time() - _CAL_PING[0] > 150:
+                db = connect()
+                try:
+                    if share_identity(db)["can_publish"] or db.execute("SELECT COUNT(*) FROM shares").fetchone()[0]:
+                        for d in _cal_collect_due(db):
+                            labcal.os_notify(*labcal.describe(d))
+                finally:
+                    db.close()
+        except Exception as exc:  # noqa: BLE001 - never stop the app for a reminder
+            logging.getLogger("papershelf").warning("calendar reminders failed: %s", exc)
+        STOP.wait(60)
 
 
 @app.get("/api/lab/overview")
@@ -3833,7 +3983,9 @@ def lab_overview():
                                 "created": p["created"], "comments": len(p["comments"])} for p in v["posts"][:3]]})
     my_tasks.sort(key=lambda t: (t["due"] or "9999", {"high": 0, "normal": 1, "low": 2}.get(t["prio"], 1)))
     all_for_me.sort(key=lambda x: x["created"] or "", reverse=True)
-    return jsonify(groups=out, my_tasks=my_tasks, my_plans=my_plans, for_me=all_for_me[:12], today=date.today().isoformat())
+    t0, t1 = date.today().isoformat(), (date.today() + timedelta(days=7)).isoformat()
+    upcoming = [i for i in _cal_items(db) if i["mine"] and t0 <= i["date"] <= t1 and not (i["type"] != "event" and i.get("status") == "done")][:8]
+    return jsonify(groups=out, my_tasks=my_tasks, my_plans=my_plans, for_me=all_for_me[:12], today=t0, upcoming=upcoming)
 
 
 # --------------------------------------------------------------------------- shared documents
@@ -5337,6 +5489,7 @@ def main():
             logging.getLogger("papershelf").warning("refreshing the launcher icon failed: %s", exc)
     threading.Thread(target=_refresh_icons, daemon=True).start()
     threading.Thread(target=auto_sync_loop, daemon=True).start()
+    threading.Thread(target=calendar_loop, daemon=True).start()
     threading.Thread(target=share_loop, daemon=True).start()
     threading.Thread(target=sjr_watch_loop, daemon=True).start()
     threading.Thread(target=fulltext_loop, daemon=True).start()

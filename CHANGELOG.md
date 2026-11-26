@@ -2,6 +2,16 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.0 – 2026-11-26
+**The lab calendar.**
+- New **Calendar** tab in every group, and **Calendar** in the Lab sidebar for all your groups together. Month, week and agenda views; filters (only mine, events, task deadlines, plan deadlines).
+- **Events** shared with the group: experiments, meetings, deadlines and other, with date, start and end time, place, description, who is involved and a reminder. Click a day to add one. Events travel with the group like tasks do, so every member sees them on every computer.
+- Task and plan deadlines appear in the calendar too, and the Overview has a **Coming up** list for the next 7 days.
+- **Experiments and meetings get a discussion**: a post is created in Ideas and discussion (or link an existing one), and the event links to it.
+- **Reminders**: a notification while PaperShelf is open, and an operating-system notification when it runs in the background. Deadlines remind you at 09:00 on the day. Turn them off with the 🔔 button.
+- **Export to your calendar** (.ics) for a whole group, all groups, only yours, or a single event, for Apple Calendar, Google Calendar and Outlook (which then alert you even when PaperShelf is closed). Nothing is published online.
+- Includes everything since 2.30: highlights, account and GitHub sign-in, several computers on one account, hidden console windows on Windows.
+
 ## 2.33.6 – 2026-11-26
 - Windows: no more black console windows flashing when PaperShelf starts or updates (git, PowerShell and the like now run hidden).
 

@@ -419,14 +419,14 @@ LAB_KINDS = ("idea", "experiment", "question", "result", "decision", "protocol",
 TASK_STATUS = ("todo", "doing", "done")
 TASK_PRIO = ("high", "normal", "low")
 MAX_POST, MAX_COMMENT = 20000, 5000
-LAB_LIMITS = {"posts": 2000, "comments": 10000, "plans": 300, "tasks": 3000, "checks": 20000, "remarks": 20000}
+LAB_LIMITS = {"posts": 2000, "comments": 10000, "plans": 300, "tasks": 3000, "checks": 20000, "remarks": 20000, "events": 5000}
 OID_RE = re.compile(r"^[a-f0-9]{8,32}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _lab(st) -> dict:
     lab = st.setdefault("lab", {})
-    for k in ("posts", "comments", "votes", "pins", "plans", "tasks", "checks", "remarks"):
+    for k in ("posts", "comments", "votes", "pins", "plans", "tasks", "checks", "remarks", "events"):
         lab.setdefault(k, {})
     return lab
 
@@ -568,14 +568,21 @@ def set_pin(st, author, post, v: bool):
 PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "owners": None, "pos": None, "del": None, "done": None, "arch": None}
 # the checklist of a task: each item on its own, so two people ticking different items never clash
 CHECK_FIELDS = {"task": 32, "text": 300, "done": None, "pos": None, "del": None}
-SPECS = {"plans": PLAN_FIELDS, "tasks": None, "checks": CHECK_FIELDS}
+# calendar events (experiments, meetings, deadlines): date YYYY-MM-DD, optional start/end HH:MM, who is involved, a link to a
+# discussion post / plan / task; "remind" = minutes before the start (or before 09:00 for an all-day event)
+EVENT_KINDS = ("experiment", "meeting", "deadline", "other")
+EVENT_REMIND = (0, 10, 30, 60, 120, 1440, 2880)
+EVENT_FIELDS = {"title": 200, "kind": None, "date": 10, "start": 5, "end": 5, "place": 160, "desc": 5000, "people": None, "post": 32,
+                "plan": 32, "task": 32, "remind": None, "del": None}
+TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+SPECS = {"plans": PLAN_FIELDS, "tasks": None, "checks": CHECK_FIELDS, "events": EVENT_FIELDS}
 TASK_FIELDS = {"title": 300, "notes": 5000, "status": None, "assignee": 60, "assignees": None, "due": 10, "plan": 32, "paper": 80,
                "post": 32, "prio": None, "pos": None, "del": None, "arch": None}
 
 
 def _field_ok(coll, k, v):
     """The cleaned value of a field of a plan or task, or raise ValueError."""
-    spec = {"plans": PLAN_FIELDS, "checks": CHECK_FIELDS}.get(coll, TASK_FIELDS)
+    spec = {"plans": PLAN_FIELDS, "checks": CHECK_FIELDS, "events": EVENT_FIELDS}.get(coll, TASK_FIELDS)
     if k not in spec:
         raise ValueError(k)
     if k in ("del", "done", "arch"):
@@ -588,14 +595,27 @@ def _field_ok(coll, k, v):
         return v
     if k == "prio":
         return v if v in TASK_PRIO else "normal"
-    if k in ("assignees", "owners"):
+    if k in ("assignees", "owners", "people"):
         return clean_people(v)
+    if k == "kind":
+        return v if v in EVENT_KINDS else "other"
+    if k == "remind":
+        try:
+            n = int(v) if v not in (None, "") else -1
+        except (ValueError, TypeError):
+            n = -1
+        return n if n in EVENT_REMIND else -1          # -1 = no reminder
+    if k in ("start", "end"):
+        v = str(v or "")
+        if v and not TIME_RE.match(v):
+            raise ValueError(k)
+        return v
     v = str(v or "")
-    if k == "due" and v and not DATE_RE.match(v):
+    if k in ("due", "date") and v and not DATE_RE.match(v):
         raise ValueError(k)
     if k in ("plan", "post", "task") and v and not OID_RE.match(v):
         raise ValueError(k)
-    return (" ".join(v.split()) if k in ("title", "name", "assignee", "text") else v)[:spec[k]]
+    return (" ".join(v.split()) if k in ("title", "name", "assignee", "text", "place") else v)[:spec[k]]
 
 
 def set_fields(st, author, coll, oid=None, **fields) -> str:
@@ -646,11 +666,12 @@ def lab_view(st) -> dict:
     for t in tasks:
         t["checklist"] = checks.get(t["id"], [])
         t["remarks"] = remarks.get(("task", t["id"]), [])
+    events = sorted(objs(lab.get("events")), key=lambda e: (e.get("date") or "", e.get("start") or "", e.get("created") or ""))
     plans = sorted(objs(lab.get("plans")), key=lambda p: (p.get("pos") or 0, p.get("created") or ""))
     for pl in plans:
         pl["remarks"] = remarks.get(("plan", pl["id"]), [])
     return {"posts": sorted(posts.values(), key=lambda p: (p.get("created") or ""), reverse=True),
-            "plans": plans, "tasks": tasks}
+            "plans": plans, "tasks": tasks, "events": events}
 
 
 def _merge_fields(x: dict, y: dict) -> dict:
@@ -676,7 +697,8 @@ def _merge_lab(a: dict, b: dict) -> dict:
            "remarks": _merge_notes(a.get("remarks") or {}, b.get("remarks") or {}),
            "plans": _merge_fields(a.get("plans") or {}, b.get("plans") or {}),
            "tasks": _merge_fields(a.get("tasks") or {}, b.get("tasks") or {}),
-           "checks": _merge_fields(a.get("checks") or {}, b.get("checks") or {}), "votes": {}, "pins": {}}
+           "checks": _merge_fields(a.get("checks") or {}, b.get("checks") or {}),
+           "events": _merge_fields(a.get("events") or {}, b.get("events") or {}), "votes": {}, "pins": {}}
     for pid in set(a.get("votes") or {}) | set(b.get("votes") or {}):
         va, vb = (a.get("votes") or {}).get(pid) or {}, (b.get("votes") or {}).get(pid) or {}
         d = {}
@@ -697,7 +719,7 @@ def _lab_stamps(lab) -> int:
     for k in ("posts", "comments", "remarks"):
         for n in (lab.get(k) or {}).values():
             c = max(c, (n.get("s") or [0])[0])
-    for k in ("plans", "tasks", "checks"):
+    for k in ("plans", "tasks", "checks", "events"):
         for o in (lab.get(k) or {}).values():
             for f in (o.get("f") or {}).values():
                 c = max(c, (f.get("s") or [0])[0])
@@ -710,7 +732,7 @@ def _lab_stamps(lab) -> int:
 
 
 def _validate_lab(raw) -> dict:
-    lab = {"posts": {}, "comments": {}, "votes": {}, "pins": {}, "plans": {}, "tasks": {}, "checks": {}, "remarks": {}}
+    lab = {"posts": {}, "comments": {}, "votes": {}, "pins": {}, "plans": {}, "tasks": {}, "checks": {}, "remarks": {}, "events": {}}
     if not isinstance(raw, dict):
         return lab
     ok_name = lambda a: bool(NAME_RE.match(a) or a.startswith("local-"))
@@ -740,7 +762,7 @@ def _validate_lab(raw) -> dict:
                     continue
                 o["post"] = str(n["post"])
             lab[coll][str(oid)] = o
-    for coll in ("plans", "tasks", "checks"):
+    for coll in ("plans", "tasks", "checks", "events"):
         src = raw.get(coll) if isinstance(raw.get(coll), dict) else {}
         for oid, o in list(src.items())[:LAB_LIMITS[coll]]:
             if not (isinstance(o, dict) and OID_RE.match(str(oid)) and isinstance(o.get("f"), dict)):
