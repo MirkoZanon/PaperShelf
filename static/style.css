@@ -2547,3 +2547,10 @@ body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { backgro
 
 .dx-tools .dx-count { margin-left: auto; color: var(--muted); font-size: 12.5px; } .dx-tools .dx-count:hover { color: var(--text); }
 .dx-tools { min-height: 38px; }
+
+/* Authors in colour while writing */
+.dx-tawrap { position: relative; } .dx-mirror { position: absolute; inset: 0; pointer-events: none; white-space: pre-wrap; overflow-wrap: break-word; word-wrap: break-word; color: transparent; font: 16px/1.7 Georgia, "Iowan Old Style", "Times New Roman", serif; padding: 0; margin: 0; }
+.dx-mirror .dx-au { border-radius: 2px; } .dx-tawrap .dx-text { position: relative; background: transparent; padding: 0; margin: 0; white-space: pre-wrap; overflow-wrap: break-word; }
+.dx-tools .dx-authbtn { margin-left: 0; } .dx-tools .dx-authbtn.on { color: var(--accent, #2f7d57); background: color-mix(in srgb, var(--accent, #2f7d57) 12%, transparent); }
+.dx-leg { padding: 4px 8px 2px; } .dx-legend-bar { margin: 0; padding: 0; border: 0; font-size: 12.5px; }
+.dx-mirror .dx-au { background: hsl(var(--c) 70% 58% / .27); } @media (prefers-color-scheme: dark) { .dx-mirror .dx-au { background: hsl(var(--c) 55% 50% / .34); } }

@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.4 – 2026-11-26
+- **Authors in colour while you write**: a new "Authors" button in the second bar of a document colours each person's text in their own colour, in Edit and Suggest mode too (before this it was only in Review mode). A legend under the bar shows each colour with the person and their share of the text. It follows what you type, and each computer of a person keeps the same colour.
+
 ## 3.3.1 – 2026-11-26
 - The word count moved to the right end of the second bar (the toolbar row), which is now shown in every mode so the count is always in the same place.
 

@@ -138,7 +138,7 @@ const Docs = (() => {
     schedule(); ta.value = R.B.text; autosize(ta); if (caret != null) ta.setSelectionRange(caret, caret); ta.focus({preventScroll: true});
     paintSide(); remoteSoon(); updUndoBtns(); D.sel = selection();
   }
-  function rebuild(upto) { const R = D.R; R.B = build(R.ops, upto); R.max = Math.max(R.max || 0, maxCtr(R.ops)); }
+  function rebuild(upto) { const R = D.R; R.B = build(R.ops, upto); R.max = Math.max(R.max || 0, maxCtr(R.ops)); if (D.auth) paintMirror(); }
 
   /* ------------------------------------------------------------- talking to the server */
   const setStatus = s => { D.status = s; const el = $('#dx-status', D.host); if (el) { el.textContent = {saved: 'Saved', saving: 'Saving…', offline: 'Not saved yet, retrying…', read: 'Read only'}[s] || ''; el.className = 'dx-status ' + s; } };
@@ -338,7 +338,7 @@ const Docs = (() => {
         <button data-fmt="cite" title="Cite a paper of the group">${ic('book')}Cite</button>
         <button data-fmt="comment" title="Comment on the selected text (${MOD}+Alt+M)">${ic('chat')}Comment</button>
         <button data-fmt="suggest" title="Suggest a change to the selected text">${ic('pen')}Suggest</button>
-      ` : ''}<span class="grow"></span><button class="dx-count" id="dx-count" data-dx="count" title="Words and characters of the document, and of the text you have selected">${ic('note')}<span id="dx-count-t">– words</span></button></div></div>
+      ` : ''}<span class="grow"></span><button class="dx-count dx-authbtn ${D.auth ? 'on' : ''}" id="dx-authbtn" data-dx="authors" title="Show who wrote what: each person's text in their own color">${ic('users')}<span>Authors</span></button><button class="dx-count" data-dx="count" title="Words and characters of the document, and of the text you have selected">${ic('note')}<span id="dx-count-t">– words</span></button></div><div class="dx-leg" id="dx-leg" hidden></div></div>
       <div class="dx-main"><div class="dx-page" id="dx-page"></div><aside class="dx-side" id="dx-side"></aside></div>
       <div class="dx-float" id="dx-float"></div></div>`;
     paintPage(); paintSide(); paintNow(); fitStick(); countSoon();
@@ -523,6 +523,22 @@ const Docs = (() => {
     const rng = {}; for (const [a, log] of Object.entries(D.R.ops)) for (const o of log) if (o.k === 'i' && o.p) (rng[a] || (rng[a] = [])).push([o.c, o.c + o.t.length - 1]);
     return B.vis.map(x => !!rng[x.a] && rng[x.a].some(r => x.c >= r[0] && x.c <= r[1]));
   }
+  // "Authors": every writer's text in their own color, also while writing (a layer behind the text box)
+  function paintMirror() {
+    const m = $('#dx-mirror', D.host), B = D.R?.B; paintLegend();
+    if (!m || !B) return;
+    if (!D.auth || B.vis.length > 150000) { m.innerHTML = ''; return; }
+    let h = '', cur = null, buf = '';
+    const flush = () => { if (buf) h += `<span style="--c:${auHue(cur)}" class="dx-au">${esc(buf)}</span>`; buf = ''; };
+    for (const n of B.vis) { if (n.a !== cur) { flush(); cur = n.a; } buf += n.ch; }
+    flush(); m.innerHTML = h + '&#8203;';
+  }
+  function paintLegend() {
+    const el = $('#dx-leg', D.host); if (!el) return;
+    const on = D.auth && D.mode !== 'marks' && D.mode !== 'preview' && D.R;
+    el.hidden = !on; el.innerHTML = on ? legendHtml().replace('dx-legend', 'dx-legend dx-legend-bar') : '';
+    $('#dx-authbtn', D.host)?.classList.toggle('on', !!D.auth); fitStick();
+  }
   function legendHtml() {
     const R = D.R, counts = {}; R.B.vis.forEach(n => { counts[n.a] = (counts[n.a] || 0) + 1; });
     const tot = R.B.vis.length || 1, pn = D.pasted ? pastedFlags(R.B).filter(Boolean).length : 0;
@@ -539,8 +555,8 @@ const Docs = (() => {
       return;
     }
     if (D.mode === 'write') {
-      pg.innerHTML = `<textarea id="dx-text" class="dx-text" spellcheck="true" ${W ? '' : 'readonly'} placeholder="${W ? 'Start writing…  Use # for headings, **bold**, - for lists, [@Smith2020] to cite a paper.' : ''}" aria-label="Document text"></textarea>`;
-      const ta = $('#dx-text', pg); ta.value = R.B.text; autosize(ta);
+      pg.innerHTML = `<div class="dx-tawrap"><div class="dx-mirror" id="dx-mirror" aria-hidden="true"></div><textarea id="dx-text" class="dx-text" spellcheck="true" ${W ? '' : 'readonly'} placeholder="${W ? 'Start writing…  Use # for headings, **bold**, - for lists, [@Smith2020] to cite a paper.' : ''}" aria-label="Document text"></textarea></div>`;
+      const ta = $('#dx-text', pg); ta.value = R.B.text; autosize(ta); paintMirror();
     } else if (D.mode === 'suggest' && W) {
       pg.innerHTML = `<div class="dx-sugbar">${ic('pen')}<span><b>Suggesting.</b> Write and delete as usual: your changes show in the text as suggestions (deleted text struck out, new text in green) and the others can accept or reject them.</span><span class="grow"></span><button class="btn small" data-dx-mode="write">Back to editing</button></div><div class="dx-src dx-suggest" id="dx-src" contenteditable="true" spellcheck="true" role="textbox" aria-multiline="true" aria-label="Document text (suggesting)">${marksHtml(R.B, true)}</div>`;
       if (D.focusSrc) { D.focusSrc = false; placeCaret(D.caret || {base: R.B.vis.length}); }
@@ -549,6 +565,7 @@ const Docs = (() => {
     } else {
       pg.innerHTML = previewHtml(R.B, R.title);
     }
+    paintLegend();
   }
   const autosize = ta => {      // the box is collapsed to measure it: keep the scroll position or the page jumps while typing
     const sc = scroller(), top = sc.scrollTop;
@@ -1252,7 +1269,7 @@ const Docs = (() => {
     host.addEventListener('keyup', e => { if ((D.mode === 'marks' || D.mode === 'suggest') && e.shiftKey && e.target.closest?.('#dx-src, body')) setTimeout(showBubble, 10); });
     document.addEventListener('mousedown', e => { if (!e.target.closest('.dx-bubble, .dx-comp') && !e.target.closest('#dx-src')) hideBubble(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') hideBubble(); });
-    host.addEventListener('change', e => { if (e.target.matches('[data-dx-auth]')) { D.auth = e.target.checked; paintPage(); } if (e.target.matches('[data-dx-paste]')) { D.pasted = e.target.checked; paintPage(); } });
+    host.addEventListener('change', e => { if (e.target.matches('[data-dx-auth]')) { D.auth = e.target.checked; paintPage(); paintLegend(); } if (e.target.matches('[data-dx-paste]')) { D.pasted = e.target.checked; paintPage(); } });
     host.addEventListener('select', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
@@ -1305,6 +1322,7 @@ const Docs = (() => {
       const pg = t.closest('[data-dx-purge]')?.dataset.dxPurge; if (pg) return purgeDoc(pg);
       if (dx === 'export-menu') { e.stopPropagation(); return exportMenu(t.closest('button')); }
       if (t.closest('[data-dx=count]')) return countDialog();
+      if (t.closest('[data-dx=authors]')) { D.auth = !D.auth; paintPage(); paintMirror(); return; }
       const ag = t.closest('[data-dx-asg]')?.dataset.dxAsg; if (ag) return asgDialog(ag);
       if (dx === 'comment-add') return addComment(false);
       if (dx === 'suggest-add') return addComment(true);
