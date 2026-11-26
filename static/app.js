@@ -1106,7 +1106,7 @@ function openSettings(startTab) {
         <div class="sync-actions"><button class="btn small" id="sync-test">Test</button><span id="sync-test-res" class="muted small"></span></div></li>
     </ol>
     ${s.has_git === false ? `<p class="warn-box small"><b>Git is needed</b> and isn't installed on this computer. ${state.platform === 'darwin' ? 'Open the Terminal app, type <code>xcode-select --install</code>, press Enter and accept.' : 'Install it from <a href="https://git-scm.com/download/win" target="_blank" rel="noopener">git-scm.com</a> (default options), then restart PaperShelf.'}</p>` : ''}
-    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>At start-up and every 20 minutes.</small></span></label>
+    <label class="opt"><input type="checkbox" id="set-sync-auto" ${s.sync_auto === '1' ? 'checked' : ''}><span>Sync automatically<small>At start-up, every 5 minutes and when you come back to the app.</small></span></label>
     <label class="opt"><input type="checkbox" id="set-sync-pdfs" ${s.sync_pdfs === '1' ? 'checked' : ''}><span>Also sync PDF files<small>Best under ~1 GB (≈ 400 papers).</small></span></label>
     <p class="muted small"><b>Second computer:</b> install PaperShelf and do step 4 with the same repository.</p>
     </div>
@@ -1566,7 +1566,15 @@ function updateSyncButton() {
     (s.last_sync ? `\n(last library sync: ${new Date(s.last_sync).toLocaleString()})` : '');
   b.classList.toggle('warn', !!s.last_sync_error);
 }
-let syncing = false;
+let syncing = false, lastQuiet = Date.now();
+document.addEventListener('visibilitychange', async () => {   // coming back to the app: fetch what the other computers did (quietly)
+  const s = state.settings || {};
+  if (document.visibilityState !== 'visible' || syncing || !s.sync_repo || s.sync_auto !== '1' || Date.now() - lastQuiet < 120000) return;
+  lastQuiet = Date.now();
+  try { const d = await api('/api/sync', {method: 'POST'}); state.settings = d.settings; const st = d.stats;
+    if (st.added || st.updated || st.removed) { await loadLibrary(); toast(`Library updated from your other computers (${[st.added && st.added + ' new', st.updated && st.updated + ' updated', st.removed && st.removed + ' removed'].filter(Boolean).join(', ')}).`, 'ok'); }
+    updateSyncButton(); } catch (e) { /* silent */ }
+});
 async function syncNow() {
   // one button for everything: your library on your other computers, shared labels & notes, new app versions
   if (syncing) return;
@@ -1581,6 +1589,7 @@ async function syncNow() {
       const bits = [st.added && `${st.added} new`, st.updated && `${st.updated} updated`, st.removed && `${st.removed} removed`,
         st.pdfs_down && `${st.pdfs_down} PDFs received`, st.pdfs_up && `${st.pdfs_up} PDFs sent`].filter(Boolean);
       done.push(`library synced${bits.length ? ' (' + bits.join(', ') + ')' : ''}`);
+      if (st.clock) problems.push(st.clock);
     } catch (err) {
       problems.push('library sync: ' + err.message);
       try { const d = await api('/api/settings'); state.settings = d.settings; } catch (e) { /* ignore */ }

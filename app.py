@@ -87,7 +87,7 @@ STATUSES = {"to_read", "reading", "read"}
 META_FIELDS = ["title", "authors", "year", "journal", "journal_abbr", "volume", "issue", "pages", "publisher",
                "type", "doi", "arxiv_id", "url", "abstract", "pdf_url"]
 CITATION_FIELDS = ["openalex_id", "refs", "related", "cited_by_count"]
-SECRET_SETTINGS = {"sync_token", "openalex_key", "core_key", "share_token"}
+SECRET_SETTINGS = {"sync_token", "openalex_key", "core_key", "share_token", "share_accounts"}
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 PROXY_TEST_DOI = "10.1126/science.1127647"  # a subscription-only Science article, to test library access
 
@@ -265,6 +265,15 @@ def new_uid() -> str:
     return uuid.uuid4().hex
 
 
+def _accounts_of(raw) -> dict:
+    """GitHub accounts remembered on this computer only: {user: {"token", "gist"}} (never leaves this computer)."""
+    try:
+        d = json.loads(raw or "{}")
+    except ValueError:
+        return {}
+    return {u: v for u, v in d.items() if isinstance(v, dict) and v.get("token")} if isinstance(d, dict) else {}
+
+
 def get_settings(db=None, secrets=True) -> dict:
     db = db or get_db()
     s = {"email": "", "pdf_dir": str(DEFAULT_PDF_DIR), "default_style": "apa", "sync_repo": "", "sync_token": "",
@@ -272,7 +281,7 @@ def get_settings(db=None, secrets=True) -> dict:
          "auto_import": "", "remove_downloads": "", "watch_dir": str(Path.home() / "Downloads"), "openalex_key": "",
          "core_key": "", "sjr_auto": "", "update_check": "1", "update_cache": "",
          "update_auto": "1", "just_updated": "", "own_window": "1",
-         "share_repo": "", "share_token": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
+         "share_repo": "", "share_token": "", "share_accounts": "", "share_auto": "1", "install_id": "", "share_user": "", "share_gist": "",
          "display_name": "", "list_checkboxes": "", "start_page": "home", "stale_days": "60",
          "feed_topics": "[]", "feed_last": "", "lib_check": "1", "feed_muted": "[]", "look": "glass", "accent": "green"}
     for row in db.execute("SELECT key, value FROM settings"):
@@ -286,10 +295,12 @@ def get_settings(db=None, secrets=True) -> dict:
         s["proxies"] = json.loads(s["proxies"] or "[]")
     except ValueError:
         s["proxies"] = []
+    accts = _accounts_of(s.get("share_accounts"))
     if not secrets:
         for key in SECRET_SETTINGS:
             s["has_" + key] = bool(s.pop(key))
         s["has_git"] = bool(shutil.which("git"))   # needed by "Sync my computers"
+        s["accounts"] = [{"user": u, "active": u == s.get("share_user") and bool(s.get("share_gist"))} for u in accts]
     return s
 
 
@@ -601,7 +612,15 @@ def _icon_version() -> str:
 def index():
     html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
     html = re.sub(r'(/static/icons/icon-\d+\.png)"', lambda m: f'{m.group(1)}?v={_icon_version()}"', html)
+    html = re.sub(r'(/static/[A-Za-z0-9_./-]+\.(?:js|css))"', lambda m: f'{m.group(1)}?v={APP_VERSION}"', html)   # a new version = new addresses, so no browser keeps old scripts
     return Response(html, mimetype="text/html", headers={"Cache-Control": "no-cache"})
+
+
+@app.after_request
+def _static_fresh(resp):
+    if request.path.startswith("/static/") and not request.path.startswith("/static/icons/"):
+        resp.headers["Cache-Control"] = "no-cache"   # always ask; unchanged files answer "304 not modified" (fast)
+    return resp
 
 
 @app.get("/quickadd")
@@ -2133,7 +2152,7 @@ def sync_now():
 
 
 def auto_sync_loop():
-    """Sync at start-up and every 20 minutes when "Sync automatically" is on."""
+    """Sync at start-up and every 5 minutes when "Sync automatically" is on."""
     if STOP.wait(3):
         return
     while not STOP.is_set():
@@ -2145,7 +2164,7 @@ def auto_sync_loop():
             logging.getLogger("papershelf").warning("auto-sync failed: %s", exc)
         finally:
             db.close()
-        STOP.wait(20 * 60)
+        STOP.wait(5 * 60)
 
 
 @app.post("/api/open-folder")
@@ -3155,6 +3174,9 @@ def share_identity(db) -> dict:
     token = s.get("share_token") or s.get("sync_token") or ""
     user, gist = s.get("share_user") or "", s.get("share_gist") or ""
     src = f"gist:{gist}" if gist else ""
+    if user and gist and token and user not in _accounts_of(s.get("share_accounts")):   # remember the account already in use (this computer only)
+        acc = _accounts_of(s.get("share_accounts")); acc[user] = {"token": token, "gist": gist}
+        set_setting(db, "share_accounts", json.dumps(acc)); db.commit()
     return {"user": user, "src": src, "repo": src, "token": token, "local": "local-" + s["install_id"], "tag": s["install_id"][:8].lower(),
             "can_publish": bool(user and gist and token)}
 
@@ -5077,11 +5099,36 @@ def share_setup():
     """Turn sharing on: find (or create) your secret shared-labels gist with your GitHub token."""
     b = request.get_json(silent=True) or {}
     db = get_db()
-    if b.get("off"):
+    if b.get("forget"):   # delete a saved account (its token) from this computer; if it is the one in use, sign out
+        user = str(b["forget"])
+        acc = _accounts_of(get_settings(db).get("share_accounts"))
+        acc.pop(user, None)
+        set_setting(db, "share_accounts", json.dumps(acc))
+        if get_settings(db).get("share_user") == user:
+            for k in ("share_user", "share_gist", "share_token"):
+                set_setting(db, k, "")
+        db.commit()
+        return jsonify(ok=True, settings=get_settings(db, secrets=False))
+    if b.get("off"):     # sign out: this computer stops using the account; it stays in the list for a one-click sign-in
         for k in ("share_user", "share_gist"):
             set_setting(db, k, "")
         db.commit()
         return jsonify(ok=True, settings=get_settings(db, secrets=False))
+    if b.get("switch"):  # use another saved account
+        acc = _accounts_of(get_settings(db).get("share_accounts")).get(str(b["switch"]))
+        if not acc:
+            return error("That account is not saved on this computer. Connect it with its token.")
+        try:
+            gh = sharing.GitHub(acc["token"])
+            user = gh.whoami()
+            gist = acc.get("gist") or gh.find_or_create_gist()
+        except sharing.ShareError as exc:
+            return error(f"{exc} (If the token expired, remove this account and connect again.)", 502)
+        set_setting(db, "share_token", acc["token"])
+        set_setting(db, "share_user", user)
+        set_setting(db, "share_gist", gist)
+        db.commit()
+        return jsonify(ok=True, user=user, gist=gist, settings=get_settings(db, secrets=False))
     s = get_settings(db)
     token = (b.get("token") or "").strip() or s.get("share_token") or s.get("sync_token")
     if not token:
@@ -5096,6 +5143,9 @@ def share_setup():
         set_setting(db, "share_token", token.strip())
     set_setting(db, "share_user", user)
     set_setting(db, "share_gist", gist)
+    acc = _accounts_of(s.get("share_accounts"))
+    acc[user] = {"token": token.strip(), "gist": gist}
+    set_setting(db, "share_accounts", json.dumps(acc))
     db.commit()
     return jsonify(ok=True, user=user, gist=gist, settings=get_settings(db, secrets=False))
 

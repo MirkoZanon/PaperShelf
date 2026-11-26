@@ -244,6 +244,7 @@ def refresh_launchers(port: int, log: Path, version: str) -> list[str]:
             _win_url_scheme(port)
         except OSError:
             pass
+        done += _win_refresh_icons()
     return done
 
 
@@ -308,6 +309,41 @@ def set_autostart(on: bool, port: int, log: Path) -> bool:
     return True
 
 
+def _win_icon() -> str:
+    """The icon file for shortcuts: a copy in a local folder of this Windows account. On work computers the app
+    folder can be a synced or redirected folder the desktop can't read icons from (a blank icon)."""
+    src = ICONS / "PaperShelf.ico"
+    dest = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "PaperShelf" / "PaperShelf.ico"
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if not dest.exists() or dest.read_bytes() != src.read_bytes():
+            shutil.copyfile(src, dest)
+        return str(dest)
+    except OSError:
+        return str(src)
+
+
+def _win_refresh_icons() -> list[str]:
+    """After an update: point existing PaperShelf shortcuts at the local icon copy and ask Windows to redraw icons."""
+    icon, done = _win_icon(), []
+    for folder in ("Desktop", "Programs"):
+        ps = ("$f=[Environment]::GetFolderPath('%s');$p=Join-Path $f 'PaperShelf.lnk';"
+              "if(Test-Path $p){$w=New-Object -ComObject WScript.Shell;$s=$w.CreateShortcut($p);"
+              "if($s.IconLocation -ne %s){$s.IconLocation=%s;$s.Save();Write-Output $p}}") % (
+            folder, _psq(icon + ",0"), _psq(icon + ",0"))
+        try:
+            r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps], capture_output=True, text=True, timeout=60)
+            done += [x for x in r.stdout.splitlines() if x.strip()]
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if done:
+        try:
+            subprocess.run(["ie4uinit.exe", "-show"], capture_output=True, timeout=30)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return done
+
+
 def _win_shortcuts(port: int) -> list[str]:
     pyw = APP_DIR / ".venv" / "Scripts" / "pythonw.exe"
     target = pyw if pyw.exists() else Path(sys.executable).with_name("pythonw.exe")
@@ -321,7 +357,7 @@ def _win_shortcuts(port: int) -> list[str]:
             "$s.TargetPath=%s;$s.Arguments=%s;$s.WorkingDirectory=%s;$s.IconLocation=%s;"
             "$s.Description='PaperShelf – your library of scientific papers';$s.Save();Write-Output (Join-Path $f 'PaperShelf.lnk')"
         ) % (folder, _psq(target), _psq(f'"{APP_DIR / "app.py"}" --port {int(port)}'), _psq(APP_DIR),
-             _psq(str(ICONS / "PaperShelf.ico") + ",0"))
+             _psq(_win_icon() + ",0"))
         r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
                            capture_output=True, text=True, timeout=60)
         if r.returncode == 0 and r.stdout.strip():

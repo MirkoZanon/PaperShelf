@@ -429,12 +429,20 @@ const Shares = (() => {
   /* ------------------------------------------------------------ settings tab */
   function statusHtml(s) {
     return s.share_gist
-      ? `<div class="set-status ok">✓ Connected as <b>${esc(s.share_user)}</b> – you can create groups, invite people and edit. <button class="linklike" id="share-off">Disconnect</button></div>`
+      ? `<div class="set-status ok">✓ Connected as <b>${esc(s.share_user)}</b> – you can create groups, invite people and edit. <button class="linklike" id="share-off">Sign out</button></div>${accountsHtml(s)}`
       : `<div class="set-status">Not connected. <b>Joining as a reader needs nothing</b> (sidebar → Groups ＋ → Join). To <b>create</b> groups or <b>edit and write notes</b> in them, connect GitHub once:</div>`;
+  }
+  function accountsHtml(s) {      // accounts saved on this computer only: switch with one click
+    const a = s.accounts || [];
+    if (!a.length) return '';
+    return `<div class="section-label">Accounts on this computer</div><div class="share-accts">${a.map(x => `<div class="opt" style="display:flex;gap:8px;align-items:center;margin:4px 0">
+      <b>${esc(x.user)}</b>${x.active ? '<span class="muted small">signed in</span>' : `<button class="btn small" data-acct-use="${esc(x.user)}">Sign in</button>`}
+      <button class="linklike small" data-acct-del="${esc(x.user)}" title="Delete this account's saved token from this computer">Remove</button></div>`).join('')}</div>
+      <p class="muted small">Tokens are stored only on this computer. To add another account, sign out and connect it with its token.</p>`;
   }
   function connHtml(s) {
     const tokenSaved = s.has_share_token || s.has_sync_token;
-    return statusHtml(s) + (s.share_gist ? '' : `<ol class="gh-steps">
+    return statusHtml(s) + (s.share_gist ? '' : accountsHtml(s) + `<ol class="gh-steps">
         <li><b>A GitHub account</b> – free; skip if you have one. <a class="btn small" href="https://github.com/signup" target="_blank" rel="noopener">Create an account</a></li>
         <li><b>A token</b> with the <i>Gists</i> permission. ${s.has_sync_token ? 'If you sync your computers with a token created from PaperShelf 2.7 or later, it already has it: skip to step 3.' : ''}
           <a class="btn small" href="${TOKEN_URL}" target="_blank" rel="noopener">Create it on GitHub</a> <button class="linklike small" data-help="gh-token">Show me how</button>
@@ -464,8 +472,19 @@ const Shares = (() => {
           toast(`Connected to GitHub as ${d.user}.`, 'ok'); syncNow(null, true);
         } catch (err) { res.innerHTML = `<span style="color:var(--danger)">✗ ${esc(err.message)}</span>`; }
       }
+      const use = e.target.closest('[data-acct-use]')?.dataset.acctUse, del = e.target.closest('[data-acct-del]')?.dataset.acctDel;
+      if (use) {
+        try { const d = await api('/api/shares/setup', {method: 'POST', body: {switch: use}}); state.settings = {...state.settings, ...d.settings};
+          $('#share-conn', m.el).innerHTML = connHtml(state.settings); toast(`Signed in as ${d.user}.`, 'ok'); await refresh(); syncNow(null, true); }
+        catch (err) { toast(err.message, 'error'); }
+      }
+      if (del) {
+        if (!await confirmBox(`Remove ${del} from this computer?`, 'Its saved token is deleted here. Your groups stay online; you can add the account again with a token.', {ok: 'Remove'})) return;
+        const d = await api('/api/shares/setup', {method: 'POST', body: {forget: del}}); state.settings = {...state.settings, ...d.settings};
+        $('#share-conn', m.el).innerHTML = connHtml(state.settings);
+      }
       if (e.target.id === 'share-off') {
-        const ok = await confirmBox('Disconnect GitHub for groups on this computer?', 'Your groups stay online and with the other people; this computer just stops publishing your changes. You can connect again any time.', {ok: 'Disconnect'});
+        const ok = await confirmBox('Sign out of GitHub on this computer?', 'Your groups stay online and with the other people; this computer just stops publishing your changes. The account stays in the list here, so you can sign in again with one click.', {ok: 'Sign out'});
         if (!ok) return;
         const d = await api('/api/shares/setup', {method: 'POST', body: {off: true}}); state.settings = {...state.settings, ...d.settings};
         $('#share-conn', m.el).innerHTML = connHtml(state.settings);

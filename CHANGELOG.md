@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.31 – 2026-11-26
+- Accounts: Settings → Groups now lists the GitHub accounts saved on this computer. Sign out, sign in to another account with one click, or remove one. Tokens stay on this computer only.
+- Updates: after an update the browser can no longer keep old copies of the app's scripts and styles (a likely reason a computer looked "up to date" but behaved like an older version).
+- Library sync: also runs when you come back to the app, and every 5 minutes (was 20). Warns if this computer's clock is wrong, because the newest edit wins when libraries merge.
+- Windows: the shortcut icon is now stored in a local folder and uses a format all Windows versions draw (fixes the blank icon on some work computers); existing shortcuts are fixed after the update.
+
 ## 2.30.2 – 2026-11-25
 - Highlighting now works the way you expect: select text with the mouse (or Shift+arrows) and a small row of colors appears next to the selection; click one and the text is highlighted.
 - Fixed: the color swatches in the toolbar's Highlight menu did nothing after 2.30.1.

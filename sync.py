@@ -102,6 +102,7 @@ def _prepare(repo: Path, url: str):
     _git(repo, "config", "user.name", "PaperShelf")
     _git(repo, "config", "user.email", "papershelf@users.noreply.github.com")
     _git(repo, "config", "core.quotepath", "false")
+    _git(repo, "config", "core.autocrlf", "false")   # Windows must not rewrite line endings
 
 
 def _checkout_remote(repo: Path, token: str):
@@ -397,8 +398,25 @@ def sync(db, home: Path, settings: dict) -> dict:
                     continue  # someone synced in the meantime: merge again
                 raise SyncError(_friendly(r.stderr))
         stats["pushed"] = dirty
+        off = clock_offset()
+        if off is not None and abs(off) > 120:
+            stats["clock"] = (f"This computer's clock is {abs(round(off / 60))} min {'ahead of' if off > 0 else 'behind'} the real time. "
+                              "Edits are merged by time, so set the date and time to automatic in your system settings.")
         return stats
     raise SyncError("The repository kept changing during sync. Try again.")
+
+
+def clock_offset() -> float | None:
+    """Seconds this computer's clock is ahead (+) or behind (-) GitHub's. The newest edit wins when
+    libraries are merged, so a wrong clock makes one computer's changes lose. None if GitHub can't be asked."""
+    try:
+        import requests
+        from email.utils import parsedate_to_datetime
+        r = requests.head("https://api.github.com", timeout=8, headers={"User-Agent": "PaperShelf-sync"})
+        d = parsedate_to_datetime(r.headers["Date"])
+        return datetime.now(timezone.utc).timestamp() - d.timestamp()
+    except Exception:  # noqa: BLE001 - only a hint
+        return None
 
 
 def git_status() -> dict:
