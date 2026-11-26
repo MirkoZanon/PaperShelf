@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.1 – 2026-11-26
+- **Calendar on the Home tab**: a month grid with colored dots on days that have something (experiments, meetings, deadlines), plus a "Coming up" list for the next two weeks. Click a day to see what is on it, click an item to open it, and "Open calendar" jumps to the Lab calendar of all your groups.
+
 ## 3.0 – 2026-11-26
 **The lab calendar.**
 - New **Calendar** tab in every group, and **Calendar** in the Lab sidebar for all your groups together. Month, week and agenda views; filters (only mine, events, task deadlines, plan deadlines).

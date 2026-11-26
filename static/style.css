@@ -2507,3 +2507,25 @@ body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { backgro
 .cal-form .input { color: var(--text); } .cal-row { display: flex; gap: 10px; flex-wrap: wrap; } .cal-row > label { flex: 1 1 120px; }
 .cal-lbl { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 @media (max-width: 760px) { .cal-day { min-height: 70px; } .cal-week { grid-template-columns: 1fr; } .cal-wcol { min-height: 0; } }
+
+/* Home: calendar widget */
+.hm-cal { grid-column: span 12; padding-bottom: 16px; }
+.hc-body { display: grid; grid-template-columns: minmax(250px, 320px) minmax(0, 1fr); gap: 26px; align-items: start; }
+.hc-nav { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; } .hc-nav b { flex: 1; text-align: center; font-size: 14px; text-transform: capitalize; }
+.hc-b { border: 1px solid var(--border); background: none; color: var(--text); border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 16px; line-height: 1; } .hc-b:hover { background: var(--hover, rgba(127,127,127,.12)); }
+.hc-t { font-size: 12px; }
+.hc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.hc-w { font-style: normal; text-align: center; font-size: 11px; color: var(--muted); padding: 2px 0 4px; }
+.hc-d { border: 0; background: none; color: var(--text); cursor: pointer; border-radius: 9px; padding: 4px 0 3px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12.5px; min-height: 36px; }
+.hc-d:hover { background: var(--hover, rgba(127,127,127,.12)); }
+.hc-d.today span { background: var(--accent, #3b82d9); color: #fff; border-radius: 50%; width: 22px; height: 22px; display: inline-grid; place-items: center; font-weight: 600; }
+.hc-d.sel { outline: 2px solid var(--accent, #3b82d9); outline-offset: -2px; }
+.hc-d em { display: flex; gap: 2px; height: 5px; } .hc-d u { width: 5px; height: 5px; border-radius: 50%; background: var(--c, #8a8f98); display: block; }
+.hc-lh { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+.hc-i { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; background: none; color: inherit; padding: 7px 8px; border-radius: 10px; cursor: pointer; }
+.hc-i:hover { background: var(--hover, rgba(127,127,127,.1)); }
+.hc-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c, #8a8f98); flex: none; }
+.hc-it { display: flex; flex-direction: column; min-width: 0; } .hc-it b { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .hc-it small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hc-more { margin: 4px 8px 0; font-size: 12.5px; }
+@media (max-width: 760px) { .hc-body { grid-template-columns: 1fr; } }
+.hc-body { padding: 12px 6px 0; }

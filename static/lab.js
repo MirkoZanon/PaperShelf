@@ -814,5 +814,6 @@ const Lab = (() => {
   async function refresh() { if (state.tab === 'lab') { await load(); render(); } }
 
   document.addEventListener('DOMContentLoaded', () => { if (main()) bind(); });
-  return {show, openGroup, refresh, isOpen: () => state.tab === 'lab'};
+  function openCalendar() { S.sid = null; S.allcal = true; S.data = null; save(); setTab('lab'); if (state.tab === 'lab') render(); }
+  return {show, openGroup, openCalendar, refresh, isOpen: () => state.tab === 'lab'};
 })();

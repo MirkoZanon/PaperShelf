@@ -18,13 +18,51 @@ const Home = (() => {
     const el = $('#home-main'); const my = ++seq;
     state.updateAvailable = (typeof Updates !== 'undefined' && Updates.info && Updates.info.available) ? Updates.info.latest : '';
     el.innerHTML = skeleton({docs: null, over: null});
-    const [docs, over, stor, app] = await Promise.all([
+    const [docs, over, stor, app, cl] = await Promise.all([
       api('/api/docs/recent').catch(() => ({docs: [], groups: []})),
       api('/api/lab/overview').catch(() => ({groups: [], my_tasks: [], for_me: []})),
-      api('/api/storage').catch(() => null), api('/api/app-status').catch(() => null)]);
+      api('/api/storage').catch(() => null), api('/api/app-status').catch(() => null),
+      api('/api/calendar').catch(() => null)]);
+    if (cl) { cal.items = cl.items || []; cal.today = cl.today; if (!cal.month) cal.month = cl.today.slice(0, 7); cal.ok = true; }
     if (stor && app) stor.app_installed = !!app.installed;
     if (my !== seq || state.tab !== 'home') return;
     el.innerHTML = skeleton({docs, over, stor});
+  }
+  /* ---- calendar widget: a month, with dots on the days that have something, and what is coming up ---- */
+  const cal = {items: [], today: '', month: '', day: '', ok: false};
+  const KIND = {experiment: 'Experiment', meeting: 'Meeting', deadline: 'Deadline', other: 'Event'};
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const itemKind = i => i.type === 'event' ? (i.kind || 'other') : 'deadline';
+  const itemLabel = i => (i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : '') + (i.title || 'Event');
+  function dayName(d) {
+    if (d === cal.today) return 'Today'; if (d === addDays(cal.today, 1)) return 'Tomorrow';
+    return new Date(d + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'});
+  }
+  function calCard() {
+    if (!cal.ok) return '';
+    const mine = cal.items.filter(i => i.mine !== false);
+    const by = {}; for (const i of mine) (by[i.date] = by[i.date] || []).push(i);
+    const [y, m] = cal.month.split('-').map(Number), first = new Date(y, m - 1, 1);
+    const lead = (first.getDay() + 6) % 7, days = new Date(y, m, 0).getDate();
+    const wd = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    let cells = wd.map(w => `<i class="hc-w">${w}</i>`).join('') + '<b class="hc-e"></b>'.repeat(lead);
+    for (let d = 1; d <= days; d++) {
+      const ds = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, L = by[ds] || [];
+      const kinds = [...new Set(L.map(itemKind))].slice(0, 3);
+      cells += `<button class="hc-d${ds === cal.today ? ' today' : ''}${ds === cal.day ? ' sel' : ''}${L.length ? ' has' : ''}" data-hm="calday|${ds}" title="${esc(L.map(itemLabel).join('\n'))}"><span>${d}</span><em>${kinds.map(k => `<u class="k-${k}"></u>`).join('')}</em></button>`;
+    }
+    const from = cal.day || cal.today;
+    let list = mine.filter(i => cal.day ? i.date === cal.day : (i.date >= cal.today && i.date <= addDays(cal.today, 14) && !(i.type !== 'event' && i.status === 'done')));
+    list.sort((a, b) => (a.date + (a.start || '99')).localeCompare(b.date + (b.start || '99')));
+    const more = list.length - 7; list = list.slice(0, 7);
+    const mon = new Date(y, m - 1, 1).toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
+    return `<section class="hm-card hm-cal"><div class="hm-h"><h2>${ic('calendar')}Calendar</h2><button class="linklike" data-hm="calopen">Open calendar →</button></div>
+      <div class="hc-body"><div class="hc-month"><div class="hc-nav"><button class="hc-b" data-hm="calnav|-1" aria-label="Previous month">‹</button><b>${esc(mon)}</b><button class="hc-b" data-hm="calnav|1" aria-label="Next month">›</button>${cal.month !== cal.today.slice(0, 7) || cal.day ? '<button class="linklike hc-t" data-hm="caltoday">Today</button>' : ''}</div>
+        <div class="hc-grid">${cells}</div></div>
+        <div class="hc-list"><div class="hc-lh">${cal.day ? esc(dayName(cal.day)) + `<button class="linklike" data-hm="calall">Show upcoming</button>` : 'Coming up · next 2 weeks'}</div>
+          ${list.length ? list.map(i => `<button class="hc-i" data-hm="calitem|${esc(i.group)}|${esc(i.id)}|${i.type}"><span class="hc-dot k-${itemKind(i)}"></span><span class="hc-it"><b>${esc(itemLabel(i))}</b><small>${esc(cal.day ? '' : dayName(i.date) + ' · ')}${i.start ? esc(i.start) + ' · ' : ''}${esc(i.type === 'event' ? KIND[i.kind] || 'Event' : i.type === 'task' ? 'Task due' : 'Plan due')} · ${esc(i.group_name)}</small></span></button>`).join('')
+            : `<p class="hm-empty">${cal.day ? 'Nothing on this day.' : 'Nothing planned in the next two weeks.'} ${cal.day ? '' : 'Plan an experiment or a meeting in the calendar of a group.'}</p>`}
+          ${more > 0 ? `<button class="linklike hc-more" data-hm="calopen">+ ${more} more →</button>` : ''}</div></div></section>`;
   }
   function skeleton({docs, over, stor}) {
     const P = state.papers || [];
@@ -73,6 +111,7 @@ const Home = (() => {
           ${loading ? '<p class="hm-empty">Loading…</p>' : G.length ? G.slice(0, 5).map(g => row('group', g.name, `${g.members} member${g.members === 1 ? '' : 's'} · ${g.papers} papers${g.open_tasks ? ` · ${g.open_tasks} open task${g.open_tasks > 1 ? 's' : ''}` : ''}`, 'group|' + g.id)).join('')
             : '<p class="hm-empty">Groups share a reading list, ideas, plans and documents. Create one, or join with a code.</p>'}
           <div class="hm-f"><button class="linklike" data-hm="newgroup">+ New group</button><button class="linklike" data-hm="join">Join with a code</button></div></section>
+        ${calCard()}
         <section class="hm-card hm-disc"><div><h2>${ic('compass')}Find what to read next</h2><p>Papers related to your library, found by topic or by meaning – and the researchers behind them.</p></div>
           <div class="hm-disc-b"><button class="btn primary" data-hm="discover">Discover papers</button><button class="btn" data-hm="topic">Search by topic</button><button class="btn" data-hm="people">Researchers</button></div></section>
         <section class="hm-card hm-tools"><div class="hm-h"><h2>${ic('gear')}Tools</h2></div>
@@ -89,8 +128,9 @@ const Home = (() => {
   }
   function addDays(d, n) { const t = new Date((d || new Date().toISOString().slice(0, 10)) + 'T12:00:00'); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); }
 
+  function redrawCal() { const c = $('.hm-cal'); if (!c) return; const t = document.createElement('div'); t.innerHTML = calCard(); c.replaceWith(t.firstElementChild); }
   async function go(a) {
-    const [k, x, y] = a.split('|');
+    const [k, x, y, z] = a.split('|');
     const lib = (mode) => { setTab(state.libScope === 'library' ? 'library' : 'reading'); if (mode) setTimeout(() => $(`[data-mode=${mode}]`)?.click(), 60); };
     switch (k) {
       case 'add': setTab('reading'); setTimeout(() => $('#add-input')?.focus(), 80); return;
@@ -104,6 +144,12 @@ const Home = (() => {
       case 'library': return setTab('library');
       case 'write': return setTab('write');
       case 'lab': return setTab('lab');
+      case 'calopen': return Lab.openCalendar();
+      case 'calnav': { const [yy, mm] = cal.month.split('-').map(Number); cal.month = iso(new Date(yy, mm - 1 + (+x), 1)).slice(0, 7); cal.day = ''; return redrawCal(); }
+      case 'caltoday': cal.month = cal.today.slice(0, 7); cal.day = ''; return redrawCal();
+      case 'calall': cal.day = ''; return redrawCal();
+      case 'calday': cal.day = cal.day === x ? '' : x; return redrawCal();
+      case 'calitem': if (z === 'event') { await Lab.openGroup(x, {sub: 'cal'}); return Cal.eventDialog({item: {group: x, id: y}}); } return Lab.openGroup(x, z === 'task' ? {task: y} : {plan: y});
       case 'people': return setTab('people');
       case 'map': return lib('map');
       case 'table': return lib('table');
