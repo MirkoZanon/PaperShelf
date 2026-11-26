@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.3.1 – 2026-11-26
+- The word count moved to the right end of the second bar (the toolbar row), which is now shown in every mode so the count is always in the same place.
+
 ## 3.3 – 2026-11-26
 - **Documents: both bars stay visible** while you scroll: the title bar with Edit / Suggest / Preview, and the formatting toolbar. The side panel sticks right under them.
 - **Word count**: a button in the title bar shows the words of the document (and "11 of 960 words" while you select text). Click it for words, characters (with and without spaces), sentences, paragraphs and reading time, for the whole document and for the selected text. Works in every mode.

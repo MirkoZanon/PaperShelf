@@ -325,12 +325,11 @@ const Docs = (() => {
           ${W ? '' : `<button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="Read with comments and suggestions in the text">Review</button>`}
           <button data-dx-mode="preview" class="${D.mode === 'preview' ? 'on' : ''}" title="The formatted document with citations and references">Preview</button></div>
         ${D.standalone ? '' : `<button class="btn small dx-ibtn ${D.split ? 'on' : ''}" data-dx="split" title="Show your library next to the document">${ic('books')}<span>Library</span></button><button class="btn small dx-ibtn" data-dx="window" title="Open this document in its own window, to keep the library in the main one">${ic('export')}<span>New window</span></button>`}
-        <button class="btn small dx-count" id="dx-count" data-dx="count" title="Words and characters of the document, and of the text you have selected">${ic('note')}<span id="dx-count-t">– words</span></button>
         <span class="dx-menu"><button class="btn small" data-dx="export-menu">${ic('download')}Export</button></span>
         ${W || R.canDelete ? `<span class="dx-menu"><button class="btn small" data-dx="more-menu" title="More">⋯</button></span>` : ''}
       </div>
       ${R.gone ? `<div class="dx-gonebar">${ic('alert')}<span><b>${esc(R.byName)}</b> deleted this document for the group. It is no longer shared or updated: this copy stays on your computer only.</span><span class="grow"></span><button class="btn small" data-dx-exp="docx">Export</button><button class="btn small danger" data-dx="purge">Remove from this computer</button></div>` : ''}
-      ${W && D.mode === 'write' ? `<div class="dx-tools" role="toolbar" aria-label="Formatting">
+      <div class="dx-tools" role="toolbar" aria-label="Formatting">${W && D.mode === 'write' ? `
         <button data-dx="undo" id="dx-undo" title="Undo (${MOD}+Z): takes back your last changes, not the ones of others" disabled>↶</button><button data-dx="redo" id="dx-redo" title="Redo (${MOD}+Shift+Z)" disabled>↷</button><span class="dx-sep"></span>
         <button data-fmt="h1" title="Heading 1"><b>H1</b></button><button data-fmt="h2" title="Heading 2"><b>H2</b></button><button data-fmt="h3" title="Heading 3"><b>H3</b></button><span class="dx-sep"></span>
         <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><button data-dx="hl-menu" title="Highlight the selected text in a color">Highlight</button><span class="dx-sep"></span>
@@ -339,7 +338,7 @@ const Docs = (() => {
         <button data-fmt="cite" title="Cite a paper of the group">${ic('book')}Cite</button>
         <button data-fmt="comment" title="Comment on the selected text (${MOD}+Alt+M)">${ic('chat')}Comment</button>
         <button data-fmt="suggest" title="Suggest a change to the selected text">${ic('pen')}Suggest</button>
-      </div>` : ''}</div>
+      ` : ''}<span class="grow"></span><button class="dx-count" id="dx-count" data-dx="count" title="Words and characters of the document, and of the text you have selected">${ic('note')}<span id="dx-count-t">– words</span></button></div></div>
       <div class="dx-main"><div class="dx-page" id="dx-page"></div><aside class="dx-side" id="dx-side"></aside></div>
       <div class="dx-float" id="dx-float"></div></div>`;
     paintPage(); paintSide(); paintNow(); fitStick(); countSoon();

@@ -2544,3 +2544,6 @@ body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { backgro
 .dx-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 10px 0; } .dx-cc h4 { margin: 0 0 6px; font-size: 13px; }
 .dx-cc dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; font-size: 13px; } .dx-cc dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; } .dx-cc dt { color: var(--muted); }
 .dx-cc.dim { opacity: .85; } @media (max-width: 560px) { .dx-cols { grid-template-columns: 1fr; } }
+
+.dx-tools .dx-count { margin-left: auto; color: var(--muted); font-size: 12.5px; } .dx-tools .dx-count:hover { color: var(--text); }
+.dx-tools { min-height: 38px; }
