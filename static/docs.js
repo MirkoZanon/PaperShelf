@@ -313,7 +313,7 @@ const Docs = (() => {
   function paint() {
     if (!D.host) return;
     const R = D.R, W = D.can;
-    root().innerHTML = `<div class="dx m-${D.mode}">
+    root().innerHTML = `<div class="dx m-${D.mode}"><div class="dx-stick" id="dx-stick">
       <div class="dx-bar">
         ${D.standalone ? '' : `<button class="btn small" data-dx="back" title="All documents">${ic('caret')}<span>Documents</span></button>`}
         <input class="dx-title" id="dx-title" value="${esc(R.title)}" maxlength="150" ${W ? '' : 'readonly'} aria-label="Title">
@@ -325,6 +325,7 @@ const Docs = (() => {
           ${W ? '' : `<button data-dx-mode="marks" class="${D.mode === 'marks' ? 'on' : ''}" title="Read with comments and suggestions in the text">Review</button>`}
           <button data-dx-mode="preview" class="${D.mode === 'preview' ? 'on' : ''}" title="The formatted document with citations and references">Preview</button></div>
         ${D.standalone ? '' : `<button class="btn small dx-ibtn ${D.split ? 'on' : ''}" data-dx="split" title="Show your library next to the document">${ic('books')}<span>Library</span></button><button class="btn small dx-ibtn" data-dx="window" title="Open this document in its own window, to keep the library in the main one">${ic('export')}<span>New window</span></button>`}
+        <button class="btn small dx-count" id="dx-count" data-dx="count" title="Words and characters of the document, and of the text you have selected">${ic('note')}<span id="dx-count-t">– words</span></button>
         <span class="dx-menu"><button class="btn small" data-dx="export-menu">${ic('download')}Export</button></span>
         ${W || R.canDelete ? `<span class="dx-menu"><button class="btn small" data-dx="more-menu" title="More">⋯</button></span>` : ''}
       </div>
@@ -338,10 +339,10 @@ const Docs = (() => {
         <button data-fmt="cite" title="Cite a paper of the group">${ic('book')}Cite</button>
         <button data-fmt="comment" title="Comment on the selected text (${MOD}+Alt+M)">${ic('chat')}Comment</button>
         <button data-fmt="suggest" title="Suggest a change to the selected text">${ic('pen')}Suggest</button>
-      </div>` : ''}
+      </div>` : ''}</div>
       <div class="dx-main"><div class="dx-page" id="dx-page"></div><aside class="dx-side" id="dx-side"></aside></div>
       <div class="dx-float" id="dx-float"></div></div>`;
-    paintPage(); paintSide(); paintNow();
+    paintPage(); paintSide(); paintNow(); fitStick(); countSoon();
   }
   function paintNow() {
     const el = $('#dx-now', D.host); if (!el || !D.R) return;
@@ -613,6 +614,42 @@ const Docs = (() => {
     $('#asg-ok', m.el).onclick = () => { const to = $$('[name=asg-who]:checked', m.el).map(x => x.value), due = $('#asg-due', m.el).value; if (!to.length && !due) { toast('Choose who it is for or a deadline.'); return; } send({to, due}); };
     const cl = $('#asg-clear', m.el); if (cl) cl.onclick = () => send({to: [], due: ''});
   }
+  /* ---- words and characters, of everything and of the selection ---- */
+  const stripMd = t => String(t || '').replace(/\[@[^\]]*\]/g, ' ').replace(/^\s*(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '').replace(/[*_`|~]/g, '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1');
+  function countOf(raw) {
+    const t = stripMd(raw), words = (t.match(/[\p{L}\p{N}][\p{L}\p{N}'’\-.,]*/gu) || []).length;
+    const chars = Array.from(String(raw || '').replace(/\n/g, ' ')).length, noSp = Array.from(t.replace(/\s/g, '')).length;
+    return {words, chars, noSp, sentences: (t.match(/[^.!?\n]+[.!?]+(\s|$)/g) || []).length || (words ? 1 : 0),
+            paras: t.split(/\n\s*\n/).filter(x => x.trim()).length, read: Math.max(words ? 1 : 0, Math.round(words / 230))};
+  }
+  function selectedText() {
+    const ta = $('#dx-text', D.host);
+    if (ta && ta.selectionEnd > ta.selectionStart) return ta.value.slice(ta.selectionStart, ta.selectionEnd);
+    const sel = window.getSelection(), pg = $('#dx-page', D.host);
+    if (sel && !sel.isCollapsed && pg && pg.contains(sel.anchorNode) && pg.contains(sel.focusNode)) return sel.toString();
+    return '';
+  }
+  function docText() { const ta = $('#dx-text', D.host); return ta ? ta.value : (D.R?.B?.text || ''); }
+  let countT = 0;
+  function countSoon() { clearTimeout(countT); countT = setTimeout(updateCount, 150); }
+  function updateCount() {
+    const el = $('#dx-count-t', D.host); if (!el || !D.R) return;
+    const all = countOf(docText()), sel = countOf(selectedText());
+    D.lastSel = selectedText() || D.lastSel; const n = x => x.toLocaleString();
+    el.textContent = sel.words ? `${n(sel.words)} of ${n(all.words)} words` : `${n(all.words)} word${all.words === 1 ? '' : 's'}`;
+  }
+  function countDialog() {
+    const all = countOf(docText()), txt = selectedText(), sel = countOf(txt), n = x => x.toLocaleString();
+    const col = (c, h) => `<div class="dx-cc"><h4>${h}</h4><dl>
+      <dt>Words</dt><dd>${n(c.words)}</dd><dt>Characters</dt><dd>${n(c.chars)}</dd><dt>Characters without spaces</dt><dd>${n(c.noSp)}</dd>
+      <dt>Sentences</dt><dd>${n(c.sentences)}</dd><dt>Paragraphs</dt><dd>${n(c.paras)}</dd><dt>Reading time</dt><dd>${c.read ? '~' + c.read + ' min' : '–'}</dd></dl></div>`;
+    modal(`<h3>Word count</h3><div class="dx-cols">${col(all, 'Whole document')}${sel.words || sel.chars ? col(sel, 'Selected text') : '<div class="dx-cc dim"><h4>Selected text</h4><p class="muted small">Select some text in the document to count it separately. You can keep the dialog open only for one count at a time.</p></div>'}</div>
+      <p class="muted small">Citations like [@key] and formatting marks are not counted as words. Characters include spaces.</p><div class="modal-actions"><button class="btn primary" data-close>Close</button></div>`);
+  }
+  function fitStick() {   // the side panel sticks right under the two bars
+    const st = $('#dx-stick', D.host), dx = $('.dx', D.host); if (st && dx) dx.style.setProperty('--dx-sh', st.offsetHeight + 'px');
+  }
+  window.addEventListener('resize', () => { if (D.host && document.contains(D.host)) fitStick(); });
   function commentsHtml() {
     const R = D.R, B = R.B, W = D.can;
     const top = R.comments.filter(c => !c.parent), kids = id => R.comments.filter(c => c.parent === id);
@@ -1183,6 +1220,9 @@ const Docs = (() => {
     host.addEventListener('mousedown', e => { if (e.target.id === 'dx-text') document.getElementById('dx-selhl')?.remove(); });
     host.addEventListener('input', e => { if (e.target.id === 'dx-text') { document.getElementById('dx-selhl')?.remove(); remoteSoon(); } if (e.target.matches?.('[data-rbox]')) D.repDraft = e.target.value; });
     host.addEventListener('keydown', e => { if (e.target.matches?.('[data-rbox]') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-dx-rsend]', host)?.click(); } });
+    host.addEventListener('mousedown', e => { if (e.target.closest('#dx-count')) e.preventDefault(); });   // keep the selection
+    document.addEventListener('selectionchange', () => { if (D.host && document.contains(D.host)) countSoon(); });
+    host.addEventListener('input', countSoon);
     host.addEventListener('change', e => {
       const t = e.target;
       if (t.matches('[data-dx-asgon]')) { D.asg.on = t.checked; if (t.checked && !D.asg.to) D.asg.to = D.R.me || ''; paintSide(); }
@@ -1265,6 +1305,7 @@ const Docs = (() => {
       if (dx === 'split') return setSplit(!D.split);
       const pg = t.closest('[data-dx-purge]')?.dataset.dxPurge; if (pg) return purgeDoc(pg);
       if (dx === 'export-menu') { e.stopPropagation(); return exportMenu(t.closest('button')); }
+      if (t.closest('[data-dx=count]')) return countDialog();
       const ag = t.closest('[data-dx-asg]')?.dataset.dxAsg; if (ag) return asgDialog(ag);
       if (dx === 'comment-add') return addComment(false);
       if (dx === 'suggest-add') return addComment(true);

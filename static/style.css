@@ -2535,3 +2535,12 @@ body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { backgro
 .dx-asg-chip { display: flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 9px; border-radius: 99px; background: color-mix(in srgb, var(--accent, #3b82d9) 13%, transparent); font-size: 12px; width: fit-content; max-width: 100%; }
 .dx-asg-chip .i { width: 13px; height: 13px; flex: none; } .dx-asg-chip.late { background: rgba(214, 69, 69, .15); color: #c0392b; } .dx-asg-chip.done { opacity: .6; }
 .dx-asg-who { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 12px; max-height: 220px; overflow: auto; }
+
+/* Document: both bars stay visible, word count */
+.dx-stick { position: sticky; top: 0; z-index: 30; background: var(--bg, #fff); padding: 6px 0 2px; margin-bottom: 8px; }
+.dx-stick .dx-bar { margin-bottom: 8px; } .dx-stick .dx-tools { position: static; margin-bottom: 4px; box-shadow: none; }
+.dx-side { top: calc(var(--dx-sh, 110px) + 8px); max-height: calc(100vh - var(--dx-sh, 110px) - 24px); }
+.dx-count .i { width: 15px; height: 15px; } .dx-count span { font-variant-numeric: tabular-nums; }
+.dx-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 10px 0; } .dx-cc h4 { margin: 0 0 6px; font-size: 13px; }
+.dx-cc dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; font-size: 13px; } .dx-cc dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; } .dx-cc dt { color: var(--muted); }
+.dx-cc.dim { opacity: .85; } @media (max-width: 560px) { .dx-cols { grid-template-columns: 1fr; } }

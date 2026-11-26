@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.3 – 2026-11-26
+- **Documents: both bars stay visible** while you scroll: the title bar with Edit / Suggest / Preview, and the formatting toolbar. The side panel sticks right under them.
+- **Word count**: a button in the title bar shows the words of the document (and "11 of 960 words" while you select text). Click it for words, characters (with and without spaces), sentences, paragraphs and reading time, for the whole document and for the selected text. Works in every mode.
+
 ## 3.2 – 2026-11-26
 - **Tasks in shared documents**: a comment, or a marked section of the text, can be given to yourself or to collaborators, with a deadline. Tick "Make it a task" when you comment (a section can be a task without writing a note), or use "Make a task" / "Edit task" on an existing comment.
 - The task is shown on the comment, in the calendar (group and all-groups, with reminders and in the .ics export) and under "Needs you" on the Home tab. Clicking it opens the document at that comment. Resolving the comment completes the task.
