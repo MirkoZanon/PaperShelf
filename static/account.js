@@ -3,11 +3,12 @@
 const Account = (() => {
   const ST = {info: null};
   const initial = () => (state.settings?.share_user || '').slice(0, 1).toUpperCase();
+  const pic = (u, big) => `<span class="acc-ini${big ? ' big' : ''}">${esc((u || '').slice(0, 1).toUpperCase())}<img src="/api/avatar/${encodeURIComponent(u)}" alt="" onerror="this.remove()"></span>`;
   function paint() {
     const b = document.getElementById('account-btn'); if (!b) return;
     const u = state.settings?.share_user, on = !!(u && state.settings?.share_gist);
     b.classList.toggle('on', on);
-    b.innerHTML = on ? `<span class="acc-ini">${esc(initial())}</span>` : '<svg class="hb-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 19.5c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><i class="acc-dot"></i>';
+    b.innerHTML = on ? pic(u) : '<svg class="hb-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5 19.5c.8-3.6 3.6-5.4 7-5.4s6.2 1.8 7 5.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><i class="acc-dot"></i>';
     b.title = on ? `Signed in as ${u} – account` : 'Sign in with GitHub';
   }
   const step = (n, html) => `<li><span class="acc-n">${n}</span><div>${html}</div></li>`;
@@ -56,7 +57,7 @@ const Account = (() => {
   function signedIn(body, s) {
     const repo = (s.sync_repo || '').replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, '');
     const others = (s.accounts || []).filter(a => !a.active);
-    body.innerHTML = `<div class="acc-who"><span class="acc-ini big">${esc(initial())}</span><div><b>${esc(s.share_user)}</b><div class="muted small">signed in on this computer</div></div></div>
+    body.innerHTML = `<div class="acc-who">${pic(s.share_user, true)}<div><b>${esc(s.share_user)}</b><div class="muted small">signed in on this computer</div></div></div>
       <ul class="acc-list">
         <li><b>Groups:</b> connected ✓ – <b>${(state.shares || []).length}</b> on this computer <button class="btn small" id="acc-groups">Find my groups</button> <span class="muted small" id="acc-gres"></span></li>
         <li><b>Library sync:</b> ${s.sync_repo && s.has_sync_token ? `on ✓ – private repository <b>${esc(repo)}</b>${s.last_sync ? `, last sync ${esc(new Date(s.last_sync).toLocaleString())}` : ''}${s.last_sync_error ? ` <span style="color:var(--danger)">⚠ ${esc(s.last_sync_error)}</span>` : ''}` : 'not set up – sign out and sign in again'}</li>

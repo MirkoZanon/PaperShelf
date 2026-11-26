@@ -1027,7 +1027,7 @@ function openSettings(startTab) {
   if (tab === 'github') tab = 'sync'; if (tab === 'data') tab = 'pdfs'; if (tab === 'updates') tab = 'general';
   if (typeof startTab === 'string') tab = startTab;
   if (!TABS.some(t => t[0] === tab)) tab = 'general';
-  const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="status" title="Check that everything works: Git, GitHub, sources…">🩺 System check</button> <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit</button></h3>
+  const m = modal(`<h3>Settings <span class="grow"></span><button class="btn small" data-help="status" title="Check that everything works: Git, GitHub, sources…">🩺 System check</button> <button class="btn small" data-close title="Close the settings">Close</button></h3>
     <div class="stabs">${TABS.map(([id, label]) => `<button data-stab="${id}" class="${id === tab ? 'on' : ''}">${label}</button>`).join('')}</div>
     <div class="stab-panels">
 
@@ -1059,6 +1059,9 @@ function openSettings(startTab) {
     <label class="opt" style="margin-top:10px"><input type="checkbox" id="set-upd-check" ${s.update_check !== '' ? 'checked' : ''}><span>Check for updates automatically<small>Anonymous request to GitHub.</small></span></label>
     <label class="opt"><input type="checkbox" id="set-upd-auto" ${s.update_auto !== '' ? 'checked' : ''}><span>Install them automatically<small>At start-up; a backup is kept. Off: you choose when.</small></span></label>
     <p class="muted small set-privacy">Your library, notes and settings stay on this computer (<code>${esc(state.dataDir)}</code>) – and in your own private GitHub repository if you sync. <button class="linklike" data-help="privacy">Privacy details</button></p>
+    <div class="section-label">PaperShelf on this computer</div>
+    <p class="muted small">Stops PaperShelf completely (the app stops running in the background). Your library stays as it is; start it again from its icon.</p>
+    <button class="btn small" id="set-quit" title="Stop PaperShelf on this computer">⏻ Quit PaperShelf</button>
     </div>
 
     <div class="stab-panel" data-panel="pdfs">

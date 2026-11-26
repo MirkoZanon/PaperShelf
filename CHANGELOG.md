@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.33.3 – 2026-11-26
+- The account icon shows your GitHub profile picture (fetched once from GitHub and kept on this computer; your initial is shown if it can't be loaded).
+- Settings: the top-right button is now "Close" instead of "Quit". "Quit PaperShelf" moved to the bottom of the General tab, with a short explanation.
+
 ## 2.33.2 – 2026-11-26
 - "Find my groups" now says what it found online: how many groups your GitHub account holds and, for any it could not restore, why. This tells you whether the other computer has published them yet.
 

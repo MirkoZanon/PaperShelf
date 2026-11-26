@@ -16,6 +16,7 @@ import mimetypes
 import os
 import hashlib
 import re
+import requests
 import shutil
 import socket
 import sqlite3
@@ -5099,6 +5100,30 @@ def import_share():
     sid, stats = _add_share_state(db, st)
     row, st = _load_share(db, sid)
     return jsonify(share=share_summary_one(db, row, st, share_identity(db)), stats=stats)
+
+
+@app.get("/api/avatar/<user>")
+def avatar(user):
+    """The GitHub picture of an account you signed in with: fetched once from GitHub, then kept on this computer."""
+    db = get_db()
+    s = get_settings(db)
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,39}", user) or user not in (_accounts_of(s.get("share_accounts")) | {s.get("share_user"): 1}):
+        return "", 404
+    f = HOME / f"avatar-{user.lower()}.img"
+    if not f.exists():
+        try:
+            r = requests.get(f"https://github.com/{user}.png?size=96", timeout=10, headers={"User-Agent": "PaperShelf-avatar"})
+            if r.status_code != 200 or not r.headers.get("Content-Type", "").startswith("image/") or len(r.content) > 300_000:
+                return "", 404
+            f.write_bytes(r.content)
+            f.with_suffix(".type").write_text(r.headers["Content-Type"].split(";")[0])
+        except (requests.exceptions.RequestException, OSError):
+            return "", 404
+    try:
+        ctype = f.with_suffix(".type").read_text().strip() or "image/png"
+    except OSError:
+        ctype = "image/png"
+    return Response(f.read_bytes(), mimetype=ctype, headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/api/github/login")
