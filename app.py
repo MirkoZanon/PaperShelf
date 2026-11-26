@@ -4397,22 +4397,28 @@ def activity_clear():
     return jsonify(ok=True)
 
 
-def restore_my_shares(db, ident, gh) -> int:
-    """On another of your computers: rejoin the shared labels kept in your own gist."""
+def restore_my_shares(db, ident, gh, info=None) -> int:
+    """On another of your computers: rejoin the shared labels kept in your own gist.
+    info (optional dict) receives what was found online, to explain an empty result."""
     if not ident["can_publish"]:
         return 0
     idx = gh.read_src(ident["user"], ident["src"], "index", fresh=True) or {}
     n = 0
     have = {r["id"] for r in db.execute("SELECT id FROM shares")}
+    info = info if info is not None else {}
+    info.update(online=len(idx.get("lists") or []), skipped=[])
     for x in idx.get("lists") or []:
         lid = str((x or {}).get("id") or "")
+        name = str((x or {}).get("name") or lid)[:60]
         if not sharing.ID_RE.match(lid) or lid in have:
             continue
         data = gh.read_src(ident["user"], ident["src"], "list", lid, fresh=True)
         if not data:
+            info["skipped"].append(f"{name}: its data is missing in your gist")
             continue
         st = sharing.validate(data)
         if ident["user"] not in sharing.members(st):
+            info["skipped"].append(f"{name}: you are not listed as a member in it")
             continue
         db.execute("INSERT INTO shares (id, state, origin, added_at) VALUES (?, ?, ?, ?)",
                    (lid, json.dumps(st), f"{ident['user']}|{ident['src']}", now()))
@@ -4426,10 +4432,10 @@ def sync_all_shares(db, only=None) -> dict:
     try:
         ident = share_identity(db)
         gh = sharing.GitHub(ident["token"])
-        restored = 0
+        restored, rinfo = 0, {}
         if only is None and ident["can_publish"]:
             try:
-                restored = restore_my_shares(db, ident, gh)
+                restored = restore_my_shares(db, ident, gh, rinfo)
             except sharing.ShareError:
                 restored = 0
         joins = []
@@ -4453,7 +4459,7 @@ def sync_all_shares(db, only=None) -> dict:
                     gh.delete_comment(ident["src"], j["cid"])
                 except sharing.ShareError:
                     pass
-        return {"lists": res, "restored": restored}
+        return {"lists": res, "restored": restored, "online": rinfo.get("online"), "skipped": rinfo.get("skipped") or [], "user": ident["user"]}
     finally:
         share_lock.release()
 

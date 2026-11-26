@@ -100,8 +100,8 @@ const Account = (() => {
         const d = await api('/api/shares/sync', {method: 'POST', body: {}});
         try { await loadLibrary(); } catch (e) { /* ignore */ }
         const n = d.result.restored || 0, errs = Object.values(d.result.lists || {}).filter(x => x.error).length;
-        const msgText = n ? `✓ ${n} group${n > 1 ? 's' : ''} restored from your account.` : ((state.shares || []).length ? '✓ Groups are up to date.' : 'No groups found in your GitHub account yet. Groups you created or joined on another computer appear here once that computer has synced (open PaperShelf there and press the update button).');
-        toast(msgText, n || (state.shares || []).length ? 'ok' : 'info', 9000); if (errs) toast(`${errs} group(s) could not be read – see the group for details.`, 'error', 9000);
+        const msgText = n ? `✓ ${n} group${n > 1 ? 's' : ''} restored from your account.` : ((state.shares || []).length ? '✓ Groups are up to date.' : `Nothing to restore: your GitHub account (${d.result.user}) holds ${d.result.online || 0} group${d.result.online === 1 ? '' : 's'} online. If you expected some, open PaperShelf on the computer that has them, check the account icon shows ${d.result.user}, and press the update button there.`);
+        toast(msgText, n || (state.shares || []).length ? 'ok' : 'info', 9000); if ((d.result.skipped || []).length) toast('Not restored: ' + d.result.skipped.join('; '), 'error', 12000); if (errs) toast(`${errs} group(s) could not be read – see the group for details.`, 'error', 9000);
       } catch (err) { toast(err.message, 'error'); }
       if (m.el.isConnected) show();
     }

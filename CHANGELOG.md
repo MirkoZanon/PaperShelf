@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.33.2 – 2026-11-26
+- "Find my groups" now says what it found online: how many groups your GitHub account holds and, for any it could not restore, why. This tells you whether the other computer has published them yet.
+
 ## 2.33.1 – 2026-11-26
 - Fixed: on a new computer, signing in did not bring back your groups (they were only updated if the computer already had some). Signing in now restores all your groups, documents and notes from your GitHub account, and the update button and the automatic update do the same.
 - The account panel has "Find my groups" and shows how many groups are on this computer.
