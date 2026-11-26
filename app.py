@@ -48,6 +48,7 @@ import pdfshare
 import sync as syncmod
 import launcher
 import updater
+import ghlogin
 import watcher as watchermod
 
 # Some systems (notably Windows) map .js/.mjs to the wrong type, which stops the page from loading
@@ -5094,6 +5095,61 @@ def import_share():
     return jsonify(share=share_summary_one(db, row, st, share_identity(db)), stats=stats)
 
 
+@app.get("/api/github/login")
+def github_login_info():
+    return jsonify(available=bool(ghlogin.client_id(get_settings(get_db()))))
+
+
+@app.post("/api/github/login/start")
+def github_login_start():
+    """Sign in with GitHub, step 1: get the short code the person approves on github.com."""
+    db = get_db()
+    b = request.get_json(silent=True) or {}
+    if (b.get("client_id") or "").strip():
+        set_setting(db, "github_client_id", b["client_id"].strip())
+        db.commit()
+    cid = ghlogin.client_id(get_settings(db))
+    if not cid:
+        return error("Paste the Client ID of your GitHub OAuth app first.")
+    try:
+        return jsonify(ghlogin.start(cid))
+    except ghlogin.LoginError as exc:
+        return error(str(exc), 502)
+
+
+@app.post("/api/github/login/poll")
+def github_login_poll():
+    """Step 2: has the person approved? If so, connect groups and library sync in one go."""
+    db = get_db()
+    code = str((request.get_json(silent=True) or {}).get("code") or "")
+    try:
+        r = ghlogin.poll(code)
+        if r["status"] != "ok":
+            return jsonify({k: v for k, v in r.items() if k != "token"})
+        token = r["token"]
+        gh = sharing.GitHub(token)
+        user = gh.whoami()
+        gist = gh.find_or_create_gist()
+        repo = ghlogin.ensure_library_repo(token, user)
+    except (ghlogin.LoginError, sharing.ShareError) as exc:
+        return error(str(exc), 502)
+    s = get_settings(db)
+    set_setting(db, "share_token", token)
+    set_setting(db, "share_user", user)
+    set_setting(db, "share_gist", gist)
+    if not s.get("sync_repo"):      # first time on this computer: the library syncs through your private repository
+        set_setting(db, "sync_repo", repo)
+        set_setting(db, "sync_token", token)
+        set_setting(db, "sync_auto", "1")
+    elif s.get("sync_repo") == repo:
+        set_setting(db, "sync_token", token)
+    acc = _accounts_of(s.get("share_accounts"))
+    acc[user] = {"token": token, "gist": gist, "repo": repo}
+    set_setting(db, "share_accounts", json.dumps(acc))
+    db.commit()
+    return jsonify(status="ok", user=user, repo=repo, settings=get_settings(db, secrets=False))
+
+
 @app.post("/api/shares/setup")
 def share_setup():
     """Turn sharing on: find (or create) your secret shared-labels gist with your GitHub token."""
@@ -5102,8 +5158,10 @@ def share_setup():
     if b.get("forget"):   # delete a saved account (its token) from this computer; if it is the one in use, sign out
         user = str(b["forget"])
         acc = _accounts_of(get_settings(db).get("share_accounts"))
-        acc.pop(user, None)
+        gone = acc.pop(user, None) or {}
         set_setting(db, "share_accounts", json.dumps(acc))
+        if gone.get("token") and get_settings(db).get("sync_token") == gone["token"]:
+            set_setting(db, "sync_token", "")
         if get_settings(db).get("share_user") == user:
             for k in ("share_user", "share_gist", "share_token"):
                 set_setting(db, k, "")

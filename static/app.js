@@ -1091,7 +1091,7 @@ function openSettings(startTab) {
     </div>
 
     <div class="stab-panel" data-panel="sync">
-    <div class="set-intro sync"><b>One library on all your computers.</b> Goes through a private GitHub repository only you can see. With one computer you don't need it. <button class="help-q" data-help="sync" title="Explain this">?</button></div>
+    <div class="set-intro sync"><b>One library on all your computers.</b> Goes through a private GitHub repository only you can see. With one computer you don't need it. <b>Easiest:</b> in the Groups tab click <i>Sign in with GitHub</i> – this is then set up for you. <button class="help-q" data-help="sync" title="Explain this">?</button></div>
     <div class="set-status ${s.sync_repo && s.has_sync_token ? (s.last_sync_error ? 'bad' : 'ok') : ''}">${s.sync_repo && s.has_sync_token
       ? `${s.last_sync_error ? `⚠ Last sync failed: ${esc(s.last_sync_error)}` : `✓ On – ${s.last_sync ? `last sync ${esc(new Date(s.last_sync).toLocaleString())}` : 'not synced yet'}`} · <span class="muted">${esc(s.sync_repo.replace(/^https?:\/\/github\.com\//, ''))}</span>`
       : 'Not set up yet: 4 steps, about 5 minutes, the first time only.'}</div>

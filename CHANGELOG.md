@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.32 – 2026-11-26
+- Sign in with GitHub (Settings → Groups): approve a short code on github.com and PaperShelf sets up Groups and your library sync by itself, creating the private papershelf-library repository if needed. No token to create or copy. On a new computer: sign in and everything is found again.
+- One-time setup: this needs the Client ID of a free GitHub OAuth app (Device Flow enabled), pasted in the same screen. The token stays only on this computer. Using a token by hand still works.
+
 ## 2.31 – 2026-11-26
 - Accounts: Settings → Groups now lists the GitHub accounts saved on this computer. Sign out, sign in to another account with one click, or remove one. Tokens stay on this computer only.
 - Updates: after an update the browser can no longer keep old copies of the app's scripts and styles (a likely reason a computer looked "up to date" but behaved like an older version).

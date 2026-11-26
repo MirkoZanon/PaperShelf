@@ -440,9 +440,38 @@ const Shares = (() => {
       <button class="linklike small" data-acct-del="${esc(x.user)}" title="Delete this account's saved token from this computer">Remove</button></div>`).join('')}</div>
       <p class="muted small">Tokens are stored only on this computer. To add another account, sign out and connect it with its token.</p>`;
   }
+  function loginHtml(s) {      // the easy way: approve a code on github.com; groups and library sync are set up automatically
+    return `<div class="gh-login" id="gh-login"><button class="btn primary" id="gh-signin">Sign in with GitHub</button>
+      <span class="muted small">Easiest: approve a code on github.com – no token to create or copy. Sets up Groups and your library sync (a private repository) in one go.</span>
+      <div id="gh-cid" style="display:none;margin-top:6px"><input class="input wide" id="gh-cid-in" placeholder="Client ID of your GitHub OAuth app (Ov23…)" autocomplete="off"><small class="muted">One-time: create a free OAuth app on GitHub with “Enable Device Flow” ticked and paste its Client ID here.</small></div></div>`;
+  }
+  async function signIn(m) {
+    const box = $('#gh-login', m.el); if (!box) return;
+    let st;
+    try { st = await api('/api/github/login/start', {method: 'POST', body: {client_id: $('#gh-cid-in', m.el)?.value || ''}}); }
+    catch (err) { $('#gh-cid', m.el).style.display = ''; toast(err.message, 'error'); return; }
+    box.innerHTML = `<div class="set-status">Your code: <b style="font-size:1.4em;letter-spacing:.12em">${esc(st.code)}</b>
+      <button class="btn small" id="gh-open">Open GitHub</button> <button class="linklike small" id="gh-copy">Copy code</button>
+      <div class="muted small" id="gh-wait">On github.com enter this code and click Authorize. Waiting…</div></div>`;
+    const open = () => window.open(st.url, '_blank', 'noopener'); open();
+    $('#gh-open', box).onclick = open; $('#gh-copy', box).onclick = () => navigator.clipboard?.writeText(st.code).then(() => toast('Code copied.', 'ok'));
+    let every = (st.interval || 5) * 1000;
+    const tick = async () => {
+      if (!document.body.contains(box)) return;
+      try {
+        const r = await api('/api/github/login/poll', {method: 'POST', body: {code: st.code}});
+        if (r.status === 'ok') { state.settings = {...state.settings, ...r.settings}; $('#share-conn', m.el).innerHTML = connHtml(state.settings);
+          toast(`Signed in as ${r.user}. Groups and library sync are ready.`, 'ok'); await refresh(); syncNow(null, true); return; }
+        if (r.status === 'denied' || r.status === 'expired') { $('#share-conn', m.el).innerHTML = connHtml(state.settings); toast(r.status === 'denied' ? 'Sign-in cancelled on GitHub.' : 'The code expired. Click Sign in with GitHub again.', 'error'); return; }
+        if (r.status === 'slow') every = (r.interval || 10) * 1000;
+      } catch (err) { const w = $('#gh-wait', box); if (w) w.textContent = '⚠ ' + err.message; }
+      setTimeout(tick, every);
+    };
+    setTimeout(tick, every);
+  }
   function connHtml(s) {
     const tokenSaved = s.has_share_token || s.has_sync_token;
-    return statusHtml(s) + (s.share_gist ? '' : accountsHtml(s) + `<ol class="gh-steps">
+    return statusHtml(s) + (s.share_gist ? '' : accountsHtml(s) + loginHtml(s) + `<p class="muted small" style="margin:10px 0 4px">Or use a token instead:</p><ol class="gh-steps">
         <li><b>A GitHub account</b> – free; skip if you have one. <a class="btn small" href="https://github.com/signup" target="_blank" rel="noopener">Create an account</a></li>
         <li><b>A token</b> with the <i>Gists</i> permission. ${s.has_sync_token ? 'If you sync your computers with a token created from PaperShelf 2.7 or later, it already has it: skip to step 3.' : ''}
           <a class="btn small" href="${TOKEN_URL}" target="_blank" rel="noopener">Create it on GitHub</a> <button class="linklike small" data-help="gh-token">Show me how</button>
@@ -462,7 +491,9 @@ const Shares = (() => {
   }
   function settingsBind(m) {
     const panel = $('[data-panel=sharing]', m.el);
+    api('/api/github/login').then(d => { if (!d.available && $('#gh-cid', m.el)) $('#gh-cid', m.el).style.display = ''; }).catch(() => {});
     panel?.addEventListener('click', async e => {
+      if (e.target.id === 'gh-signin') signIn(m);
       if (e.target.id === 'share-on') {
         const res = $('#share-on-res', m.el); res.textContent = 'Connecting to GitHub…';
         try {
