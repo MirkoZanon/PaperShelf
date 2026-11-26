@@ -1565,6 +1565,7 @@ function updateSyncButton() {
   b.title = (s.last_sync_error ? `⚠ Last library sync failed: ${s.last_sync_error}\n` : '') + 'Update now: ' + what.join(', ') +
     (s.last_sync ? `\n(last library sync: ${new Date(s.last_sync).toLocaleString()})` : '');
   b.classList.toggle('warn', !!s.last_sync_error);
+  if (typeof Account !== 'undefined') Account.paint();
 }
 let syncing = false, lastQuiet = Date.now();
 document.addEventListener('visibilitychange', async () => {   // coming back to the app: fetch what the other computers did (quietly)

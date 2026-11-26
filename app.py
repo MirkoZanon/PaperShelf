@@ -5097,7 +5097,10 @@ def import_share():
 
 @app.get("/api/github/login")
 def github_login_info():
-    return jsonify(available=bool(ghlogin.client_id(get_settings(get_db()))))
+    repo = updater.config().get("repo") or ""
+    port = request.host.rsplit(":", 1)[-1] if ":" in (request.host or "") else PORT
+    return jsonify(available=bool(ghlogin.client_id(get_settings(get_db()))), home=f"https://github.com/{repo}" if repo else "https://github.com",
+                   callback=f"http://127.0.0.1:{int(port)}")
 
 
 @app.post("/api/github/login/start")

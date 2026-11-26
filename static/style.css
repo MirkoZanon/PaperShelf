@@ -2445,3 +2445,23 @@ body.look-glass.dark .dx-pr.warn, :root[data-theme="dark"] .dx-pr.warn { backgro
 .dx-selhl { position: fixed; z-index: 200; display: flex; gap: 6px; align-items: center; padding: 6px 8px; background: var(--bg, #fff); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
 .dx-selhl button { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid rgba(0,0,0,.18); cursor: pointer; flex: none; }
 .dx-selhl button.none { width: auto; padding: 0 9px; border-radius: 8px; font-size: 12px; background: none; border: 1px solid var(--border); color: inherit; }
+
+/* 2.33 account button + guided sign-in */
+.acc-btn { position: relative; }
+.acc-btn .acc-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: #e0a82e; box-shadow: 0 0 0 2px var(--panel, #fff); }
+.acc-btn.on .acc-dot { display: none; }
+.acc-ini { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent, #2f9e6a); color: #fff; font-weight: 700; font-size: 13px; }
+.acc-ini.big { width: 44px; height: 44px; font-size: 20px; }
+.acc { min-width: 0; }
+.acc-lead { font-size: 16px; margin: 4px 0 6px; }
+.acc-steps { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 12px; }
+.acc-steps li { display: flex; gap: 10px; align-items: flex-start; }
+.acc-n { flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--accent, #2f9e6a); color: #fff; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; }
+.acc-code { font: 700 34px/1.2 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .14em; text-align: center; padding: 14px; margin: 8px 0; border: 2px dashed var(--accent, #2f9e6a); border-radius: 12px; user-select: all; }
+.acc-list { margin: 8px 0 12px; padding-left: 18px; display: grid; gap: 6px; }
+.acc-who { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+.acc .input.wide { margin: 6px 0; }
+.acc { width: 100%; }
+.acc-code, .acc .input.wide, .acc .opt { box-sizing: border-box; max-width: 100%; width: 100%; }
+.acc .input.wide { width: 100%; }
+.acc-steps li > div { min-width: 0; flex: 1; overflow-wrap: anywhere; }

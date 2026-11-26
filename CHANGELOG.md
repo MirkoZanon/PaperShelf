@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 2.33 – 2026-11-26
+- New person icon in the top bar: your account. Signed out, it walks you through signing in with GitHub on screen, step by step (first the one-time GitHub preparation, then the short code), and says exactly what is created: a private "papershelf-library" repository, a secret gist for groups, and a token stored only on this computer.
+- Signed in, the icon shows your initial. Its panel shows what is connected, lets you sync now, sign out, or switch to another saved account.
+
 ## 2.32 – 2026-11-26
 - Sign in with GitHub (Settings → Groups): approve a short code on github.com and PaperShelf sets up Groups and your library sync by itself, creating the private papershelf-library repository if needed. No token to create or copy. On a new computer: sign in and everything is found again.
 - One-time setup: this needs the Client ID of a free GitHub OAuth app (Device Flow enabled), pasted in the same screen. The token stays only on this computer. Using a token by hand still works.
