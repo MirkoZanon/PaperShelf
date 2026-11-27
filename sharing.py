@@ -67,7 +67,7 @@ SRC_RE = re.compile(r"^gist:[a-f0-9]{20,40}$")
 ID_RE = re.compile(r"^[a-f0-9]{12}$")
 GIST_DESCRIPTION = "PaperShelf shared labels (managed by the PaperShelf app – titles and DOIs only)"
 JOIN_PREFIX = "PaperShelf sharing:"
-META_KEYS = ("doi", "title", "authors", "year", "journal", "publisher", "arxiv_id", "url", "type")
+META_KEYS = ("doi", "title", "authors", "year", "journal", "journal_abbr", "volume", "issue", "pages", "publisher", "arxiv_id", "url", "type")
 
 
 class ShareError(Exception):
@@ -1046,7 +1046,7 @@ def new_doc(st, author, title="") -> str:
     did = uuid.uuid4().hex[:12]
     s = tick(st, author)
     docs[did] = {"by": author, "created": _now(), "title": {"v": " ".join(str(title or "").split())[:DOC_LIMITS["title"]] or "Untitled document", "s": s},
-                 "arch": {"v": False, "s": s}, "gone": {"v": False, "s": s}, "ops": {}, "cm": {}, "img": {}}
+                 "arch": {"v": False, "s": s}, "gone": {"v": False, "s": s}, "rs": {"v": "", "s": [0, ""]}, "ops": {}, "cm": {}, "img": {}}
     return did
 
 
@@ -1057,12 +1057,17 @@ def doc_of(st, did) -> dict:
     return d
 
 
-def set_doc(st, author, did, title=None, arch=None):
+def set_doc(st, author, did, title=None, arch=None, style=None):
     d = doc_of(st, did)
     if title is not None:
         d["title"] = {"v": " ".join(str(title).split())[:DOC_LIMITS["title"]] or "Untitled document", "s": tick(st, author)}
     if arch is not None:
         d["arch"] = {"v": bool(arch), "s": tick(st, author)}
+    if style is not None:      # the reference style of this document ("" = the default one)
+        sid = str(style).strip()[:24]
+        if sid and not re.fullmatch(r"[a-z0-9_-]+", sid):
+            raise ShareError("Unknown reference style.")
+        d["rs"] = {"v": sid, "s": tick(st, author)}
 
 
 def delete_doc(st, author, did):
@@ -1277,7 +1282,7 @@ def _merge_docs(a: dict, b: dict) -> dict:
             continue
         m = {"by": min(x.get("by") or "", y.get("by") or "") or x.get("by") or y.get("by"),
              "created": min(x.get("created") or "9", y.get("created") or "9")}
-        for k in ("title", "arch", "gone"):
+        for k in ("title", "arch", "gone", "rs"):
             p, q = x.get(k) or {}, y.get(k) or {}
             m[k] = dict(q if newer(q.get("s"), p.get("s")) else p)
         m["ops"] = {}
@@ -1301,7 +1306,7 @@ def _merge_docs(a: dict, b: dict) -> dict:
 def _doc_stamps(docs) -> int:
     c = 0
     for d in docs.values():
-        for k in ("title", "arch", "gone"):
+        for k in ("title", "arch", "gone", "rs"):
             c = max(c, ((d.get(k) or {}).get("s") or [0])[0])
         for n in (d.get("cm") or {}).values():
             c = max(c, (n.get("s") or [0])[0])
@@ -1324,6 +1329,8 @@ def _validate_docs(raw) -> dict:
                 doc[k] = {"v": " ".join(str(v.get("v") or "").split())[:DOC_LIMITS["title"]] or dflt, "s": stp}
             else:
                 doc[k] = {"v": bool(v.get("v")), "s": stp}
+        rsv = d.get("rs") if isinstance(d.get("rs"), dict) else {}
+        doc["rs"] = {"v": (str(rsv.get("v") or "")[:24] if re.fullmatch(r"[a-z0-9_-]*", str(rsv.get("v") or "")) else ""), "s": _stamp(rsv.get("s"))}
         for au, log in list((d.get("ops") if isinstance(d.get("ops"), dict) else {}).items())[:MAX_MEMBERS * 4]:
             if not au_ok(au) or not isinstance(log, list):
                 continue

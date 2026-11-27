@@ -403,6 +403,77 @@ STYLES = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# Journal -> reference style (built in, works offline)
+# --------------------------------------------------------------------------- #
+# The style a journal asks for, by the start of its name. Journals that are not listed are not guessed: the person picks.
+_JOURNAL_RULES = [
+    ("nature", r"^(nature\b|nature$|scientific (reports|data)\b|communications (biology|chemistry|physics|earth|medicine|psychology|materials)\b|npj\b)"),
+    ("science", r"^science($| advances| translational| signaling| immunology| robotics)"),
+    ("cell", r"^(cell($| reports| systems| stem cell| metabolism| host| chemical biology| genomics)|neuron$|current biology|iscience|molecular cell|developmental cell|immunity$|cancer cell|structure$|trends in\b|chem$|joule$|heliyon|patterns$)"),
+    ("pnas", r"^(proceedings of the national academy|pnas)"),
+    ("royalsociety", r"^(proceedings of the royal society|proc\.? (r\.? )?soc|biology letters|philosophical transactions|journal of the royal society|royal society open science|open biology|interface focus)"),
+    ("jneurosci", r"^(the )?(journal of neuroscience$|j\.? ?neurosci\.?$|eneuro)"),
+    ("elife", r"^elife"),
+    ("vancouver", r"^(plos\b|bmj\b|the lancet|lancet\b|new england journal|jama\b|journal of the american medical|bmc\b|nucleic acids research|annals of\b|blood$|cancer research|the journal of biological chemistry|journal of biological chemistry)"),
+    ("apa", r"^(psychological|journal of experimental psychology|american psychologist|developmental psychology|journal of personality|cognition$|cognitive|behavioral and brain|journal of abnormal|journal of applied psychology|emotion$|neuropsychology|journal of educational psychology|perspectives on psychological|memory and cognition|quarterly journal of experimental psychology|frontiers in\b)"),
+]
+# a few names to complete while typing (the rules above decide the style of anything else)
+JOURNAL_HINTS = [
+    "Nature", "Nature Neuroscience", "Nature Communications", "Nature Methods", "Nature Ecology & Evolution", "Nature Human Behaviour", "Scientific Reports",
+    "Science", "Science Advances", "Cell", "Neuron", "Current Biology", "Cell Reports", "iScience", "Molecular Cell", "Developmental Cell", "Trends in Cognitive Sciences", "Trends in Ecology & Evolution",
+    "Proceedings of the National Academy of Sciences", "PNAS Nexus", "Proceedings of the Royal Society B", "Biology Letters", "Philosophical Transactions of the Royal Society B",
+    "Journal of the Royal Society Interface", "Royal Society Open Science", "The Journal of Neuroscience", "eNeuro", "eLife",
+    "PLOS Biology", "PLOS ONE", "PLOS Computational Biology", "PLOS Genetics", "BMC Biology", "Frontiers in Neuroscience", "Frontiers in Psychology", "Frontiers in Behavioral Neuroscience",
+    "Nucleic Acids Research", "The Lancet", "New England Journal of Medicine", "JAMA", "BMJ", "Journal of Biological Chemistry",
+    "Psychological Science", "Psychological Review", "Psychological Bulletin", "Journal of Experimental Psychology: General", "Cognition",
+]
+
+
+def style_for_journal(name: str) -> str:
+    n = re.sub(r"\s+", " ", (name or "").strip().lower().replace("&", "and"))
+    for sid, rx in _JOURNAL_RULES:
+        if re.search(rx, n):
+            return sid
+    return ""
+
+
+def journal_suggestions(q: str, limit: int = 8) -> list:
+    """Journals (from a short built-in list) whose name starts with or contains the typed text; plus what the typed text itself maps to."""
+    q = re.sub(r"\s+", " ", (q or "").strip())
+    if not q:
+        return []
+    ql = q.lower()
+    out, seen = [], set()
+    own = style_for_journal(q)
+    if own:
+        out.append({"journal": q, "style": own, "name": STYLES[own]["name"], "typed": True})
+        seen.add(ql)
+    for j in sorted(JOURNAL_HINTS, key=lambda x: (not x.lower().startswith(ql), x.lower())):
+        if ql in j.lower() and j.lower() not in seen:
+            sid = style_for_journal(j)
+            if sid:
+                out.append({"journal": j, "style": sid, "name": STYLES[sid]["name"]})
+                seen.add(j.lower())
+        if len(out) >= limit:
+            break
+    return out
+
+
+def paper_of_meta(meta: dict) -> dict:
+    """The shape the style functions want, from the few details a group keeps of a paper."""
+    m = dict(meta or {})
+    au = [a if isinstance(a, dict) else {"family": str(a), "given": ""} for a in (m.get("authors") or [])]
+    base = {"title": "", "year": None, "journal": "", "journal_abbr": "", "volume": "", "issue": "", "pages": "", "publisher": "", "type": "article", "doi": "", "url": "", "arxiv_id": ""}
+    base.update({k: v for k, v in m.items() if v is not None})
+    base["authors"] = au
+    return base
+
+
+# how a numbered style cites inside the text
+INLINE_BRACKETS = {"nature": ("[", "]"), "science": ("(", ")"), "cell": ("[", "]"), "royalsociety": ("[", "]"), "pnas": ("[", "]"), "vancouver": ("(", ")")}
+
+
 def style_list():
     return [{"id": k, "name": v["name"], "journals": v["journals"], "numbered": v["numbered"]} for k, v in STYLES.items()]
 

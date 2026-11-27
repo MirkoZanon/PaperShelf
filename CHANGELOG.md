@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.15 – 2026-11-27
+- **Reference style for each document, by journal**: in a document, **Cite → Reference style** lets you pick a style (APA, Nature, Science, Cell Press, PNAS, Royal Society, J Neurosci, eLife, PLOS/Vancouver) or **type the journal you write for**: PaperShelf completes the name and chooses the style that journal asks for (Nature Neuroscience → Nature, Neuron → Cell Press, eLife → eLife, PLOS ONE → Vancouver…). Journals not in the built-in list are not guessed: you choose the closest style. The style belongs to the document, so the whole group sees the same.
+- **Numbered or author-year, as the style requires**: numbered styles cite as [1], [1, 2], [1–3] (or (1) for Science/Vancouver) in order of first appearance, and the reference list is numbered in the same order. Author-year styles keep (Smith, 2020) and an alphabetical list. It applies to Preview and to Markdown, Word and text exports.
+- Groups now keep volume, issue and pages of their papers, so references are complete (papers already in a group are completed the first time you open a document).
+
 ## 3.14 – 2026-11-27
 - **Books and other material by ISBN**: paste an ISBN (10 or 13 digits, with or without dashes, with or without "ISBN") in the add box, on the Home search or in *Add many at once*. PaperShelf checks the number, then looks the book up in Crossref (it gives a DOI when the publisher registered one), Open Library and Google Books, and fills title, authors, year, publisher, pages and subjects.
 - **Books in the title search**: when you type a few words of a title, books from Open Library appear among the suggestions, together with papers.

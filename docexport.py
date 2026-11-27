@@ -7,6 +7,7 @@ import re
 import struct
 import zipfile
 from xml.sax.saxutils import escape
+import citations
 
 CITE_RE = re.compile(r"\[@([^\]\n]{1,200})\]")
 
@@ -36,7 +37,9 @@ def short_cite(meta: dict) -> str:
     return f"{who}, {meta.get('year') or 'n.d.'}"
 
 
-def reference(meta: dict) -> str:
+def reference(meta: dict, style: str = "") -> str:
+    if style and style in citations.STYLES:
+        return citations.cite_text(citations.paper_of_meta(meta), style)
     au = meta.get("authors") or []
     names = []
     for a in au[:8]:
@@ -55,10 +58,39 @@ def reference(meta: dict) -> str:
     return " ".join(b for b in bits if b)
 
 
-def resolve(text: str, items: dict):
-    """Replace [@Smith2020; @Lee2019] with (Smith, 2020; Lee et al., 2019). Returns (text, ordered list of cited item keys)."""
+def _ranges(nums):
+    """[1, 2, 3, 5] -> '1-3, 5' (how numbered styles write a group)."""
+    out, i = [], 0
+    nums = sorted(set(nums))
+    while i < len(nums):
+        j = i
+        while j + 1 < len(nums) and nums[j + 1] == nums[j] + 1:
+            j += 1
+        out.append(str(nums[i]) if j == i else (f"{nums[i]}, {nums[j]}" if j == i + 1 else f"{nums[i]}\u2013{nums[j]}"))
+        i = j + 1
+    return ", ".join(out)
+
+
+def resolve(text: str, items: dict, style: str = ""):
+    """Replace [@Smith2020; @Lee2019] with (Smith, 2020; Lee et al., 2019) – or, for a numbered style, with [1, 2] in order of
+    first appearance. Returns (text, ordered list of cited item keys)."""
     by_label = {v: k for k, v in labels(items).items()}
     cited = []
+    numbered = bool(style and citations.STYLES.get(style, {}).get("numbered"))
+    br = citations.INLINE_BRACKETS.get(style, ("[", "]"))
+
+    def sub_num(m):
+        parts = [p.strip().lstrip("@").strip() for p in re.split(r"[;,]", m.group(1)) if p.strip()]
+        nums, bad = [], []
+        for p in parts:
+            k = by_label.get(p)
+            if not k:
+                bad.append(f"{p}?")
+                continue
+            if k not in cited:
+                cited.append(k)
+            nums.append(cited.index(k) + 1)
+        return br[0] + ", ".join(([_ranges(nums)] if nums else []) + bad) + br[1]
 
     def sub(m):
         parts = [p.strip().lstrip("@").strip() for p in re.split(r"[;,]", m.group(1)) if p.strip()]
@@ -73,7 +105,7 @@ def resolve(text: str, items: dict):
             out.append(short_cite(items[k].get("meta") or {}))
         return "(" + "; ".join(out) + ")"
     text = re.sub(r"\][ \t]*[;,]?[ \t]*\[@", "; @", text)      # [@a] [@b] and [@a], [@b] are one group: (A, 2020; B, 2019)
-    return CITE_RE.sub(sub, text), cited
+    return CITE_RE.sub(sub_num if numbered else sub, text), cited
 
 
 IMG_RE = re.compile(r"!\[([^\]\n]*)\]\(img:([0-9a-f]{16})\)")
@@ -84,8 +116,8 @@ TEXT_COLORS = {"red": "D64545", "orange": "D9822B", "green": "2F9E44", "blue": "
 COLOR_RE = re.compile(r"\{(red|orange|green|blue|purple|grey|gray)\}([\s\S]+?)\{/\}")
 
 
-def markdown(title: str, text: str, items: dict, by: str = "", date: str = "", images: dict | None = None, inline_images: bool = False) -> str:
-    body, cited = resolve(text, items)
+def markdown(title: str, text: str, items: dict, by: str = "", date: str = "", images: dict | None = None, inline_images: bool = False, style: str = "") -> str:
+    body, cited = resolve(text, items, style)
     if inline_images:     # a stand-alone Markdown file carries its pictures inside
         body = IMG_RE.sub(lambda m: (f"![{m.group(1)}](data:{images[m.group(2)][0]};base64,{base64.b64encode(images[m.group(2)][1]).decode()})"
                                      if images and m.group(2) in images else f"[picture: {m.group(1)}]"), body)
@@ -95,8 +127,11 @@ def markdown(title: str, text: str, items: dict, by: str = "", date: str = "", i
         L += [f"_{' · '.join(x for x in (by, date) if x)}_", ""]
     L += [body.rstrip(), ""]
     if cited:
-        refs = sorted(cited, key=lambda k: reference(items[k].get("meta") or {}).lower())
-        L += ["## References", ""] + [f"- {reference(items[k].get('meta') or {})}" for k in refs] + [""]
+        if style and citations.STYLES.get(style, {}).get("numbered"):          # in order of appearance, numbered like the citations
+            L += ["## References", ""] + [f"{i}. {reference(items[k].get('meta') or {}, style)}" for i, k in enumerate(cited, 1)] + [""]
+        else:
+            refs = sorted(cited, key=lambda k: reference(items[k].get("meta") or {}, style).lower())
+            L += ["## References", ""] + [f"- {reference(items[k].get('meta') or {}, style)}" for k in refs] + [""]
     return "\n".join(L)
 
 

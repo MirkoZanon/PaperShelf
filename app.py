@@ -4160,8 +4160,10 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
     who = lambda a, n="": names.get(a) or n or a
     items = _doc_items(st)
     lab = docexport.labels(items)
+    rs = ((d.get("rs") or {}).get("v") or "")
+    rs = rs if rs in citations.STYLES else ""
     papers = sorted(({"key": k, "label": lab[k], "title": (e.get("meta") or {}).get("title") or "", "cite": docexport.short_cite(e.get("meta") or {}),
-                      "ref": docexport.reference(e.get("meta") or {})} for k, e in items.items()), key=lambda p: p["label"].lower())
+                      "ref": docexport.reference(e.get("meta") or {}, rs)} for k, e in items.items()), key=lambda p: p["label"].lower())
     gone = sharing.is_gone(d)
     return jsonify(id=did, title=d["title"]["v"], arch=bool(d["arch"]["v"]), gone=gone, by=d["by"], by_name=who(d["by"]),
                    can_write=bool(author) and not gone, can_delete=bool(author) and d["by"] in ({ident["user"], ident["local"]} - {""}) and not gone,
@@ -4177,7 +4179,8 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
                    snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
                    images=[{"id": k, "name": i.get("name") or "", "n": i["n"], "mine": i["by"] in ({ident["user"], ident["local"]} - {""})}
                            for k, i in sorted((d.get("img") or {}).items(), key=lambda kv: kv[1].get("at") or "")],
-                   papers=papers, **extra)
+                   papers=papers, refstyle={"id": rs, "numbered": bool(rs and citations.STYLES[rs]["numbered"]), "br": list(citations.INLINE_BRACKETS.get(rs, ("[", "]")))},
+                   **extra)
 
 
 def _doc_write(db, sid, did=None):
@@ -4257,7 +4260,7 @@ def docs_edit(sid, did):
         return err
     b = request.get_json(silent=True) or {}
     try:
-        sharing.set_doc(st, author, did, title=b.get("title"), arch=b.get("arch"))
+        sharing.set_doc(st, author, did, title=b.get("title"), arch=b.get("arch"), style=b.get("style"))
     except sharing.ShareError as exc:
         return error(str(exc))
     _doc_saved(db, sid, st)
@@ -4430,6 +4433,14 @@ def doc_refs(sid, did):
     return jsonify(group=group, library=library)
 
 
+@app.get("/api/ref-styles")
+def ref_styles():
+    """The reference styles, and – for a few typed letters of a journal's name – the style that journal asks for."""
+    q = (request.args.get("journal") or "").strip()[:120]
+    return jsonify(styles=citations.style_list(), journals=citations.journal_suggestions(q) if q else [],
+                   guess=citations.style_for_journal(q) if q else "")
+
+
 @app.post("/api/shares/<sid>/docs/<did>/find")
 def doc_find(sid, did):
     """The Cite search box: papers of the group and of your own library whose title, authors, year, DOI or keywords contain every typed word."""
@@ -4565,7 +4576,8 @@ def doc_export(sid, did):
     title = d["title"]["v"]
     md = docexport.markdown(title, sharing.doc_text(d, upto if upto else None), _doc_items(st),
                             ", ".join(names.get(a, a) for a in sharing.doc_stats(d)["authors"]), date.today().isoformat(),
-                            images={k: (i["mime"], base64.b64decode(i["b64"])) for k, i in (d.get("img") or {}).items()}, inline_images=fmt == "md")
+                            images={k: (i["mime"], base64.b64decode(i["b64"])) for k, i in (d.get("img") or {}).items()}, inline_images=fmt == "md",
+                            style=(lambda v: v if v in citations.STYLES else "")((d.get("rs") or {}).get("v") or ""))
     fname = re.sub(r"[^\w.-]+", "_", title).strip("_")[:60] or "document"
     if fmt == "docx":
         return Response(docexport.docx_bytes(md, title, {k: (i["mime"], base64.b64decode(i["b64"])) for k, i in (d.get("img") or {}).items()}), mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

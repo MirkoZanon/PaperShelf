@@ -2636,3 +2636,7 @@ body.pdf-window .app { display: none; } body.pdf-window { background: var(--bg);
 .au-acts { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 2px; }
 .au-bulk textarea { width: 100%; margin: 6px 0; }
 .au-bulk summary { cursor: pointer; }
+
+/* 3.15 reference style of a document */
+.dx-rstyle { padding: 8px 0 10px; border-bottom: 1px solid var(--border-soft); margin-bottom: 8px; }
+.dx-rstyle .input { width: 100%; margin-top: 6px; }

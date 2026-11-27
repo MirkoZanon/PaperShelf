@@ -187,7 +187,12 @@ const Docs = (() => {
       keep.forEach((c, id) => { if (!r.comments.some(x => x.id === id)) out.push(c); });
       R.comments = out; }
     R.pres = r.pres || []; R.snaps = r.snaps; R.images = r.images || []; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
+    if (JSON.stringify(R.refstyle || null) !== JSON.stringify(r.refstyle || null)) { R.refstyle = r.refstyle; changed = true; }
     return changed;
+  }
+  async function setRefStyle(id) {
+    try { await api(`${base()}/${q(D.id)}`, {method: 'PUT', body: {style: id}}); await pull(); D.view = null; paint(); }
+    catch (err) { toast(err.message, 'error'); }
   }
   async function pull() {
     if (!D.R || !D.host || !document.body.contains(D.host)) return stopPoll();
@@ -469,15 +474,24 @@ const Docs = (() => {
   function presSoon() { clearTimeout(D.presT); D.presT = setTimeout(presSend, 1200); }
 
   // ---- the page itself: textarea (write), coloured source (review) or formatted text (preview)
+  const rangeTxt = nums => { const n = [...new Set(nums)].sort((x, y) => x - y), out = []; for (let i = 0; i < n.length;) { let j = i; while (j + 1 < n.length && n[j + 1] === n[j] + 1) j++; out.push(j === i ? String(n[i]) : j === i + 1 ? `${n[i]}, ${n[j]}` : `${n[i]}\u2013${n[j]}`); i = j + 1; } return out.join(', '); };
   function resolveCites(text) {
-    const by = new Map((D.R.papers || []).map(p => [p.label, p])), used = [];
-    const out = text.replace(/\][ \t]*[;,]?[ \t]*\[@/g, '; @').replace(/\[@([^\]\n]{1,200})\]/g, (_m, g) => '(' + g.split(/[;,]/).map(x => x.trim().replace(/^@/, '')).filter(Boolean).map(l => { const p = by.get(l); if (!p) return l + '?'; if (!used.includes(p)) used.push(p); return p.cite; }).join('; ') + ')');
+    const by = new Map((D.R.papers || []).map(p => [p.label, p])), used = [], rs = D.R.refstyle || {}, br = rs.br || ['[', ']'];
+    const out = text.replace(/\][ \t]*[;,]?[ \t]*\[@/g, '; @').replace(/\[@([^\]\n]{1,200})\]/g, (_m, g) => {
+      const ls = g.split(/[;,]/).map(x => x.trim().replace(/^@/, '')).filter(Boolean);
+      if (rs.numbered) {
+        const nums = [], bad = [];
+        for (const l of ls) { const p = by.get(l); if (!p) { bad.push(l + '?'); continue; } if (!used.includes(p)) used.push(p); nums.push(used.indexOf(p) + 1); }
+        return br[0] + [...(nums.length ? [rangeTxt(nums)] : []), ...bad].join(', ') + br[1];
+      }
+      return '(' + ls.map(l => { const p = by.get(l); if (!p) return l + '?'; if (!used.includes(p)) used.push(p); return p.cite; }).join('; ') + ')';
+    });
     return {text: out, used};
   }
   const mdHtml = t => (typeof Notes !== 'undefined' && Notes.md) ? Notes.md(t) : esc(t).replace(/\n/g, '<br>');
   function previewHtml(B, title) {
     const {text, used} = resolveCites(B.text);
-    const refs = used.slice().sort((a, b) => a.ref.toLowerCase().localeCompare(b.ref.toLowerCase()));
+    const refs = D.R.refstyle?.numbered ? used.slice() : used.slice().sort((a, b) => a.ref.toLowerCase().localeCompare(b.ref.toLowerCase()));
     const withImgs = h => h.replace(/<img class="dx-img" data-img="([0-9a-f]{16})"/g, (_m, id) => `<img class="dx-img" src="${location.origin}${base()}/${q(D.id)}/images/${id}" data-img="${id}"`);
     return `<article class="dx-prev"><h1>${esc(title)}</h1>${withImgs(mdHtml(text))}${refs.length ? `<h2>References</h2><ol class="dx-refs">${refs.map(p => `<li>${esc(p.ref)}</li>`).join('')}</ol>` : ''}</article>`;
   }
@@ -721,7 +735,11 @@ const Docs = (() => {
   }
   function citeHtml() {
     const P = D.R.papers || [];
-    return `${D.can ? `<div class="dx-sugrefs"><div class="dx-row"><b>Fits what you are writing</b><span class="grow"></span><button class="btn small" data-dx="refs" title="Find papers that fit the paragraph you are in">${ic('refresh')}Suggest</button></div><div id="dx-sugrefs">${D.refsHtml || '<p class="muted small">Put the cursor in a paragraph and press <b>Suggest</b>, or type <code>[@</code> in the text. Matching is done on this computer.</p>'}</div></div>` : ''}<p class="muted small">Click a paper to put its citation in the text. The reference list is written for you in Preview and when you export.</p>
+    const rs = D.R.refstyle || {id: ''}, ST = D.styles || [];
+    const styleBox = `<div class="dx-rstyle"><div class="dx-row"><b>Reference style</b><span class="grow"></span><small class="muted" id="dx-rshint">${rs.id ? (rs.numbered ? 'Numbered citations' : 'Author, year') : 'Author, year (default)'}</small></div>
+      ${D.can ? `<select class="input" id="dx-rs" aria-label="Reference style"><option value="">Default – author, year</option>${ST.map(x => `<option value="${esc(x.id)}" ${rs.id === x.id ? 'selected' : ''}>${esc(x.name)}${x.numbered ? ' (numbered)' : ''}</option>`).join('')}</select>
+        <input class="input" id="dx-rsj" list="dx-rsjl" placeholder="…or type the journal you write for" autocomplete="off" aria-label="Journal"><datalist id="dx-rsjl"></datalist>` : `<div class="small">${esc(ST.find(x => x.id === rs.id)?.name || 'Default')}</div>`}</div>`;
+    return `${styleBox}${D.can ? `<div class="dx-sugrefs"><div class="dx-row"><b>Fits what you are writing</b><span class="grow"></span><button class="btn small" data-dx="refs" title="Find papers that fit the paragraph you are in">${ic('refresh')}Suggest</button></div><div id="dx-sugrefs">${D.refsHtml || '<p class="muted small">Put the cursor in a paragraph and press <b>Suggest</b>, or type <code>[@</code> in the text. Matching is done on this computer.</p>'}</div></div>` : ''}<p class="muted small">Click a paper to put its citation in the text. The reference list is written for you in Preview and when you export.</p>
       <input class="input" id="dx-cq" type="search" placeholder="Search by title, author, year or DOI" aria-label="Search papers" style="margin:8px 0" value="${esc(D.cq || '')}">
       <div id="dx-qres">${D.cqHtml || ''}</div>
       <div id="dx-plist" ${D.cq ? 'hidden' : ''}>${P.map(p => `<button class="dx-paper" data-dx-cite="${esc(p.label)}" data-s="${esc((p.label + ' ' + p.title).toLowerCase())}"><b>${esc(p.cite)}</b><span>${esc(truncate(p.title, 110))}</span><code>[@${esc(p.label)}]</code></button>`).join('') || '<p class="muted small dx-none">The group has no papers yet. Add papers to the group in the library, then cite them here.</p>'}</div>`;
@@ -1335,7 +1353,22 @@ const Docs = (() => {
     host.addEventListener('select', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
+    host.addEventListener('input', async e => {      // the journal field: complete the name while typing
+      if (e.target.id !== 'dx-rsj') return;
+      const v = e.target.value.trim(); if (v.length < 2) return;
+      try { const r = await api('/api/ref-styles?journal=' + encodeURIComponent(v)); const dl = $('#dx-rsjl', D.host); if (dl) dl.innerHTML = r.journals.map(j => `<option value="${esc(j.journal)}">${esc(j.name)}</option>`).join(''); } catch { /* ignore */ }
+    });
     host.addEventListener('change', async e => {
+      if (e.target.id === 'dx-rs' && D.can) { await setRefStyle(e.target.value); return; }
+      if (e.target.id === 'dx-rsj' && D.can) {
+        const v = e.target.value.trim(); if (!v) return;
+        try {
+          const r = await api('/api/ref-styles?journal=' + encodeURIComponent(v)), hint = $('#dx-rshint', D.host);
+          if (r.guess) { await setRefStyle(r.guess); toast(`${v}: ${(D.styles || []).find(x => x.id === r.guess)?.name || r.guess} style.`, 'ok'); }
+          else if (hint) hint.textContent = `No built-in style for “${v}”: choose the closest in the list.`;
+        } catch (err) { toast(err.message, 'error'); }
+        return;
+      }
       if (e.target.id === 'dx-title' && D.can) {
         try { await api(`${base()}/${q(D.id)}`, {method: 'PUT', body: {title: e.target.value}}); D.R.title = e.target.value.trim() || 'Untitled document'; } catch (err) { toast(err.message, 'error'); }
       }
@@ -1431,6 +1464,7 @@ const Docs = (() => {
     D.onBack = opt.onBack || null;
     if (D.sid !== sid) { stopPoll(); D.id = null; D.R = null; D.list = null; D.view = null; D.showArch = false; }
     D.sid = sid; D.host = host; D.can = canWrite; skeleton(host);
+    if (!D.styles) api('/api/ref-styles').then(r => { D.styles = r.styles || []; if (D.R && D.side === 'cite') paintSide(); }).catch(() => {});
     host.classList.toggle('split', D.split);
     document.body.classList.toggle('dx-split-on', D.split);
     if (bound !== host) { bind(host); bound = host; }
