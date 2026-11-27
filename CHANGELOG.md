@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.19 – 2026-11-27
+- **Get the manuscript ready for submission**: a new **Submit** tab in every document. Choose the journal you write for (or type its name) and PaperShelf checks which sections that journal family usually asks for, in which order: Abstract, Significance statement, Methods, Data availability, Author contributions, Competing interests, Funding… Each one is shown as present, missing or out of order, with the word limits where they exist. **Add missing sections** puts empty headings in the journal's order, each with a note on what to write.
+- **Authors with affiliations**: enter the authors in order, with their affiliations (numbered), corresponding author, equal contribution, lead contact (Cell Press), ORCID and CRediT contribution roles. **Put on title page** writes the author line with the right markers and the affiliation list under the title; **Contributions text** writes the author-contributions statement (initials and roles). The author list is saved with the document and shared with the group.
+- **Journal rules as suggestions**: under the section list the tab shows what that journal family typically requires (for example a Lead contact for Cell Press, the Significance statement for PNAS, CRediT roles for PLOS and eLife). These are typical requirements, not the exact instructions: always check the journal's current author guidelines.
+- **Privacy**: only names, affiliations and ORCID are kept, inside the document. No e-mail address is stored (the corresponding author's address is left as a placeholder), and nothing is sent anywhere.
+- Everyone in a group needs this version to see and edit the shared author list.
+
 ## 3.18 – 2026-11-27
 - **Deleted pictures stay deleted**: a picture you removed came back in the list because the other copies of the document (which still had it) brought it back when they merged. A removal now travels like any other change; adding the same picture again later works too.
 - **No more whole-text colouring**: after deleting a picture, saving a reference or accepting a change, the whole document was shown as if someone had just typed it (in their colour). Only text that is really new is now coloured.

@@ -54,6 +54,8 @@ from urllib.parse import urlparse
 
 import requests
 
+import submission
+
 FORMAT = 1
 DEFAULT_REPO_NAME = "papershelf-shared"
 MAX_ITEMS = 20000
@@ -1057,7 +1059,7 @@ def new_doc(st, author, title="") -> str:
     did = uuid.uuid4().hex[:12]
     s = tick(st, author)
     docs[did] = {"by": author, "created": _now(), "title": {"v": " ".join(str(title or "").split())[:DOC_LIMITS["title"]] or "Untitled document", "s": s},
-                 "arch": {"v": False, "s": s}, "gone": {"v": False, "s": s}, "rs": {"v": "", "s": [0, ""]}, "ops": {}, "cm": {}, "img": {}}
+                 "arch": {"v": False, "s": s}, "gone": {"v": False, "s": s}, "rs": {"v": "", "s": [0, ""]}, "sub": {"v": {}, "s": [0, ""]}, "ops": {}, "cm": {}, "img": {}}
     return did
 
 
@@ -1068,7 +1070,7 @@ def doc_of(st, did) -> dict:
     return d
 
 
-def set_doc(st, author, did, title=None, arch=None, style=None):
+def set_doc(st, author, did, title=None, arch=None, style=None, sub=None):
     d = doc_of(st, did)
     if title is not None:
         d["title"] = {"v": " ".join(str(title).split())[:DOC_LIMITS["title"]] or "Untitled document", "s": tick(st, author)}
@@ -1079,6 +1081,8 @@ def set_doc(st, author, did, title=None, arch=None, style=None):
         if sid and not re.fullmatch(r"[a-z0-9_-]+", sid):
             raise ShareError("Unknown reference style.")
         d["rs"] = {"v": sid, "s": tick(st, author)}
+    if sub is not None:        # author list with affiliations, for the submission block
+        d["sub"] = {"v": submission.clean_sub(sub), "s": tick(st, author)}
 
 
 def delete_doc(st, author, did):
@@ -1293,7 +1297,7 @@ def _merge_docs(a: dict, b: dict) -> dict:
             continue
         m = {"by": min(x.get("by") or "", y.get("by") or "") or x.get("by") or y.get("by"),
              "created": min(x.get("created") or "9", y.get("created") or "9")}
-        for k in ("title", "arch", "gone", "rs"):
+        for k in ("title", "arch", "gone", "rs", "sub"):
             p, q = x.get(k) or {}, y.get(k) or {}
             m[k] = dict(q if newer(q.get("s"), p.get("s")) else p)
         m["ops"] = {}
@@ -1320,7 +1324,7 @@ def _merge_docs(a: dict, b: dict) -> dict:
 def _doc_stamps(docs) -> int:
     c = 0
     for d in docs.values():
-        for k in ("title", "arch", "gone", "rs"):
+        for k in ("title", "arch", "gone", "rs", "sub"):
             c = max(c, ((d.get(k) or {}).get("s") or [0])[0])
         for n in (d.get("cm") or {}).values():
             c = max(c, (n.get("s") or [0])[0])
@@ -1344,6 +1348,8 @@ def _validate_docs(raw) -> dict:
             else:
                 doc[k] = {"v": bool(v.get("v")), "s": stp}
         rsv = d.get("rs") if isinstance(d.get("rs"), dict) else {}
+        sbv = d.get("sub") if isinstance(d.get("sub"), dict) else {}
+        doc["sub"] = {"v": submission.clean_sub(sbv.get("v")), "s": _stamp(sbv.get("s"))}
         doc["rs"] = {"v": (str(rsv.get("v") or "")[:24] if re.fullmatch(r"[a-z0-9_-]*", str(rsv.get("v") or "")) else ""), "s": _stamp(rsv.get("s"))}
         for au, log in list((d.get("ops") if isinstance(d.get("ops"), dict) else {}).items())[:MAX_MEMBERS * 4]:
             if not au_ok(au) or not isinstance(log, list):

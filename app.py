@@ -38,6 +38,7 @@ from urllib.parse import urlencode
 from flask import Flask, Response, g, jsonify, redirect, request, send_file
 
 import citations
+import submission
 import coauth
 import fulltext
 import concepts
@@ -4181,6 +4182,7 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
                    snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
                    images=[{"id": k, "name": i.get("name") or "", "n": i["n"], "mine": i["by"] in ({ident["user"], ident["local"]} - {""})}
                            for k, i in sorted(sharing.live_images(d).items(), key=lambda kv: kv[1].get("at") or "")],
+                   sub=(d.get("sub") or {}).get("v") or {"authors": [], "affils": []}, credit=submission.CREDIT,
                    papers=papers, refstyle={"id": rs, "numbered": bool(rs and citations.STYLES[rs]["numbered"]), "br": list(citations.INLINE_BRACKETS.get(rs, ("[", "]")))},
                    **extra)
 
@@ -4262,11 +4264,31 @@ def docs_edit(sid, did):
         return err
     b = request.get_json(silent=True) or {}
     try:
-        sharing.set_doc(st, author, did, title=b.get("title"), arch=b.get("arch"), style=b.get("style"))
+        sharing.set_doc(st, author, did, title=b.get("title"), arch=b.get("arch"), style=b.get("style"), sub=b.get("sub"))
     except sharing.ShareError as exc:
         return error(str(exc))
     _doc_saved(db, sid, st)
     return _docs_list(db, sid, st)
+
+
+@app.post("/api/submission")
+def submission_run():
+    """Section check and text helpers for a manuscript. Works on the text the page sends; nothing is stored or sent elsewhere."""
+    b = request.get_json(silent=True) or {}
+    text, style = str(b.get("text") or "")[:2_000_000], str(b.get("style") or "")
+    style = style if style in citations.STYLES else ""
+    sub = submission.clean_sub(b.get("sub"))
+    act = b.get("action") or "check"
+    out = text
+    if act == "sections":
+        out = submission.add_missing(text, style, bool(b.get("required_only")))
+    elif act == "authors":
+        out = submission.insert_authors(text, sub, style)
+    elif act == "contrib":
+        out = submission.insert_contributions(text, sub, style)
+    P = submission.profile(style)
+    return jsonify(text=out, changed=out != text, sections=submission.check_sections(out, style), name=P["name"], rules=P["rules"],
+                   styles=[{"id": k, "name": v.get("name") or k} for k, v in citations.STYLES.items()])
 
 
 @app.delete("/api/shares/<sid>/docs/<did>")

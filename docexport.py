@@ -74,6 +74,7 @@ def _ranges(nums):
 def resolve(text: str, items: dict, style: str = ""):
     """Replace [@Smith2020; @Lee2019] with (Smith, 2020; Lee et al., 2019) – or, for a numbered style, with [1, 2] in order of
     first appearance. Returns (text, ordered list of cited item keys)."""
+    text = re.sub(r"<!-- /?authors -->[ \t]*\n?", "", text or "")      # the markers around the author block (submission.py)
     by_label = {v: k for k, v in labels(items).items()}
     cited = []
     numbered = bool(style and citations.STYLES.get(style, {}).get("numbered"))

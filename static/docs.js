@@ -193,7 +193,9 @@ const Docs = (() => {
       keep.forEach((c, id) => { if (!r.comments.some(x => x.id === id)) out.push(c); });
       R.comments = out; }
     R.pres = r.pres || []; R.snaps = r.snaps; R.images = r.images || []; R.papers = r.papers; R.people = r.people; D.can = r.can_write;
-    if (JSON.stringify(R.refstyle || null) !== JSON.stringify(r.refstyle || null)) { R.refstyle = r.refstyle; changed = true; }
+    if (JSON.stringify(R.refstyle || null) !== JSON.stringify(r.refstyle || null)) { R.refstyle = r.refstyle; changed = true; D.subKey = null; }
+    if (r.sub && JSON.stringify(R.sub || null) !== JSON.stringify(r.sub)) { R.sub = r.sub; if (!D.sdDirty) D.sd = null; }
+    if (r.credit) R.credit = r.credit;
     return changed;
   }
   async function setRefStyle(id) {
@@ -485,7 +487,7 @@ const Docs = (() => {
   const rangeTxt = nums => { const n = [...new Set(nums)].sort((x, y) => x - y), out = []; for (let i = 0; i < n.length;) { let j = i; while (j + 1 < n.length && n[j + 1] === n[j] + 1) j++; out.push(j === i ? String(n[i]) : j === i + 1 ? `${n[i]}, ${n[j]}` : `${n[i]}\u2013${n[j]}`); i = j + 1; } return out.join(', '); };
   function resolveCites(text) {
     const by = new Map((D.R.papers || []).map(p => [p.label, p])), used = [], rs = D.R.refstyle || {}, br = rs.br || ['[', ']'];
-    const out = text.replace(/\][ \t]*[;,]?[ \t]*\[@/g, '; @').replace(/\[@([^\]\n]{1,200})\]/g, (_m, g) => {
+    const out = text.replace(/<!-- \/?authors -->[ \t]*\n?/g, '').replace(/\][ \t]*[;,]?[ \t]*\[@/g, '; @').replace(/\[@([^\]\n]{1,200})\]/g, (_m, g) => {
       const ls = g.split(/[;,]/).map(x => x.trim().replace(/^@/, '')).filter(Boolean);
       if (rs.numbered) {
         const nums = [], bad = [];
@@ -648,8 +650,8 @@ const Docs = (() => {
     const R = D.R, openN = R.comments.filter(c => !c.parent && c.state === 'open').length;
     const keep = $('.dx-sbody', el)?.scrollTop || 0, draft = $('#dx-cnew', el)?.value, foc = document.activeElement?.id === 'dx-cnew';
     const rb = document.activeElement?.matches?.('[data-rbox]') ? document.activeElement : null, rbSel = rb ? [rb.selectionStart, rb.selectionEnd] : null;
-    el.innerHTML = `<div class="dx-stabs">${sideTab('comments', 'Comments', openN)}${sideTab('cite', 'Cite', '')}${sideTab('media', 'Pictures', (R.images || []).length)}${sideTab('history', 'History', '')}</div>
-      <div class="dx-sbody">${D.side === 'cite' ? citeHtml() : D.side === 'history' ? historyHtml() : D.side === 'media' ? mediaHtml() : commentsHtml()}</div>`;
+    el.innerHTML = `<div class="dx-stabs">${sideTab('comments', 'Comments', openN)}${sideTab('cite', 'Cite', '')}${sideTab('media', 'Pictures', (R.images || []).length)}${sideTab('submit', 'Submit', '')}${sideTab('history', 'History', '')}</div>
+      <div class="dx-sbody">${D.side === 'submit' ? submitHtml() : D.side === 'cite' ? citeHtml() : D.side === 'history' ? historyHtml() : D.side === 'media' ? mediaHtml() : commentsHtml()}</div>`;
     const sb = $('.dx-sbody', el); if (sb) sb.scrollTop = keep;
     if (draft != null && $('#dx-cnew', el)) { $('#dx-cnew', el).value = draft; if (foc) $('#dx-cnew', el).focus(); }
     if (rbSel) { const nb = $('[data-rbox]', el); if (nb) { nb.focus({preventScroll: true}); nb.setSelectionRange(rbSel[0], rbSel[1]); } }
@@ -801,6 +803,85 @@ const Docs = (() => {
       if (op.k === 'i') cur.add += Array.from(op.t).length; else cur.del += op.r.reduce((s, r) => s + r[2], 0);
     }
     return out.reverse().slice(0, 40);
+  }
+  // ---- getting the manuscript ready for a journal: authors with affiliations, section check, missing sections ----
+  const SUBICON = {ok: '✓', missing: '＋', order: '↕'};
+  function subDraft() {
+    if (!D.sd || D.sdId !== D.id) { D.sd = JSON.parse(JSON.stringify(D.R.sub || {authors: [], affils: []})); D.sdId = D.id; D.sdDirty = false; }
+    return D.sd;
+  }
+  function submitHtml() {
+    const R = D.R, rs = R.refstyle || {id: ''}, ST = D.styles || [], SD = subDraft(), W = D.can && D.mode === 'write' && !D.view;
+    const res = D.subRes, key = rs.id + '|' + (R.B?.text || '').length;
+    if (!res || D.subKey !== key) subCheck();
+    const secs = (res?.sections || []);
+    const list = secs.length ? secs.map(x => `<li class="dx-sec ${x.state}" title="${esc(x.note || '')}"><span class="dx-secic">${SUBICON[x.state]}</span><span class="grow"><b>${esc(x.title)}</b>${x.req !== 'required' ? ' <small class="muted">optional</small>' : ''}${x.state === 'order' ? '<small class="muted"> – not in the journal’s order</small>' : x.state === 'missing' ? '<small class="muted"> – missing</small>' : ''}${x.words ? `<small class="muted"> · up to ${x.words} words</small>` : ''}</span></li>`).join('') : '<li class="muted small">Checking…</li>';
+    const miss = secs.filter(x => x.state === 'missing').length, reqMiss = secs.filter(x => x.state === 'missing' && x.req === 'required').length;
+    const roleBox = (a, i) => `<details class="dx-roles"><summary>Contributions${a.roles?.length ? ` (${a.roles.length})` : ''}</summary>${(R.credit || []).map(c => `<label><input type="checkbox" data-sr="${esc(c)}" data-i="${i}" ${(a.roles || []).includes(c) ? 'checked' : ''}> ${esc(c)}</label>`).join('')}</details>`;
+    const rows = SD.authors.map((a, i) => `<div class="dx-au" data-i="${i}">
+        <div class="dx-row"><input class="input" data-sa="given" data-i="${i}" placeholder="Given name" value="${esc(a.given)}" aria-label="Given name"><input class="input" data-sa="family" data-i="${i}" placeholder="Family name" value="${esc(a.family)}" aria-label="Family name"></div>
+        <div class="dx-row"><input class="input" data-sa="aff" data-i="${i}" placeholder="Affiliations, e.g. 1,2" value="${esc((a.aff || []).join(','))}" aria-label="Affiliation numbers"><input class="input" data-sa="orcid" data-i="${i}" placeholder="ORCID 0000-0000-0000-0000" value="${esc(a.orcid)}" aria-label="ORCID"></div>
+        <div class="dx-row dx-flags"><label><input type="checkbox" data-sf="corr" data-i="${i}" ${a.corr ? 'checked' : ''}> Corresponding</label><label><input type="checkbox" data-sf="equal" data-i="${i}" ${a.equal ? 'checked' : ''}> Equal contribution</label><label><input type="checkbox" data-sf="lead" data-i="${i}" ${a.lead ? 'checked' : ''}> Lead contact</label>
+          <span class="grow"></span><button class="btn small ghost" data-sub="up" data-i="${i}" title="Move up" ${i ? '' : 'disabled'}>↑</button><button class="btn small ghost" data-sub="down" data-i="${i}" title="Move down" ${i < SD.authors.length - 1 ? '' : 'disabled'}>↓</button><button class="btn small ghost" data-sub="del" data-i="${i}" title="Remove author">✕</button></div>
+        ${roleBox(a, i)}</div>`).join('');
+    const journal = D.can ? `<select class="input" id="dx-rs" aria-label="Target journal style"><option value="">No journal chosen</option>${ST.map(x => `<option value="${esc(x.id)}" ${rs.id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>
+        <input class="input" id="dx-rsj" list="dx-rsjl" placeholder="…or type the journal you write for" autocomplete="off" aria-label="Journal"><datalist id="dx-rsjl"></datalist>` : `<div class="small">${esc(ST.find(x => x.id === rs.id)?.name || 'No journal chosen')}</div>`;
+    return `<div class="dx-sub">
+      <div class="dx-rstyle"><div class="dx-row"><b>Target journal</b><span class="grow"></span><small class="muted" id="dx-rshint">${esc(res?.name || '')}</small></div>${journal}</div>
+      <div class="dx-row"><b>Sections</b><span class="grow"></span><button class="btn small ghost" data-sub="check">${ic('refresh')}Check again</button></div>
+      <ul class="dx-seclist">${list}</ul>
+      ${W && miss ? `<div class="dx-row"><button class="btn small primary" data-sub="sections">Add ${miss} missing section${miss > 1 ? 's' : ''}</button>${reqMiss && reqMiss < miss ? `<button class="btn small" data-sub="sections-req">Only the ${reqMiss} required</button>` : ''}</div><p class="muted small">Empty headings are put in the journal’s order, each with a note on what to write.</p>` : ''}
+      ${!rs.id ? '<p class="muted small">Choose a journal to see which sections it usually asks for and in which order. Without one, a general research-article layout is used.</p>' : ''}
+      ${(res?.rules || []).length ? `<div class="dx-rules"><b>Usually asked by this journal</b><ul>${res.rules.map(t => `<li>${esc(t)}</li>`).join('')}</ul><p class="muted small">These are the typical requirements of the journal family, not its exact instructions. Check the current author guidelines before you submit.</p></div>` : ''}
+      <div class="dx-row" style="margin-top:12px"><b>Authors and affiliations</b><span class="grow"></span>${D.can ? `<button class="btn small" data-sub="add">${ic('plus')}Author</button>` : ''}</div>
+      ${D.can ? `<textarea class="input" id="dx-saff" rows="3" placeholder="Affiliations, one per line. The first line is number 1." aria-label="Affiliations">${esc((SD.affils || []).join('\n'))}</textarea>` : (SD.affils || []).map((t, i) => `<div class="small">${i + 1}. ${esc(t)}</div>`).join('')}
+      ${D.can ? rows : SD.authors.map(a => `<div class="small">${esc(a.given)} ${esc(a.family)}</div>`).join('')}
+      ${D.can && (SD.authors.length || SD.affils.length) ? `<div class="dx-row"><button class="btn small primary" data-sub="save" ${D.sdDirty ? '' : 'disabled'}>Save authors</button>${W && SD.authors.length ? `<button class="btn small" data-sub="authors" title="Writes the author line, affiliations and markers under the title">Put on title page</button>` : ''}${W && SD.authors.some(a => a.roles?.length) ? `<button class="btn small" data-sub="contrib" title="Writes the author-contributions statement from the roles above">Contributions text</button>` : ''}</div>` : ''}
+      <p class="muted small">Only names, affiliations and ORCID are kept, in this document. No e-mail address is stored: the corresponding author’s address is left as a placeholder to fill in. Nothing is sent anywhere.</p></div>`;
+  }
+  async function subCheck() {
+    const rs = D.R.refstyle || {id: ''}, key = rs.id + '|' + (D.R.B?.text || '').length; D.subKey = key;
+    try { const r = await api('/api/submission', {method: 'POST', body: {text: D.R.B.text, style: rs.id, sub: D.sd}}); if (D.side === 'submit' && D.subKey === key) { D.subRes = r; paintSide(); } }
+    catch (err) { D.subKey = null; }
+  }
+  async function subAct(action, extra = {}) {
+    const rs = D.R.refstyle || {id: ''};
+    try {
+      const r = await api('/api/submission', {method: 'POST', body: {text: D.R.B.text, style: rs.id, sub: D.sd, action, ...extra}});
+      if (r.changed) { const ta = $('#dx-text', D.host); if (ta) ta.value = r.text; editTo(r.text); if (ta) { autosize(ta); paintMirror(); } paintNow(); toast(action === 'sections' ? 'Missing sections added.' : action === 'authors' ? 'Authors put under the title.' : 'Contributions written.', 'ok'); }
+      else toast(action === 'contrib' ? 'Nothing to write: give the authors some contribution roles first.' : 'Nothing to change.');
+      D.subKey = null; paintSide();
+    } catch (err) { toast(err.message, 'error'); }
+  }
+  async function subSave() {
+    try { await api(`${base()}/${q(D.id)}`, {method: 'PUT', body: {sub: D.sd}}); D.sdDirty = false; D.sd = null; await pull(); paintSide(); toast('Authors saved.', 'ok'); }
+    catch (err) { toast(err.message, 'error'); }
+  }
+  function subClick(t) {
+    const b = t.closest('[data-sub]'); if (!b) return false;
+    const a = b.dataset.sub, i = +b.dataset.i, SD = subDraft(), A = SD.authors;
+    if (a === 'check') { D.subKey = null; paintSide(); }
+    else if (a === 'sections' || a === 'sections-req') subAct('sections', {required_only: a === 'sections-req'});
+    else if (a === 'authors' || a === 'contrib') subAct(a);
+    else if (a === 'save') subSave();
+    else {
+      if (a === 'add') A.push({given: '', family: '', aff: [], corr: false, equal: false, lead: false, orcid: '', roles: []});
+      else if (a === 'del') A.splice(i, 1);
+      else if (a === 'up' && i > 0) [A[i - 1], A[i]] = [A[i], A[i - 1]];
+      else if (a === 'down' && i < A.length - 1) [A[i + 1], A[i]] = [A[i], A[i + 1]];
+      D.sdDirty = true; paintSide();
+    }
+    return true;
+  }
+  function subInput(e) {
+    const el = e.target, SD = D.sd; if (!SD || !D.R) return;
+    const i = +el.dataset.i;
+    if (el.id === 'dx-saff') SD.affils = el.value.split('\n').map(x => x.trim()).filter(Boolean);
+    else if (el.dataset.sa) { const a = SD.authors[i]; if (!a) return; a[el.dataset.sa] = el.dataset.sa === 'aff' ? el.value.split(/[,\s]+/).map(Number).filter(n => n > 0) : el.value; }
+    else if (el.dataset.sf) SD.authors[i][el.dataset.sf] = el.checked;
+    else if (el.dataset.sr) { const r = SD.authors[i].roles = SD.authors[i].roles || []; const k = r.indexOf(el.dataset.sr); if (el.checked && k < 0) r.push(el.dataset.sr); else if (!el.checked && k >= 0) r.splice(k, 1); }
+    else return;
+    D.sdDirty = true; const sv = $('[data-sub="save"]', D.host); if (sv) sv.disabled = false;
   }
   function historyHtml() {
     const R = D.R, S = sessions();
@@ -1375,6 +1456,7 @@ const Docs = (() => {
     host.addEventListener('keydown', e => { if (e.target.matches?.('[data-rbox]') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-dx-rsend]', host)?.click(); } });
     host.addEventListener('mousedown', e => { if (e.target.closest('#dx-count')) e.preventDefault(); });   // keep the selection
     document.addEventListener('selectionchange', () => { if (D.host && document.contains(D.host)) countSoon(); });
+    host.addEventListener('input', subInput); host.addEventListener('change', subInput);
     host.addEventListener('input', e => { countSoon(); if (e.target.id === 'dx-text') { const w = e.target.parentNode; if (w.classList.contains('rich') || e.target.value.includes('{/}')) paintMirror(); } });
     host.addEventListener('change', e => {
       const t = e.target;
@@ -1488,6 +1570,7 @@ const Docs = (() => {
       if (dx === 'leave-view') { D.view = null; paintPage(); return; }
       const mode = t.closest('[data-dx-mode]')?.dataset.dxMode;
       if (mode) return gotoMode(mode);
+      if (subClick(t)) return;
       const side = t.closest('[data-dx-side]')?.dataset.dxSide; if (side) { D.side = side; return paintSide(); }
       const tb = t.closest('[data-tbl]')?.dataset.tbl; if (tb) return tblOp(tb);
       const fmt = t.closest('[data-fmt]')?.dataset.fmt;
