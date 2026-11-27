@@ -4180,7 +4180,7 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
                               "name": who(c["by"], c.get("name")), "mine": c["by"] in ({ident["user"], ident["local"]} - {""})} for c in cmv["comments"]],
                    snaps=[{"id": s["id"], "label": s.get("label"), "upto": s.get("upto"), "created": s.get("created"), "name": who(s["by"], s.get("name"))} for s in cmv["snaps"]],
                    images=[{"id": k, "name": i.get("name") or "", "n": i["n"], "mine": i["by"] in ({ident["user"], ident["local"]} - {""})}
-                           for k, i in sorted((d.get("img") or {}).items(), key=lambda kv: kv[1].get("at") or "")],
+                           for k, i in sorted(sharing.live_images(d).items(), key=lambda kv: kv[1].get("at") or "")],
                    papers=papers, refstyle={"id": rs, "numbered": bool(rs and citations.STYLES[rs]["numbered"]), "br": list(citations.INLINE_BRACKETS.get(rs, ("[", "]")))},
                    **extra)
 
@@ -4510,7 +4510,7 @@ def doc_refs_fill(sid, did):
             sharing.remove_item(st, author, key)
         sharing.add_item(st, author, meta)
         _doc_saved(db, sid, st)
-    return _doc_payload(db, sid, did)
+    return _doc_payload(db, sid, did, {a: 10 ** 9 for a in ((_load_share(db, sid)[1] or {}).get("docs", {}).get(did, {}).get("ops") or {})})
 
 
 @app.post("/api/shares/<sid>/docs/<did>/find")
@@ -4601,7 +4601,7 @@ def doc_image_add(sid, did):
     except sharing.ShareError as e:
         return error(str(e), 400)
     _doc_saved(db, sid, st)
-    return _doc_payload(db, sid, did, st=st, image=iid)
+    return _doc_payload(db, sid, did, {a: 10 ** 9 for a in (st["docs"][did].get("ops") or {})}, st=st, image=iid)
 
 
 @app.delete("/api/shares/<sid>/docs/<did>/images/<iid>")
@@ -4615,7 +4615,7 @@ def doc_image_del(sid, did, iid):
     except sharing.ShareError as e:
         return error(str(e), 403)
     _doc_saved(db, sid, st)
-    return _doc_payload(db, sid, did, st=st)
+    return _doc_payload(db, sid, did, {a: 10 ** 9 for a in (st["docs"][did].get("ops") or {})}, st=st)
 
 
 @app.get("/api/shares/<sid>/docs/<did>/images/<iid>")
@@ -4648,11 +4648,11 @@ def doc_export(sid, did):
     title = d["title"]["v"]
     md = docexport.markdown(title, sharing.doc_text(d, upto if upto else None), _doc_items(st),
                             ", ".join(names.get(a, a) for a in sharing.doc_stats(d)["authors"]), date.today().isoformat(),
-                            images={k: (i["mime"], base64.b64decode(i["b64"])) for k, i in (d.get("img") or {}).items()}, inline_images=fmt == "md",
+                            images={k: (i["mime"], base64.b64decode(i["b64"])) for k, i in sharing.live_images(d).items()}, inline_images=fmt == "md",
                             style=(lambda v: v if v in citations.STYLES else "")((d.get("rs") or {}).get("v") or ""))
     fname = re.sub(r"[^\w.-]+", "_", title).strip("_")[:60] or "document"
     if fmt == "docx":
-        return Response(docexport.docx_bytes(md, title, {k: (i["mime"], base64.b64decode(i["b64"])) for k, i in (d.get("img") or {}).items()}), mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        return Response(docexport.docx_bytes(md, title, {k: (i["mime"], base64.b64decode(i["b64"])) for k, i in sharing.live_images(d).items()}), mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         headers={"Content-Disposition": f'attachment; filename="{fname}.docx"'})
     if fmt == "txt":
         return Response(docexport.plain(md), mimetype="text/plain; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{fname}.txt"'})

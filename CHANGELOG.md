@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.18 – 2026-11-27
+- **Deleted pictures stay deleted**: a picture you removed came back in the list because the other copies of the document (which still had it) brought it back when they merged. A removal now travels like any other change; adding the same picture again later works too.
+- **No more whole-text colouring**: after deleting a picture, saving a reference or accepting a change, the whole document was shown as if someone had just typed it (in their colour). Only text that is really new is now coloured.
+
 ## 3.17 – 2026-11-27
 - **Reference check, like a copy-editor**: once a document has a reference style, **Cite → Reference check** looks at every cited reference and reports what that style needs and is missing: year, title, journal, **volume**, **pages or article number**, publisher (books), DOI or link (preprints), and **first names or initials** of the authors. Less important details (issue number, DOI where the style prints it) are shown as softer hints. Each reference opens a small form to fill what is missing and **Save**; the paper of your library is corrected and the group's copy follows. A reference list entry in Preview that is incomplete says "check: volume, pages".
 - **Check online**: one click looks the DOI (or, without DOI, the exact title) up on Crossref and *suggests* the missing details, marked "suggested by Crossref, check it". Nothing is saved until you press Save, and a paper that does not match exactly gets no suggestion rather than a wrong one. Only the DOI or the title is sent.

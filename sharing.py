@@ -998,9 +998,10 @@ def add_doc_image(st, author, did, raw: bytes, name="") -> str:
         raise ShareError("This picture is too big (more than 250 KB after resizing).")
     iid = _img_id(raw)
     imgs = d.setdefault("img", {})
-    if iid in imgs:
+    live = {k: v for k, v in imgs.items() if not v.get("gone")}
+    if iid in live:
         return iid
-    if len(imgs) >= DOC_LIMITS["imgs"] or sum(i["n"] for i in imgs.values()) + len(raw) > DOC_LIMITS["img_total"]:
+    if len(live) >= DOC_LIMITS["imgs"] or sum(i["n"] for i in live.values()) + len(raw) > DOC_LIMITS["img_total"]:
         raise ShareError("This document already has as many pictures as it can hold (12, 2 MB in all). Remove unused ones first.")
     imgs[iid] = {"mime": mime, "b64": base64.b64encode(raw).decode(), "n": len(raw), "by": author, "at": _now(),
                  "name": " ".join(str(name or "").split())[:80]}
@@ -1010,19 +1011,31 @@ def add_doc_image(st, author, did, raw: bytes, name="") -> str:
 def del_doc_image(st, author, did, iid):
     d = doc_of(st, did)
     i = (d.get("img") or {}).get(iid)
-    if not i:
+    if not i or i.get("gone"):
         return
-    del d["img"][iid]          # any writer of the document may remove a picture (the app asks first, and says if the text uses it)
+    # any writer of the document may remove a picture (the app asks first, and says if the text uses it). A marker stays,
+    # so that the copies of the other members (which still have the picture) do not bring it back when they merge.
+    d["img"][iid] = {"gone": True, "at": _now()}
 
 
 def doc_image(st, did, iid):
     i = ((doc_of(st, did).get("img") or {}).get(iid))
-    return (i["mime"], base64.b64decode(i["b64"])) if i else None
+    return (i["mime"], base64.b64decode(i["b64"])) if i and not i.get("gone") else None
+
+
+def live_images(d) -> dict:
+    return {k: v for k, v in (d.get("img") or {}).items() if not v.get("gone")}
 
 
 def _validate_imgs(raw) -> dict:
     out = {}
-    for iid, i in list((raw if isinstance(raw, dict) else {}).items())[:DOC_LIMITS["imgs"]]:
+    for iid, i in list((raw if isinstance(raw, dict) else {}).items())[:DOC_LIMITS["imgs"] * 4]:
+        if not isinstance(i, dict):
+            continue
+        if i.get("gone"):          # a removed picture: only the marker travels
+            if re.fullmatch(r"[0-9a-f]{16}", str(iid)):
+                out[iid] = {"gone": True, "at": str(i.get("at") or "")[:40]}
+            continue
         try:
             data = base64.b64decode(str(i.get("b64") or ""), validate=True)
         except Exception:
@@ -1296,7 +1309,10 @@ def _merge_docs(a: dict, b: dict) -> dict:
             p, q = (x.get("pres") or {}).get(k), (y.get("pres") or {}).get(k)
             m["pres"][k] = dict(q if q and (not p or (q.get("at") or "") > (p.get("at") or "")) else p)
         m["cm"] = _merge_notes(x.get("cm") or {}, y.get("cm") or {})
-        m["img"] = {**(y.get("img") or {}), **(x.get("img") or {})}
+        m["img"] = {}
+        for iid in set(x.get("img") or {}) | set(y.get("img") or {}):
+            p, q = (x.get("img") or {}).get(iid), (y.get("img") or {}).get(iid)
+            m["img"][iid] = dict(p if p and (not q or (p.get("at") or "") >= (q.get("at") or "")) else q)     # the newest word wins: added, or removed
         out[did] = m
     return out
 

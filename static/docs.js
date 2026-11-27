@@ -178,7 +178,13 @@ const Docs = (() => {
     const R = D.R; let changed = false;
     for (const [a, o] of Object.entries(r.ops || {})) {
       if (a === R.ok) { if (o.n > (R.ops[a] || []).length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.sent = R.ops[a].length; changed = true; } R.have[a] = Math.max(R.have[a] || 0, o.n); continue; }
-      if (o.ops.length) { R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.have[a] = o.n; changed = true; if (au(a) !== R.me) for (const op of o.ops) (D.fresh || (D.fresh = [])).push({a, op, t: Date.now()}); }
+      if (o.ops.length) {
+        const known = (R.ops[a] || []).length;          // only what was not here before is new (an answer may repeat operations we already had)
+        R.ops[a] = (R.ops[a] || []).slice(0, o.from).concat(o.ops); R.have[a] = o.n;
+        const fresh = o.ops.slice(Math.max(0, known - o.from));
+        if (fresh.length || o.from > known) changed = true;
+        if (au(a) !== R.me) for (const op of fresh) (D.fresh || (D.fresh = [])).push({a, op, t: Date.now()});
+      }
     }
     R.title = r.title; R.arch = r.arch; R.gone = r.gone; R.canDelete = r.can_delete;
     { const keep = new Map(), dels = new Set();      // the suggestions I am typing right now are newer than what the server sent
