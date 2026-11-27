@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.11 – 2026-11-27
+- **Simpler Lab**: a group now has only two tabs, **Home** and **Ideas and discussion**. The calendar is not specific to a group, so the per-group Calendar tab is gone: use **Calendar** on the left of Lab (all groups, with a Group choice for new events). Home keeps its small calendar, now with **New event** and a link to the full calendar.
+- **No second place for documents**: the group's Documents tab is gone too, because the same documents are in **Write**. On the group's Home, "Documents being written" opens a document in Write; **New** and **All documents** are next to it.
+- Fixed a small error that could appear in the background after closing a document.
+
 ## 3.10 – 2026-11-27
 - **Cite search, fixed**: searching an author name now puts the papers *by* that author first (exact surname, then name starts, then the rest of the authors), and only then papers that merely contain the word in the title. Accents are ignored (`bodenes` finds Bodénès), and the lists are longer (30 group papers, 60 from your library), newest first among equals.
 

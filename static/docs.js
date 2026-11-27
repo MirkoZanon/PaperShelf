@@ -672,7 +672,7 @@ const Docs = (() => {
   let countT = 0;
   function countSoon() { clearTimeout(countT); countT = setTimeout(updateCount, 150); }
   function updateCount() {
-    const el = $('#dx-count-t', D.host); if (!el || !D.R) return;
+    if (!D.host || !D.R) return; const el = $('#dx-count-t', D.host); if (!el) return;
     const all = countOf(docText()), sel = countOf(selectedText());
     D.lastSel = selectedText() || D.lastSel; const n = x => x.toLocaleString();
     el.textContent = sel.words ? `${n(sel.words)} of ${n(all.words)} words` : `${n(all.words)} word${all.words === 1 ? '' : 's'}`;

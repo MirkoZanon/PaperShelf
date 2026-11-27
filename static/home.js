@@ -153,7 +153,7 @@ const Home = (() => {
       case 'caltoday': cal.month = cal.today.slice(0, 7); cal.day = ''; return redrawCal();
       case 'calall': cal.day = ''; return redrawCal();
       case 'calday': cal.day = cal.day === x ? '' : x; return redrawCal();
-      case 'calitem': if (z === 'event') { await Lab.openGroup(x, {sub: 'cal'}); return Cal.eventDialog({item: {group: x, id: y}}); } if (z === 'note') return Write.open(x, y.split('~')[0], {cm: y.split('~')[1]}); return Lab.openGroup(x, z === 'task' || z === 'step' ? {task: y} : {plan: y});
+      case 'calitem': if (z === 'event') return Cal.eventDialog({item: {group: x, id: y}}); if (z === 'note') return Write.open(x, y.split('~')[0], {cm: y.split('~')[1]}); return Lab.openGroup(x, z === 'task' || z === 'step' ? {task: y} : {plan: y});
       case 'people': return setTab('people');
       case 'map': return lib('map');
       case 'table': return lib('table');

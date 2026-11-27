@@ -13,7 +13,7 @@ const Lab = (() => {
   const S = {sid: null, allcal: false, sub: 'plans', data: null, ov: null, open: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, flt: '', mc: {month: '', day: ''}, focus: null, pn: {}, tw: null};
   const TH = {};   // the note threads being written: {'task:<id>' | 'plan:<id>': {edit, to, draft}}
-  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['ideas', 'docs', 'cal'].includes(p.sub) ? p.sub : 'plans'; } catch { /* storage unavailable */ }
+  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['ideas'].includes(p.sub) ? p.sub : 'plans'; } catch { /* storage unavailable */ }
   let ORDER = 'auto'; try { ORDER = localStorage.getItem('papershelf-lab-order') === 'manual' ? 'manual' : 'auto'; } catch { /* ignore */ }
   const PR = {high: 0, normal: 1, low: 2};
   // the board's order: by deadline (the closest first, overdue on top, no date last), then priority
@@ -233,10 +233,8 @@ const Lab = (() => {
           <button class="btn small" data-lexport title="Download the lab as a Markdown report, for a meeting, the minutes or a lab notebook">${ic('download', 15)}Report</button>
           <button class="btn small" data-lsync title="Get the latest from the others now">${ic('refresh', 15)}Update</button></div></div>
       <div class="lab-tabs"><button data-lsub="plans" class="${S.sub === 'plans' ? 'on' : ''}">${ic('home', 16)}Home<span class="lab-n">${open || ''}</span></button>
-        <button data-lsub="ideas" class="${S.sub === 'ideas' ? 'on' : ''}">${ic('bulb', 16)}Ideas and discussion<span class="lab-n">${d.posts.length || ''}</span></button>
-        <button data-lsub="cal" class="${S.sub === 'cal' ? 'on' : ''}">${ic('calendar', 16)}Calendar<span class="lab-n">${(d.events || []).filter(e => e.date >= today()).length || ''}</span></button>
-        <button data-lsub="docs" class="${S.sub === 'docs' ? 'on' : ''}">${ic('file', 16)}Documents</button></div>
-      ${S.sub === 'plans' ? plansHtml() : S.sub === 'cal' ? '<div id="cal-host" class="cal-host"></div>' : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : ideasHtml()}`;
+        <button data-lsub="ideas" class="${S.sub === 'ideas' ? 'on' : ''}">${ic('bulb', 16)}Ideas and discussion<span class="lab-n">${d.posts.length || ''}</span></button></div>
+      ${S.sub === 'plans' ? plansHtml() : ideasHtml()}`;
   }
 
   /* ---------------------------------------------------- the group's main page: widgets */
@@ -245,7 +243,7 @@ const Lab = (() => {
     if (!h || h.sid !== S.sid) return '<p class="muted small">Loading…</p>';
     const L = h.docs.filter(x => !x.arch && !x.gone).slice(0, 6);
     if (!L.length) return `<p class="muted small">No document yet.${W() ? ' Write one together: minutes, a protocol, a draft.' : ''}</p>`;
-    return L.map(x => `<button class="lh-row" data-hdoc="${esc(x.id)}" title="Open and write">
+    return L.map(x => `<button class="lh-row" data-hdoc="${esc(x.id)}" title="Open it in Write">
         <span class="lh-t">${esc(x.title || 'Untitled')}</span>
         <span class="lh-m muted small">${esc((x.authors || []).slice(0, 3).join(', ') || x.by_name || '')}${x.updated ? ' · ' + esc(ago(x.updated)) : ''} · ${plural(x.words || 0, 'word')}${x.open ? ` <span class="lab-chip">${plural(x.open, 'open comment')}</span>` : ''}</span></button>`).join('');
   };
@@ -261,7 +259,7 @@ const Lab = (() => {
   // the two shortcuts at the top of the group's home: documents being written, latest ideas and discussion
   function homeStrip() {
     const d = S.data, t0 = today();
-    const wid = (icon, title, n, sub, body, id = '', nid = '') => `<section class="lh-w"><h3>${ic(icon, 15)}<span>${title}</span><span class="lab-n" ${nid ? `id="${nid}"` : ''}>${n || ''}</span><span class="grow"></span><button class="linklike small" data-lsub="${sub}">Open</button></h3><div class="lh-body" ${id ? `id="${id}"` : ''}>${body}</div></section>`;
+    const wid = (icon, title, n, sub, body, id = '', nid = '') => `<section class="lh-w"><h3>${ic(icon, 15)}<span>${title}</span><span class="lab-n" ${nid ? `id="${nid}"` : ''}>${n || ''}</span><span class="grow"></span>${sub === 'docs' ? `${W() ? `<button class="linklike small" data-hnewdoc>${ic('plus', 12)}New</button>` : ''}<button class="linklike small" data-hdocs title="All your documents, in Write">All documents</button>` : `<button class="linklike small" data-lsub="${sub}">Open</button>`}</h3><div class="lh-body" ${id ? `id="${id}"` : ''}>${body}</div></section>`;
     const posts = d.posts.slice().sort((a, b) => (b.activity || b.created || '').localeCompare(a.activity || a.created || '')).slice(0, 4);
     const pBody = posts.length ? posts.map(p => `<button class="lh-row k-${esc(p.kind)}" data-hpost="${esc(p.id)}"><span class="lh-t">${kindIc(p.kind)}${esc(p.title || truncate(p.body || '', 70))}</span>
         <span class="lh-m muted small">${esc(p.mine ? 'You' : p.name)} · ${esc(ago(p.created))}${p.comments.length ? ' · ' + plural(p.comments.length, 'comment') : ''}${p.votes.length ? ' · ' + p.votes.length + (p.votes.length === 1 ? ' vote' : ' votes') : ''}</span></button>`).join('') : `<p class="muted small">Nothing yet. Share an idea, a question or a result.</p>`;
@@ -528,7 +526,7 @@ const Lab = (() => {
       <div class="lab-mc-h">${S.mc.day ? esc(dueTxt(S.mc.day)) + '<button class="linklike" data-lmcday="">Next deadlines</button>' : 'Next deadlines'}</div>
       ${list.length ? list.map(i => `<button class="lab-mc-i ${i.done ? 'done' : ''}" ${i.task ? `data-task="${esc(i.task)}"` : i.plan ? `data-lplan="${esc(i.plan)}"` : `data-lmcev="${esc(i.ev)}"`}><span class="lab-mc-dt ${i.date < t0 && !i.done ? 'late' : ''}">${esc(dueTxt(i.date))}</span><span class="lab-mc-t">${GL[i.kind]}${esc(truncate(i.title, 44))}${i.sub ? `<small>${esc(truncate(i.sub, 40))}</small>` : ''}</span></button>`).join('')
         : `<p class="muted small lab-mc-none">${S.mc.day ? 'Nothing is due on this day.' : 'No deadline ahead. Give a task or a checklist item a date and it shows here and in the calendar.'}</p>`}
-      <button class="linklike lab-mc-open" data-lmcopen>Open the full calendar →</button></div>`;
+      ${W() ? `<button class="linklike lab-mc-open" data-lmcnew>${ic('plus', 12)}New event</button>` : ''}<button class="linklike lab-mc-open" data-lmcopen>All groups' calendar</button></div>`;
   }
   // what was archived: kept with its checklists and notes, out of the board and the overview
   function archiveHtml() {
@@ -740,12 +738,13 @@ const Lab = (() => {
     const el = main();
     el.addEventListener('click', async e => {
       const t = e.target;
-      if (t.closest('[data-lmcopen]')) { S.sub = 'cal'; save(); render(); return; }
+      if (t.closest('[data-lmcopen]')) { openCalendar(); return; }
+      if (t.closest('[data-lmcnew]')) { Cal.eventDialog({sid: S.sid}); return; }
       if (t.closest('[data-lcal]')) { S.sid = null; S.allcal = true; S.data = null; save(); render(); return; }
       const lg = t.closest('[data-lg]'); if (lg) { go(lg.dataset.lg); return; }
       if (t.closest('[data-lnewgroup]')) { Shares.newDialog?.(); return; }
       if (t.closest('[data-ljoin]')) { Shares.joinDialog?.(); return; }
-      const oc = t.closest('[data-ovcal]'); if (oc) { const [sid, ty, id] = oc.dataset.ovcal.split('|'); if (ty === 'event') { await openGroup(sid, {sub: 'cal'}); Cal.eventDialog({item: {group: sid, id}}); } else if (ty === 'note') Write.open(sid, id.split('~')[0], {cm: id.split('~')[1]}); else openGroup(sid, (ty === 'task' || ty === 'step') ? {task: id} : {plan: id}); return; }
+      const oc = t.closest('[data-ovcal]'); if (oc) { const [sid, ty, id] = oc.dataset.ovcal.split('|'); if (ty === 'event') Cal.eventDialog({item: {group: sid, id}}); else if (ty === 'note') Write.open(sid, id.split('~')[0], {cm: id.split('~')[1]}); else openGroup(sid, (ty === 'task' || ty === 'step') ? {task: id} : {plan: id}); return; }
       const op = t.closest('[data-ovplan]'); if (op) { const [sid, id] = op.dataset.ovplan.split('|'); openGroup(sid, {plan: id}); return; }
       const ov = t.closest('[data-ovtask], [data-ovpost], [data-ovdone]');
       if (ov) {
@@ -760,7 +759,9 @@ const Lab = (() => {
       if (!S.data) return;
       if (t.closest('.th')) { await threadClick(e); return; }
       if (t.closest('[data-ldoneall]')) { S.doneAll = !S.doneAll; render(); return; }
-      const hd = t.closest('[data-hdoc]'); if (hd) { S.openDoc = hd.dataset.hdoc; S.sub = 'docs'; save(); render(); return; }
+      const hd = t.closest('[data-hdoc]'); if (hd) { Write.open(S.sid, hd.dataset.hdoc); return; }
+      if (t.closest('[data-hdocs]')) { setTab('write'); return; }
+      if (t.closest('[data-hnewdoc]')) { Write.newDoc(); return; }
       const hp = t.closest('[data-hpost]'); if (hp) { gotoPost(hp.dataset.hpost); return; }
       const ht = t.closest('[data-htask]'); if (ht) { taskWindow(ht.dataset.htask); return; }
       const sub = t.closest('[data-lsub]'); if (sub) { S.sub = sub.dataset.lsub; save(); render(); return; }
