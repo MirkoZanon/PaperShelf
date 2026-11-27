@@ -616,12 +616,29 @@ function groupedHtml(list) {
 }
 
 /* ------------------------------------------------------------------ detail */
+// "Family, Given" per line is the safe form, but a whole list on one line is understood too:
+// "Rossi M, Bianchi L" · "Rossi, M., Bianchi, L." · "Marco Rossi and Luca Bianchi" · "Rossi M; Bianchi L"
 function parseAuthors(text) {
-  return text.split('\n').map(l => l.trim()).filter(Boolean).map(line => {
-    if (line.includes(',')) { const i = line.indexOf(','); return {family: line.slice(0, i).trim(), given: line.slice(i + 1).trim()}; }
-    const parts = line.split(/\s+/);
-    return parts.length === 1 ? {family: parts[0], given: ''} : {family: parts.pop(), given: parts.join(' ')};
-  });
+  const initials = t => /^(?:[A-Z]\.?-?){1,4}$/.test(t.replace(/\s+/g, ''));      // "M", "M.", "J.K.", "JK"
+  const one = s => {
+    s = s.trim().replace(/\.$/, '');
+    if (s.includes(',')) { const i = s.indexOf(','); return {family: s.slice(0, i).trim(), given: s.slice(i + 1).trim()}; }
+    const p = s.split(/\s+/);
+    if (p.length === 1) return {family: p[0], given: ''};
+    if (p.length > 1 && initials(p[p.length - 1]) && !initials(p[0])) return {family: p.slice(0, -1).join(' '), given: p[p.length - 1]};   // "Rossi M"
+    return {family: p.pop(), given: p.join(' ')};                                                                                 // "Marco Rossi"
+  };
+  const out = [];
+  for (const chunk of text.split(/\n|;|\s+&\s+|\s+and\s+|\s+e\s+(?=[A-Z])/)) {
+    const c = chunk.trim(); if (!c) continue;
+    const parts = c.split(',').map(x => x.trim()).filter(Boolean);
+    if (parts.length <= 1) { out.push(one(c)); continue; }
+    if (parts.length === 2 && !(/\s/.test(parts[0]) && /\s/.test(parts[1]))) { out.push(one(c)); continue; }   // "Rossi, Marco" (but not "Rossi M, Bianchi L")
+    if (parts.length > 2 && parts.length % 2 === 0 && (parts.filter((_, i) => i % 2).every(initials) || parts.every(x => !/\s/.test(x)))) {              // "Rossi, M., Bianchi, L."
+      for (let i = 0; i < parts.length; i += 2) out.push({family: parts[i], given: parts[i + 1].replace(/\.$/, '')});
+    } else parts.forEach(x => out.push(one(x)));                                              // "Rossi M, Bianchi L"
+  }
+  return out.filter(a => a.family);
 }
 function groupChecks(p, pid = null, depth = 0) {
   return childrenOf(pid).map(g => `<label style="padding-left:${depth * 18}px"><input type="checkbox" data-gcheck="${g.id}" ${p.group_ids.includes(g.id) ? 'checked' : ''}> ${labelIcon(g.color, 'tag')} ${esc(g.name)}</label>` + groupChecks(p, g.id, depth + 1)).join('');
@@ -684,7 +701,7 @@ function detailRest(p, link, authorsText) {
     ${citationSection(p)}
     <details class="fld d-sec" id="d-edit" ${state.editOpen ? 'open' : ''}><summary>✎ Edit details <span class="muted small">title, authors, journal, DOI…</span></summary>
     <label class="fld"><span>Title</span><textarea data-f="title" rows="2">${esc(p.title)}</textarea></label>
-    <label class="fld"><span>Authors <em>– one per line, “Family, Given”</em></span><textarea data-f="authors" rows="${Math.min(8, Math.max(2, p.authors.length))}">${esc(authorsText)}</textarea></label>
+    <label class="fld"><span>Authors <em>– one per line, “Family, Given” (a whole list on one line works too)</em></span><textarea data-f="authors" rows="${Math.min(8, Math.max(2, p.authors.length))}">${esc(authorsText)}</textarea></label>
     <div class="grid3">
       <label class="fld"><span>Year</span><input data-f="year" inputmode="numeric" value="${esc(p.year ?? '')}"></label>
       <label class="fld span2"><span>Type</span><select data-f="type">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}" ${p.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>

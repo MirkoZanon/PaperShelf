@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.12 – 2026-11-27
+- **Wrong author names in citations, fixed**: a paper keeps in the group the details it had when it was added, so a paper typed by hand and corrected later (authors, year, title) was still cited with the old, empty or someone else's details. Now every correction you make in your library (or "Refresh") also updates the group's copy, and papers corrected earlier are brought up to date the first time you open a document. Note: a citation label is made of the first author and the year (Rossi2020), so it changes if you change those.
+- **Authors typed on one line**: "Rossi M, Bianchi L", "Rossi, M., Bianchi, L.", "Marco Rossi and Luca Bianchi" or "Smith JK; Lee K" are now read as separate authors (before, the whole line became a single author with an odd name).
+
 ## 3.11 – 2026-11-27
 - **Simpler Lab**: a group now has only two tabs, **Home** and **Ideas and discussion**. The calendar is not specific to a group, so the per-group Calendar tab is gone: use **Calendar** on the left of Lab (all groups, with a Group choice for new events). Home keeps its small calendar, now with **New event** and a link to the full calendar.
 - **No second place for documents**: the group's Documents tab is gone too, because the same documents are in **Write**. On the group's Home, "Documents being written" opens a document in Write; **New** and **All documents** are next to it.

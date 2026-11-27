@@ -872,6 +872,45 @@ def edit_keywords():
     return jsonify(ok=True, papers=changed)
 
 
+_RESYNCED = False
+
+
+def _resync_shared_meta(db, pids):
+    """A paper of a group keeps the details it had when it was added. When you correct them in your library (authors, year,
+    title, DOI…), the group's copy follows, so that citations show the right names. If the identity of the paper changes
+    (a title or year for a paper without DOI), it moves to its new key."""
+    ident = share_identity(db)
+    touched = set()
+    for pid in pids:
+        p = load_paper(db, int(pid))
+        if not p:
+            continue
+        for r in db.execute("SELECT share_id, item_key FROM paper_shares WHERE paper_id=?", (p["id"],)).fetchall():
+            sid, key = r["share_id"], r["item_key"]
+            row, st = _load_share(db, sid)
+            author = _my_author(st, ident) if st else None
+            e = (st or {}).get("items", {}).get(key)
+            if not author or not e:
+                continue
+            meta = sharing.clean_meta(_share_meta(p))
+            if meta == e.get("meta"):
+                continue
+            new = sharing.item_key(meta)
+            if new != key:
+                shared_by_other = db.execute("SELECT COUNT(*) FROM paper_shares WHERE share_id=? AND item_key=? AND paper_id<>?", (sid, key, p["id"])).fetchone()[0]
+                if not shared_by_other:
+                    sharing.remove_item(st, author, key)
+                new = sharing.add_item(st, author, meta)
+                db.execute("UPDATE paper_shares SET item_key=? WHERE paper_id=? AND share_id=?", (new, p["id"], sid))
+            else:
+                sharing.add_item(st, author, meta)
+            _save_share(db, sid, st)
+            touched.add(sid)
+    db.commit()
+    for sid in touched:
+        publish_soon(sid)
+
+
 @app.put("/api/papers/<int:pid>")
 def update_paper(pid):
     db = get_db()
@@ -879,6 +918,7 @@ def update_paper(pid):
         return error("Paper not found", 404)
     apply_changes(db, pid, request.get_json(silent=True) or {})
     db.commit()
+    _resync_shared_meta(db, [pid])
     return jsonify(paper=load_paper(db, pid))
 
 
@@ -890,6 +930,7 @@ def bulk_update():
     for pid in body.get("ids") or []:
         apply_changes(db, int(pid), changes)
     db.commit()
+    _resync_shared_meta(db, body.get("ids") or [])
     return jsonify(papers=load_papers(db, body.get("ids") or []))
 
 
@@ -942,6 +983,7 @@ def refresh_paper(pid):
         path = pdffinder.save_pdf(meta["_pdf_bytes"], meta, get_settings(db)["pdf_dir"])
         db.execute("UPDATE papers SET pdf_path=? WHERE id=?", (str(path), pid))
     db.commit()
+    _resync_shared_meta(db, [pid])
     return jsonify(paper=load_paper(db, pid))
 
 
@@ -4178,6 +4220,14 @@ def _doc_have(raw):
 
 @app.get("/api/shares/<sid>/docs")
 def docs_list(sid):
+    global _RESYNCED
+    if not _RESYNCED:      # once per run: papers corrected in the library before 3.12 now reach the group's copy
+        _RESYNCED = True
+        try:
+            db = get_db()
+            _resync_shared_meta(db, [r[0] for r in db.execute("SELECT DISTINCT paper_id FROM paper_shares")])
+        except Exception:  # never in the way of the page
+            app.logger.exception("resync of shared papers failed")
     return _docs_list(get_db(), sid)
 
 
