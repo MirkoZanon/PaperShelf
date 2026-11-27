@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.13 – 2026-11-27
+- **Authors, one person per row**: in a paper's *Edit details* the authors are now rows with **First name(s) or initials** and **Surname**, plus **Add author**, move up/down (the first row is the first author) and remove. Nobody has to guess commas and spaces, and the names are saved the way citations need them. A row with a first name but no surname is marked and not saved. **Paste a list instead** still understands "Rossi M, Bianchi L" or "Marco Rossi and Luca Bianchi" and turns it into rows.
+
 ## 3.12 – 2026-11-27
 - **Wrong author names in citations, fixed**: a paper keeps in the group the details it had when it was added, so a paper typed by hand and corrected later (authors, year, title) was still cited with the old, empty or someone else's details. Now every correction you make in your library (or "Refresh") also updates the group's copy, and papers corrected earlier are brought up to date the first time you open a document. Note: a citation label is made of the first author and the year (Rossi2020), so it changes if you change those.
 - **Authors typed on one line**: "Rossi M, Bianchi L", "Rossi, M., Bianchi, L.", "Marco Rossi and Luca Bianchi" or "Smith JK; Lee K" are now read as separate authors (before, the whole line became a single author with an odd name).

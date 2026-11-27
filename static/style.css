@@ -2626,3 +2626,13 @@ body.pdf-window .app { display: none; } body.pdf-window { background: var(--bg);
 .cal .btn .i, .cal-bar .btn .i { width: 15px; height: 15px; margin-right: 5px; vertical-align: -2px; }
 .cal-it .i, .cal-ag-main .i, .lab-mc-t .ic { width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; opacity: .8; }
 .lab-mc-t .ic { display: inline; }
+
+/* 3.13 authors as rows */
+.au-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+.au-row .input { width: 100%; min-width: 0; }
+.au-row.bad [data-au=family] { border-color: var(--danger, #c0392b); }
+.au-b { padding: 4px 7px; line-height: 1; height: 30px; display: inline-flex; align-items: center; }
+.au-b .i { width: 14px; height: 14px; margin: 0; }
+.au-acts { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 2px; }
+.au-bulk textarea { width: 100%; margin: 6px 0; }
+.au-bulk summary { cursor: pointer; }

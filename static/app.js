@@ -677,6 +677,13 @@ function detailHead(p) {
       ${meta ? `<div class="d-meta">${meta}${p.doi ? ` · <a href="https://doi.org/${esc(p.doi)}" target="_blank" rel="noopener">${esc(p.doi)}</a>` : ''}</div>` : ''}
     </div>`;
 }
+// the authors of a paper as rows (given name, surname): nobody has to guess where a name ends
+const authorRow = (a = {}) => `<div class="au-row"><input class="input" data-au="given" placeholder="First name(s) or initials" value="${esc(a.given || '')}" maxlength="120" autocomplete="off">
+  <input class="input" data-au="family" placeholder="Surname" value="${esc(a.family || '')}" maxlength="120" autocomplete="off">
+  <button class="btn small au-b" data-auup type="button" title="Move up" aria-label="Move up">↑</button><button class="btn small au-b" data-audown type="button" title="Move down" aria-label="Move down">↓</button>
+  <button class="btn small au-b" data-audel type="button" title="Remove this author" aria-label="Remove this author">${ic('trash')}</button></div>`;
+const authorRows = list => (list && list.length ? list : [{}]).map(authorRow).join('');
+const readAuthors = () => $$('#au-rows .au-row').map(r => ({given: r.querySelector('[data-au=given]').value.replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim(), family: r.querySelector('[data-au=family]').value.replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim()})).filter(a => a.family || a.given);
 function detailRest(p, link, authorsText) {
   return `${Smart.detailBanners(p)}
     <div class="d-actions">
@@ -701,7 +708,10 @@ function detailRest(p, link, authorsText) {
     ${citationSection(p)}
     <details class="fld d-sec" id="d-edit" ${state.editOpen ? 'open' : ''}><summary>✎ Edit details <span class="muted small">title, authors, journal, DOI…</span></summary>
     <label class="fld"><span>Title</span><textarea data-f="title" rows="2">${esc(p.title)}</textarea></label>
-    <label class="fld"><span>Authors <em>– one per line, “Family, Given” (a whole list on one line works too)</em></span><textarea data-f="authors" rows="${Math.min(8, Math.max(2, p.authors.length))}">${esc(authorsText)}</textarea></label>
+    <div class="fld" id="au-fld"><span>Authors <em>– one person per row: first name(s) or initials, then surname. The first row is the first author.</em></span>
+      <div id="au-rows">${authorRows(p.authors)}</div>
+      <div class="au-acts"><button class="btn small" id="au-add" type="button">${ic('plus')}Add author</button>
+        <details class="au-bulk"><summary class="muted small">Paste a list instead</summary><textarea id="au-paste" rows="3" placeholder="Rossi M, Bianchi L, Verdi G&#10;or: Marco Rossi and Luca Bianchi"></textarea><button class="btn small" id="au-paste-go" type="button">Add these authors</button></details></div></div>
     <div class="grid3">
       <label class="fld"><span>Year</span><input data-f="year" inputmode="numeric" value="${esc(p.year ?? '')}"></label>
       <label class="fld span2"><span>Type</span><select data-f="type">${Object.entries(TYPE_LABEL).map(([k, v]) => `<option value="${k}" ${p.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -2016,6 +2026,12 @@ function bind() {
     if (e.target.id === 'cite-style') { setDefaultStyle(e.target.value).then(() => loadCitation(id)); return; }
     const gc = e.target.dataset.gcheck;
     if (gc) { const ids = $$('[data-gcheck]', body).filter(x => x.checked).map(x => +x.dataset.gcheck); savePaper(id, {group_ids: ids}, {rerender: false}); return; }
+    if (e.target.dataset.au) {   // a name was typed in a row: a row with only a first name is not saved until the surname is there
+      const rows = readAuthors(), bad = rows.filter(x => !x.family).length;
+      $$('#au-rows .au-row').forEach(r => r.classList.toggle('bad', !r.querySelector('[data-au=family]').value.trim() && !!r.querySelector('[data-au=given]').value.trim()));
+      if (!bad) savePaper(id, {authors: rows}, {rerender: false});
+      return;
+    }
     const f = e.target.dataset.f; if (!f) return;
     let v = e.target.value;
     if (f === 'authors') v = parseAuthors(v);
@@ -2035,6 +2051,16 @@ function bind() {
     const p = paperById(id);
     const jump = e.target.closest('[data-open]');
     if (jump) { openDetail(+jump.dataset.open); return; }
+    const rowOf = el => el.closest('.au-row'), rowsEl = $('#au-rows');
+    const saveAu = () => { const rows = readAuthors(); if (!rows.some(x => !x.family)) savePaper(id, {authors: rows}, {rerender: false}); };
+    if (e.target.closest('#au-add')) { rowsEl.insertAdjacentHTML('beforeend', authorRow()); rowsEl.lastElementChild.querySelector('input').focus(); return; }
+    if (e.target.closest('[data-audel]')) { const r = rowOf(e.target); if (rowsEl.children.length > 1) r.remove(); else r.querySelectorAll('input').forEach(x => { x.value = ''; }); saveAu(); return; }
+    if (e.target.closest('[data-auup]')) { const r = rowOf(e.target); if (r.previousElementSibling) r.parentNode.insertBefore(r, r.previousElementSibling); saveAu(); return; }
+    if (e.target.closest('[data-audown]')) { const r = rowOf(e.target); if (r.nextElementSibling) r.parentNode.insertBefore(r.nextElementSibling, r); saveAu(); return; }
+    if (e.target.closest('#au-paste-go')) {
+      const add = parseAuthors($('#au-paste').value); if (!add.length) return;
+      const have = readAuthors(); rowsEl.innerHTML = authorRows([...have, ...add]); $('#au-paste').value = ''; saveAu(); return;
+    }
     const del = e.target.closest('[data-kwdel]');
     if (del) { const kws = p.keywords.filter((_, i) => i !== +del.dataset.kwdel); savePaper(id, {keywords: kws}); return; }
     const s = e.target.closest('[data-status]');
