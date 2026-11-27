@@ -470,6 +470,54 @@ def paper_of_meta(meta: dict) -> dict:
     return base
 
 
+# --------------------------------------------------------------------------- #
+# Completeness check of a reference, for the style of the document
+# --------------------------------------------------------------------------- #
+FILLABLE = ("year", "title", "journal", "volume", "issue", "pages", "publisher", "doi")
+_FIELD_LABEL = {"year": "Year", "title": "Title", "journal": "Journal", "volume": "Volume number", "issue": "Issue number",
+                "pages": "Pages or article number", "publisher": "Publisher", "doi": "DOI"}
+
+
+def check_meta(meta: dict, style: str) -> list:
+    """What a journal's copy-editor would query in this reference: [{f, msg, sev}] with sev 'miss' (needed by the style) or 'hint'."""
+    m = meta or {}
+    out = []
+
+    def add(f, msg=None, sev="miss"):
+        out.append({"f": f, "msg": msg or f"{_FIELD_LABEL.get(f, f)} missing", "sev": sev})
+    au = [a for a in (m.get("authors") or []) if (a.get("family") if isinstance(a, dict) else a)]
+    if not au:
+        add("authors", "No author")
+    else:
+        short = [a["family"] for a in au if isinstance(a, dict) and not (a.get("given") or "").strip() and len(a["family"].split()) <= 2]
+        if short:
+            add("initials", "First name or initials missing for " + ", ".join(short[:3]) + (" …" if len(short) > 3 else "") + " (edit the authors in your library)")
+    if not m.get("year"):
+        add("year")
+    if not (m.get("title") or "").strip():
+        add("title")
+    t = m.get("type") or "article"
+    if t in ("article", "chapter", "preprint", "conference", "proceedings") or not t:
+        if not (m.get("journal") or "").strip():
+            add("journal", "Journal name missing" if t == "article" else "Journal, book or server name missing")
+    if t == "article":
+        if not str(m.get("volume") or "").strip():
+            add("volume")
+        if not str(m.get("pages") or "").strip():
+            add("pages")
+        if style in ("apa", "vancouver") and not str(m.get("issue") or "").strip():
+            add("issue", "Issue number missing (some journals leave it out)", "hint")
+    if t in ("book", "chapter", "report", "thesis") and not (m.get("publisher") or "").strip():
+        add("publisher")
+    if t == "chapter" and not str(m.get("pages") or "").strip():
+        add("pages")
+    if t == "preprint" and not (m.get("doi") or m.get("arxiv_id") or m.get("url")):
+        add("doi", "No DOI, arXiv number or link")
+    elif style in ("apa", "elife", "royalsociety", "pnas") and t in ("article", "chapter") and not m.get("doi"):
+        add("doi", "DOI missing (this style prints it)", "hint")
+    return out
+
+
 # how a numbered style cites inside the text
 INLINE_BRACKETS = {"nature": ("[", "]"), "science": ("(", ")"), "cell": ("[", "]"), "royalsociety": ("[", "]"), "pnas": ("[", "]"), "vancouver": ("(", ")")}
 

@@ -495,7 +495,7 @@ const Docs = (() => {
     const {text, used} = resolveCites(B.text);
     const refs = D.R.refstyle?.numbered ? used.slice() : used.slice().sort((a, b) => a.ref.toLowerCase().localeCompare(b.ref.toLowerCase()));
     const withImgs = h => h.replace(/<img class="dx-img" data-img="([0-9a-f]{16})"/g, (_m, id) => `<img class="dx-img" src="${location.origin}${base()}/${q(D.id)}/images/${id}" data-img="${id}"`);
-    return `<article class="dx-prev"><h1>${esc(title)}</h1>${withImgs(mdHtml(text))}${refs.length ? `<h2>References</h2><ol class="dx-refs">${refs.map(p => `<li>${esc(p.ref)}</li>`).join('')}</ol>` : ''}</article>`;
+    return `<article class="dx-prev"><h1>${esc(title)}</h1>${withImgs(mdHtml(text))}${refs.length ? `<h2>References</h2><ol class="dx-refs">${refs.map(p => `<li>${esc(p.ref)}${(p.issues || []).length ? ` <span class="dx-rwarn small" title="${esc(p.issues.map(i => i.msg).join('; '))}">check: ${esc(p.issues.filter(i => i.sev === 'miss').map(i => (RC_LABEL[i.f] || i.f).toLowerCase()).join(', ') || 'details')}</span>` : ''}</li>`).join('')}</ol>` : ''}</article>`;
   }
   // comment highlights, suggestions (old text struck out, new text inserted), flags where others wrote
   function reviewItems(B) {
@@ -735,13 +735,50 @@ const Docs = (() => {
       <div class="dx-cfilter"><span class="muted small">${shown.length} shown</span><span class="grow"></span>${nDone ? `<button class="dx-link" data-dx="toggle-filter">${D.filter === 'all' ? 'Hide' : 'Show'} ${nDone} done</button>` : ''}</div>
       ${shown.length ? shown.map(card).join('') : `<p class="muted small dx-none">${top.length ? 'Nothing open. Everything is resolved.' : 'No comments yet. Select a piece of text and write what you think.'}</p>`}`;
   }
+  /* ------------------------------------------------------------- reference check: what a copy-editor would query */
+  const RC_FILL = new Set(['year', 'title', 'journal', 'volume', 'issue', 'pages', 'publisher', 'doi']);
+  const RC_LABEL = {year: 'Year', title: 'Title', journal: 'Journal', volume: 'Volume', issue: 'Issue', pages: 'Pages', publisher: 'Publisher', doi: 'DOI'};
+  function checkHtml() {
+    const rs = D.R.refstyle || {}; if (!rs.id) return '';
+    const sn = (D.styles || []).find(x => x.id === rs.id)?.name || 'this style', used = resolveCites(D.R.B.text).used, bad = used.filter(p => (p.issues || []).length);
+    D.rcOpen = D.rcOpen || new Set(); D.rcDraft = D.rcDraft || {}; D.sugg = D.sugg || {};
+    if (!used.length) return `<div class="dx-rcheck"><div class="dx-row"><b>Reference check</b></div><p class="muted small">Cite a paper and it is checked for what ${esc(sn)} asks: year, volume, pages…</p></div>`;
+    const row = p => {
+      const open = D.rcOpen.has(p.key), sug = D.sugg[p.key] || {}, miss = p.issues.filter(i => i.sev === 'miss').length;
+      const fields = p.issues.filter(i => RC_FILL.has(i.f));
+      return `<div class="dx-ri ${miss ? 'miss' : 'hint'}"><button class="dx-ris" data-dx-rtoggle="${esc(p.key)}"><b>${esc(p.cite)}</b><span>${esc(truncate(p.title, 70))}</span>
+          <small>${p.issues.map(i => `<i class="${i.sev}">${esc(i.msg)}</i>`).join('')}</small></button>
+        ${open ? `<div class="dx-rif">${fields.map(i => { const dv = D.rcDraft[p.key + '|' + i.f]; const v = dv != null ? dv : (sug[i.f] || p.meta?.[i.f] || '');
+            return `<label><span>${RC_LABEL[i.f]}${sug[i.f] && dv == null ? ' <em>suggested by Crossref, check it</em>' : ''}</span><input class="input" data-dx-rf="${esc(p.key + '|' + i.f)}" value="${esc(v)}" ${D.can ? '' : 'disabled'}></label>`; }).join('')}
+          ${p.issues.some(i => i.f === 'initials' || i.f === 'authors') ? '<p class="muted small">Authors: correct them in your library (paper → Edit details → Authors); the group copy follows.</p>' : ''}
+          ${D.can && fields.length ? `<button class="btn small primary" data-dx-rfill="${esc(p.key)}">Save</button>` : ''}</div>` : ''}</div>`;
+    };
+    return `<div class="dx-rcheck"><div class="dx-row"><b>Reference check</b><span class="grow"></span>${bad.length && D.can ? `<button class="btn small" data-dx="refcheck-online" title="Looks the DOI or title up on Crossref and suggests what is missing">${ic('refresh')}Check online</button>` : ''}</div>
+      <p class="small ${bad.length ? 'dx-rwarn' : 'muted'}">${bad.length ? `${bad.length} of ${used.length} cited references need a look for ${esc(sn)}.` : `All ${used.length} cited references have what ${esc(sn)} asks.`}</p>
+      ${bad.map(row).join('')}</div>`;
+  }
+  async function checkOnline() {
+    const used = resolveCites(D.R.B.text).used.filter(p => (p.issues || []).length); if (!used.length) return;
+    const btn = $('[data-dx="refcheck-online"]', D.host); if (btn) { btn.disabled = true; btn.textContent = 'Looking…'; }
+    try {
+      const r = await api(`${base()}/${q(D.id)}/refs/online`, {method: 'POST', body: {keys: used.map(p => p.key)}});
+      D.sugg = {...(D.sugg || {}), ...r.suggestions}; Object.keys(r.suggestions).forEach(k => D.rcOpen.add(k));
+      toast(r.error || (Object.keys(r.suggestions).length ? `Suggestions found for ${Object.keys(r.suggestions).length} reference(s). Check them before saving.` : 'Nothing more found online.'), r.error ? 'error' : 'info', 6000);
+    } catch (err) { toast(err.message, 'error'); }
+    paintSide();
+  }
+  async function fillRef(key) {
+    const fields = {}; $$('[data-dx-rf]', D.host).forEach(i => { const [k, f] = i.dataset.dxRf.split('|'); if (k === key && i.value.trim()) fields[f] = i.value.trim(); });
+    try { absorb(await api(`${base()}/${q(D.id)}/refs/fill`, {method: 'POST', body: {key, fields}})); Object.keys(D.rcDraft || {}).filter(k => k.startsWith(key + '|')).forEach(k => delete D.rcDraft[k]); delete (D.sugg || {})[key]; paintSide(); paintNow(); toast('Saved.', 'ok', 2000); }
+    catch (err) { toast(err.message, 'error'); }
+  }
   function citeHtml() {
     const P = D.R.papers || [];
     const rs = D.R.refstyle || {id: ''}, ST = D.styles || [];
     const styleBox = `<div class="dx-rstyle"><div class="dx-row"><b>Reference style</b><span class="grow"></span><small class="muted" id="dx-rshint">${rs.id ? (rs.numbered ? 'Numbered citations' : 'Author, year') : 'Author, year (default)'}</small></div>
       ${D.can ? `<select class="input" id="dx-rs" aria-label="Reference style"><option value="">Default – author, year</option>${ST.map(x => `<option value="${esc(x.id)}" ${rs.id === x.id ? 'selected' : ''}>${esc(x.name)}${x.numbered ? ' (numbered)' : ''}</option>`).join('')}</select>
         <input class="input" id="dx-rsj" list="dx-rsjl" placeholder="…or type the journal you write for" autocomplete="off" aria-label="Journal"><datalist id="dx-rsjl"></datalist>` : `<div class="small">${esc(ST.find(x => x.id === rs.id)?.name || 'Default')}</div>`}</div>`;
-    return `${styleBox}${D.can ? `<div class="dx-sugrefs"><div class="dx-row"><b>Fits what you are writing</b><span class="grow"></span><button class="btn small" data-dx="refs" title="Find papers that fit the paragraph you are in">${ic('refresh')}Suggest</button></div><div id="dx-sugrefs">${D.refsHtml || '<p class="muted small">Put the cursor in a paragraph and press <b>Suggest</b>, or type <code>[@</code> in the text. Matching is done on this computer.</p>'}</div></div>` : ''}<p class="muted small">Click a paper to put its citation in the text. The reference list is written for you in Preview and when you export.</p>
+    return `${styleBox}${checkHtml()}${D.can ? `<div class="dx-sugrefs"><div class="dx-row"><b>Fits what you are writing</b><span class="grow"></span><button class="btn small" data-dx="refs" title="Find papers that fit the paragraph you are in">${ic('refresh')}Suggest</button></div><div id="dx-sugrefs">${D.refsHtml || '<p class="muted small">Put the cursor in a paragraph and press <b>Suggest</b>, or type <code>[@</code> in the text. Matching is done on this computer.</p>'}</div></div>` : ''}<p class="muted small">Click a paper to put its citation in the text. The reference list is written for you in Preview and when you export.</p>
       <input class="input" id="dx-cq" type="search" placeholder="Search by title, author, year or DOI" aria-label="Search papers" style="margin:8px 0" value="${esc(D.cq || '')}">
       <div id="dx-qres">${D.cqHtml || ''}</div>
       <div id="dx-plist" ${D.cq ? 'hidden' : ''}>${P.map(p => `<button class="dx-paper" data-dx-cite="${esc(p.label)}" data-s="${esc((p.label + ' ' + p.title).toLowerCase())}"><b>${esc(p.cite)}</b><span>${esc(truncate(p.title, 110))}</span><code>[@${esc(p.label)}]</code></button>`).join('') || '<p class="muted small dx-none">The group has no papers yet. Add papers to the group in the library, then cite them here.</p>'}</div>`;
@@ -1370,6 +1407,7 @@ const Docs = (() => {
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('mouseup', e => { if (e.target.id === 'dx-text') D.sel = selection(); });
     host.addEventListener('input', async e => {      // the journal field: complete the name while typing
+      if (e.target.dataset?.dxRf) { (D.rcDraft = D.rcDraft || {})[e.target.dataset.dxRf] = e.target.value; return; }
       if (e.target.id !== 'dx-rsj') return;
       const v = e.target.value.trim(); if (v.length < 2) return;
       try { const r = await api('/api/ref-styles?journal=' + encodeURIComponent(v)); const dl = $('#dx-rsjl', D.host); if (dl) dl.innerHTML = r.journals.map(j => `<option value="${esc(j.journal)}">${esc(j.name)}</option>`).join(''); } catch { /* ignore */ }
@@ -1449,6 +1487,9 @@ const Docs = (() => {
       const fmt = t.closest('[data-fmt]')?.dataset.fmt;
       if (fmt) { if (fmt === 'comment' || fmt === 'suggest') { D.sel = selection(); D.side = 'comments'; paintSide(); if (fmt === 'suggest') return addComment(true); $('#dx-cnew', host)?.focus(); return; } if (fmt === 'cite') { D.side = 'cite'; return paintSide(); } if (fmt === 'image') return pickImage(); return wrap(fmt); }
       const imi = t.closest('[data-dx-imgins]')?.dataset.dxImgins; if (imi) { const [id, nm] = imi.split('|'); const ta = $('#dx-text', host); if (ta) { const v = ta.value, s2 = ta.selectionStart; insertAtCursor(`${s2 && v[s2 - 1] !== '\n' ? '\n\n' : ''}![${nm}](img:${id})\n\n`); } return; }
+      if (t.closest('[data-dx="refcheck-online"]')) return checkOnline();
+      const rtg = t.closest('[data-dx-rtoggle]')?.dataset.dxRtoggle; if (rtg) { D.rcOpen = D.rcOpen || new Set(); D.rcOpen.has(rtg) ? D.rcOpen.delete(rtg) : D.rcOpen.add(rtg); paintSide(); return; }
+      const rfl = t.closest('[data-dx-rfill]')?.dataset.dxRfill; if (rfl) return fillRef(rfl);
       const imd = t.closest('[data-dx-imgdel]')?.dataset.dxImgdel; if (imd) { await deletePicture(imd); return; }
       const al = t.closest('[data-dx-addlib]'); if (al) return addLibrary(+al.dataset.dxAddlib, al.dataset.title);
       if (t.closest('[data-dx="refs"]')) return refsNow();

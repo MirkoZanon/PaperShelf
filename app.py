@@ -4163,7 +4163,9 @@ def _doc_payload(db, sid, did, have=None, st=None, **extra):
     rs = ((d.get("rs") or {}).get("v") or "")
     rs = rs if rs in citations.STYLES else ""
     papers = sorted(({"key": k, "label": lab[k], "title": (e.get("meta") or {}).get("title") or "", "cite": docexport.short_cite(e.get("meta") or {}),
-                      "ref": docexport.reference(e.get("meta") or {}, rs)} for k, e in items.items()), key=lambda p: p["label"].lower())
+                      "ref": docexport.reference(e.get("meta") or {}, rs),
+                      "issues": citations.check_meta(e.get("meta") or {}, rs) if rs else [],
+                      "meta": {f: (e.get("meta") or {}).get(f) for f in citations.FILLABLE}} for k, e in items.items()), key=lambda p: p["label"].lower())
     gone = sharing.is_gone(d)
     return jsonify(id=did, title=d["title"]["v"], arch=bool(d["arch"]["v"]), gone=gone, by=d["by"], by_name=who(d["by"]),
                    can_write=bool(author) and not gone, can_delete=bool(author) and d["by"] in ({ident["user"], ident["local"]} - {""}) and not gone,
@@ -4439,6 +4441,76 @@ def ref_styles():
     q = (request.args.get("journal") or "").strip()[:120]
     return jsonify(styles=citations.style_list(), journals=citations.journal_suggestions(q) if q else [],
                    guess=citations.style_for_journal(q) if q else "")
+
+
+@app.post("/api/shares/<sid>/docs/<did>/refs/online")
+def doc_refs_online(sid, did):
+    """Suggestions for what a reference lacks, from Crossref (by DOI, or by an exact title match). Only on request; sends the DOI or the title, nothing else."""
+    db = get_db()
+    row, st = _load_share(db, sid)
+    if not st or did not in (st.get("docs") or {}):
+        return error("That document doesn't exist any more.", 404)
+    items = _doc_items(st)
+    rs = (st["docs"][did].get("rs") or {}).get("v") or ""
+    out, tried, net = {}, 0, 0
+    for key in [k for k in ((request.get_json(silent=True) or {}).get("keys") or []) if k in items][:15]:
+        meta = items[key].get("meta") or {}
+        miss = [i["f"] for i in citations.check_meta(meta, rs) if i["f"] in citations.FILLABLE]
+        if not miss:
+            continue
+        tried += 1
+        try:
+            if meta.get("doi"):
+                cand = metadata.from_doi(meta["doi"], get_settings(db).get("email", ""))
+            else:
+                q = (meta.get("title") or "") + " " + " ".join(str((a or {}).get("family") if isinstance(a, dict) else a) for a in (meta.get("authors") or [])[:2])
+                cand = metadata.search_crossref(q, get_settings(db).get("email", ""), strict=True)
+                if metadata._norm(cand.get("title") or "") != metadata._norm(meta.get("title") or ""):
+                    continue        # not the same paper: better no suggestion than a wrong one
+        except metadata.NetworkError:
+            net += 1
+            continue
+        except metadata.MetadataError:
+            continue
+        sug = {f: str(cand.get(f)) for f in miss if cand.get(f) not in (None, "", 0)}
+        if "doi" in sug or sug:
+            out[key] = sug
+    note = "Could not reach Crossref: check your internet connection." if tried and net == tried else ""
+    return jsonify(suggestions=out, checked=tried, error=note)
+
+
+@app.post("/api/shares/<sid>/docs/<did>/refs/fill")
+def doc_refs_fill(sid, did):
+    """Fill in what a reference lacks. The paper of your library is corrected (and the group's copy follows); a paper that only
+    the group has is corrected in the group's copy."""
+    db = get_db()
+    st, author, err = _doc_write(db, sid, did)
+    if err:
+        return err
+    b = request.get_json(silent=True) or {}
+    key = b.get("key")
+    e = (st.get("items") or {}).get(key)
+    if not e or not sharing.present(e):
+        return error("That reference is not in the group any more.", 404)
+    f = {k: str(v).strip() for k, v in (b.get("fields") or {}).items() if k in citations.FILLABLE and str(v or "").strip()}
+    if not f:
+        return error("Nothing to save.")
+    if "year" in f and not re.fullmatch(r"(1[5-9]|20)\d\d", f["year"]):
+        return error("The year should have four digits, like 2019.")
+    r = db.execute("SELECT paper_id FROM paper_shares WHERE share_id=? AND item_key=?", (sid, key)).fetchone()
+    if r:
+        apply_changes(db, r["paper_id"], f)
+        db.commit()
+        _resync_shared_meta(db, [r["paper_id"]])
+    else:
+        meta = dict(e.get("meta") or {})
+        meta.update({k: (int(v) if k == "year" else v) for k, v in f.items()})
+        new = sharing.item_key(sharing.clean_meta(meta))
+        if new != key:
+            sharing.remove_item(st, author, key)
+        sharing.add_item(st, author, meta)
+        _doc_saved(db, sid, st)
+    return _doc_payload(db, sid, did)
 
 
 @app.post("/api/shares/<sid>/docs/<did>/find")

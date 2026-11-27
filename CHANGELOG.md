@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.17 – 2026-11-27
+- **Reference check, like a copy-editor**: once a document has a reference style, **Cite → Reference check** looks at every cited reference and reports what that style needs and is missing: year, title, journal, **volume**, **pages or article number**, publisher (books), DOI or link (preprints), and **first names or initials** of the authors. Less important details (issue number, DOI where the style prints it) are shown as softer hints. Each reference opens a small form to fill what is missing and **Save**; the paper of your library is corrected and the group's copy follows. A reference list entry in Preview that is incomplete says "check: volume, pages".
+- **Check online**: one click looks the DOI (or, without DOI, the exact title) up on Crossref and *suggests* the missing details, marked "suggested by Crossref, check it". Nothing is saved until you press Save, and a paper that does not match exactly gets no suggestion rather than a wrong one. Only the DOI or the title is sent.
+
 ## 3.16 – 2026-11-27
 - **Highlights in Edit mode are on the text again**: the yellow highlight (and the marks for comments, suggestions and other people's cursors) was drawn shifted from the line since the coloured-text layer came in 3.7. It is now exactly under the words.
 - **Delete pictures**: in a document's **Pictures** tab every picture has a **Delete** button (any editor of the document, not only the one who added it). It says whether the picture is used in the text; if it is, you are warned that it will also be removed from the text (do it in Edit mode; one Undo brings the text back).

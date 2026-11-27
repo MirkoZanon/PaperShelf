@@ -2640,3 +2640,15 @@ body.pdf-window .app { display: none; } body.pdf-window { background: var(--bg);
 /* 3.15 reference style of a document */
 .dx-rstyle { padding: 8px 0 10px; border-bottom: 1px solid var(--border-soft); margin-bottom: 8px; }
 .dx-rstyle .input { width: 100%; margin-top: 6px; }
+
+/* 3.17 reference check */
+.dx-rcheck { padding: 8px 0 10px; border-bottom: 1px solid var(--border-soft); margin-bottom: 8px; }
+.dx-rwarn { color: #b4541a; } @media (prefers-color-scheme: dark) { .dx-rwarn { color: #f0a060; } }
+.dx-ri { border: 1px solid var(--border-soft); border-radius: 10px; margin-top: 6px; overflow: hidden; }
+.dx-ri.miss { border-left: 3px solid #d9822b; } .dx-ri.hint { border-left: 3px solid var(--border); }
+.dx-ris { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; background: none; border: 0; padding: 7px 9px; cursor: pointer; color: inherit; font: inherit; }
+.dx-ris span { color: var(--muted); font-size: 12px; } .dx-ris small { display: flex; flex-wrap: wrap; gap: 4px; }
+.dx-ris small i { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 8px; background: color-mix(in srgb, #d9822b 16%, transparent); }
+.dx-ris small i.hint { background: var(--hover); color: var(--muted); }
+.dx-rif { padding: 4px 9px 9px; display: grid; gap: 6px; } .dx-rif label span { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.dx-rif label em { color: #2f7a4d; font-style: normal; } .dx-rif .input { width: 100%; }
