@@ -33,7 +33,7 @@ const Home = (() => {
   const KIND = {experiment: 'Experiment', meeting: 'Meeting', deadline: 'Deadline', other: 'Event'};
   const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const itemKind = i => i.type === 'event' ? (i.kind || 'other') : 'deadline';
-  const itemLabel = i => (i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : i.type === 'note' ? '✎ ' : '') + (i.title || 'Event');
+  const itemLabel = i => (i.type === 'task' || i.type === 'step' ? '☐ ' : i.type === 'plan' ? '⚑ ' : i.type === 'note' ? '✎ ' : '') + (i.title || 'Event');
   function dayName(d) {
     if (d === cal.today) return 'Today'; if (d === addDays(cal.today, 1)) return 'Tomorrow';
     return new Date(d + 'T12:00:00').toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'});
@@ -60,7 +60,7 @@ const Home = (() => {
       <div class="hc-body"><div class="hc-month"><div class="hc-nav"><button class="hc-b" data-hm="calnav|-1" aria-label="Previous month">‹</button><b>${esc(mon)}</b><button class="hc-b" data-hm="calnav|1" aria-label="Next month">›</button>${cal.month !== cal.today.slice(0, 7) || cal.day ? '<button class="linklike hc-t" data-hm="caltoday">Today</button>' : ''}</div>
         <div class="hc-grid">${cells}</div></div>
         <div class="hc-list"><div class="hc-lh">${cal.day ? esc(dayName(cal.day)) + `<button class="linklike" data-hm="calall">Show upcoming</button>` : 'Coming up · next 2 weeks'}</div>
-          ${list.length ? list.map(i => `<button class="hc-i" data-hm="calitem|${esc(i.group)}|${esc(i.id)}|${i.type}"><span class="hc-dot k-${itemKind(i)}"></span><span class="hc-it"><b>${esc(itemLabel(i))}</b><small>${esc(cal.day ? '' : dayName(i.date) + ' · ')}${i.start ? esc(i.start) + ' · ' : ''}${esc(i.type === 'event' ? KIND[i.kind] || 'Event' : i.type === 'task' ? 'Task due' : i.type === 'note' ? 'Document task' : 'Plan due')} · ${esc(i.group_name)}</small></span></button>`).join('')
+          ${list.length ? list.map(i => `<button class="hc-i" data-hm="calitem|${esc(i.group)}|${esc(i.id)}|${i.type}"><span class="hc-dot k-${itemKind(i)}"></span><span class="hc-it"><b>${esc(itemLabel(i))}</b><small>${esc(cal.day ? '' : dayName(i.date) + ' · ')}${i.start ? esc(i.start) + ' · ' : ''}${esc(i.type === 'event' ? KIND[i.kind] || 'Event' : i.type === 'task' ? 'Task due' : i.type === 'step' ? 'Checklist item due' : i.type === 'note' ? 'Document task' : 'Plan due')} · ${esc(i.group_name)}</small></span></button>`).join('')
             : `<p class="hm-empty">${cal.day ? 'Nothing on this day.' : 'Nothing planned in the next two weeks.'} ${cal.day ? '' : 'Plan an experiment or a meeting in the calendar of a group.'}</p>`}
           ${more > 0 ? `<button class="linklike hc-more" data-hm="calopen">+ ${more} more →</button>` : ''}</div></div></section>`;
   }
@@ -153,7 +153,7 @@ const Home = (() => {
       case 'caltoday': cal.month = cal.today.slice(0, 7); cal.day = ''; return redrawCal();
       case 'calall': cal.day = ''; return redrawCal();
       case 'calday': cal.day = cal.day === x ? '' : x; return redrawCal();
-      case 'calitem': if (z === 'event') { await Lab.openGroup(x, {sub: 'cal'}); return Cal.eventDialog({item: {group: x, id: y}}); } if (z === 'note') return Write.open(x, y.split('~')[0], {cm: y.split('~')[1]}); return Lab.openGroup(x, z === 'task' ? {task: y} : {plan: y});
+      case 'calitem': if (z === 'event') { await Lab.openGroup(x, {sub: 'cal'}); return Cal.eventDialog({item: {group: x, id: y}}); } if (z === 'note') return Write.open(x, y.split('~')[0], {cm: y.split('~')[1]}); return Lab.openGroup(x, z === 'task' || z === 'step' ? {task: y} : {plan: y});
       case 'people': return setTab('people');
       case 'map': return lib('map');
       case 'table': return lib('table');

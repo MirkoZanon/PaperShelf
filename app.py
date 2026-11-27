@@ -3830,6 +3830,15 @@ def _cal_items(db, only=None) -> list:
                 out.append({**base, "key": f"task|{r['id']}|{t['id']}", "type": "task", "id": t["id"], "title": t.get("title") or "",
                             "kind": "deadline", "date": t["due"], "start": "", "end": "", "place": "", "desc": "", "people": who(ppl),
                             "status": t.get("status") or "todo", "mine": bool(me & set(ppl)), "remind": -1})
+            if not t.get("arch") and (t.get("plan") or "") not in gone:       # the items of its checklist can have a deadline of their own
+                ppl = sharing.task_people(t)
+                for c in t.get("checklist") or []:
+                    if c.get("due"):
+                        out.append({**base, "key": f"step|{r['id']}|{c['id']}", "type": "step", "id": t["id"], "ck": c["id"],
+                                    "title": f"{t.get('title') or ''} › {c['text']}"[:160], "kind": "deadline", "date": c["due"], "start": "", "end": "",
+                                    "place": "", "desc": f"Step of the task “{t.get('title') or ''}”", "people": who(ppl),
+                                    "status": "done" if c["done"] or t.get("status") == "done" else (t.get("status") or "todo"),
+                                    "mine": bool(me & set(ppl)), "remind": -1})
         for did, d in (st.get("docs") or {}).items():          # comments and sections of documents that were given to someone
             if sharing.is_gone(d) or (d.get("arch") or {}).get("v"):
                 continue

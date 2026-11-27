@@ -567,7 +567,7 @@ def set_pin(st, author, post, v: bool):
 # "arch": archived – kept, but out of the way (an archived plan takes its tasks with it)
 PLAN_FIELDS = {"name": 120, "goal": 3000, "due": 10, "owners": None, "pos": None, "del": None, "done": None, "arch": None}
 # the checklist of a task: each item on its own, so two people ticking different items never clash
-CHECK_FIELDS = {"task": 32, "text": 300, "done": None, "pos": None, "del": None}
+CHECK_FIELDS = {"task": 32, "text": 300, "due": 10, "done": None, "pos": None, "del": None}
 # calendar events (experiments, meetings, deadlines): date YYYY-MM-DD, optional start/end HH:MM, who is involved, a link to a
 # discussion post / plan / task; "remind" = minutes before the start (or before 09:00 for an all-day event)
 EVENT_KINDS = ("experiment", "meeting", "deadline", "other")
@@ -659,7 +659,7 @@ def lab_view(st) -> dict:
     tasks = sorted(objs(lab.get("tasks")), key=lambda t: (t.get("pos") or 0, t.get("created") or ""))
     checks = {}
     for c in sorted(objs(lab.get("checks")), key=lambda c: (c.get("pos") or 0, c.get("created") or "")):
-        checks.setdefault(c.get("task") or "", []).append({"id": c["id"], "text": c.get("text") or "", "done": bool(c.get("done"))})
+        checks.setdefault(c.get("task") or "", []).append({"id": c["id"], "text": c.get("text") or "", "done": bool(c.get("done")), "due": c.get("due") or ""})
     remarks = {}
     for r in sorted(alive(lab.get("remarks")).values(), key=lambda r: (r.get("created") or "", r.get("c") or 0)):
         remarks.setdefault((r.get("on"), r.get("ref")), []).append(r)

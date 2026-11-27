@@ -11,7 +11,7 @@
    Everything lives in the group's file and travels with it (see sharing.py). Readers only read. */
 const Lab = (() => {
   const S = {sid: null, allcal: false, sub: 'ideas', data: null, ov: null, open: new Set(), composing: null, cto: {},
-    f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, focus: null, pn: {}, tw: null};
+    f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, flt: '', mc: {month: '', day: ''}, focus: null, pn: {}, tw: null};
   const TH = {};   // the note threads being written: {'task:<id>' | 'plan:<id>': {edit, to, draft}}
   try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['plans', 'docs', 'cal'].includes(p.sub) ? p.sub : 'ideas'; } catch { /* storage unavailable */ }
   let ORDER = 'auto'; try { ORDER = localStorage.getItem('papershelf-lab-order') === 'manual' ? 'manual' : 'auto'; } catch { /* ignore */ }
@@ -60,6 +60,7 @@ const Lab = (() => {
   const K = Object.fromEntries(KINDS.map(([k, i, l]) => [k, {i: ic(i, 15), l}]));
   const kindIc = k => K[k]?.i || K.idea.i;
   const STATUS = [['todo', 'To do'], ['doing', 'Doing'], ['done', 'Done']];
+  const BOARD = [STATUS[1], STATUS[0], STATUS[2]];      // what is being done comes first, on the left
   const HINT = {idea: 'A hypothesis, a new direction, something worth trying…', experiment: 'Design: question, conditions, n, measures, expected result…',
     question: 'Something the group should answer or discuss…', result: 'What came out: data, figure, effect size, what it means…',
     decision: 'What was decided, by whom, and why…', protocol: 'A method or a procedure the group follows…', note: 'Anything worth sharing with the group…'};
@@ -84,7 +85,8 @@ const Lab = (() => {
   const av = (id, name, size = 24) => `<span class="lab-av" style="width:${size}px;height:${size}px;font-size:${Math.round(size / 2.5)}px;background:hsl(${hue(id)} 42% 44%)" title="${esc(name || id)}">${esc(initials(name || id))}</span>`;
   const gdot = (id, name, color, cls = '') => `<span class="lab-g-dot ${cls}" style="background:${esc(color || `hsl(${hue(id)} 40% 46%)`)}">${esc(initials(name))}</span>`;
   const md = t => (typeof Notes !== 'undefined' && Notes.md) ? Notes.md(t) : esc(t).replace(/\n/g, '<br>');
-  const today = () => new Date().toISOString().slice(0, 10);
+  const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const today = () => isoOf(new Date());
   function ago(s) {
     const t = Date.parse(s); if (!t) return '';
     const m = Math.round((Date.now() - t) / 60000);
@@ -93,7 +95,7 @@ const Lab = (() => {
     const d = Math.round(h / 24); return d < 7 ? `${d} day${d > 1 ? 's' : ''} ago` : new Date(t).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'});
   }
   const dueTxt = d => { if (!d) return ''; const t = new Date(d + 'T12:00'); return t.toLocaleDateString(undefined, {day: 'numeric', month: 'short'}); };
-  const dueCls = (d, status) => !d || status === 'done' ? '' : d < today() ? 'overdue' : d <= new Date(Date.now() + 3 * 864e5).toISOString().slice(0, 10) ? 'soon' : '';
+  const dueCls = (d, status) => !d || status === 'done' ? '' : d < today() ? 'overdue' : d <= isoOf(new Date(Date.now() + 3 * 864e5)) ? 'soon' : '';
   const dueChip = (d, status) => d ? `<span class="lab-due ${dueCls(d, status)}" title="${dueCls(d, status) === 'overdue' ? 'Overdue' : 'Deadline'}">${ic('calendar', 13)}${esc(dueTxt(d))}</span>` : '';
   const prog = (done, n) => `<span class="lab-prog"><span style="width:${n ? Math.round(100 * done / n) : 0}%"></span></span>`;
   // the members as chips to click (who a task is for, who a post or a note is addressed to)
@@ -428,13 +430,15 @@ const Lab = (() => {
             <span class="lab-pi-m muted small"><span>${x.done}/${x.n} done</span>${p.remarks.length ? `<span class="ov-i">${ic('message', 12)}${p.remarks.length}</span>` : ''}<span class="grow"></span>${dueChip(p.due, x.n && x.done === x.n ? 'done' : '')}</span></button>`; }).join('')}
         ${noPlan && d.plans.some(p => !p.arch) ? `<button class="lab-pi ${S.plan === 'none' ? 'on' : ''}" data-lplan="none"><span class="lab-pi-h"><b>Without a plan</b><span class="lab-n">${noPlan}</span></span></button>` : ''}
         ${nArch || inArch ? `<button class="lab-pi lab-pi-arch ${inArch ? 'on' : ''}" data-lplan="archive" title="Archived plans and tasks: kept, out of the way">${ic('archive', 15)}<b>Archive</b><span class="lab-n">${nArch || ''}</span></button>` : ''}
+        ${miniCal()}
         ${!d.plans.length ? `<p class="muted small lab-plist-hint">${w ? 'No plans yet. Start one for an experiment or a paper: it can come with the usual steps already filled in.' : 'No plans yet.'}</p>` : ''}
       </div>
       <div class="lab-pmain">${S.plan === 'archive' ? archiveHtml() : `${head}
+        ${glanceHtml()}
         <div class="lab-boardbar"><label class="lab-mine"><input type="checkbox" id="lab-mine" ${S.mine ? 'checked' : ''}> Only my tasks</label>
           <select class="input lab-order" id="lab-order" title="How the tasks are ordered in each column"><option value="auto" ${ORDER === 'auto' ? 'selected' : ''}>By deadline, then priority</option><option value="manual" ${ORDER === 'manual' ? 'selected' : ''}>In the order I drag them</option></select><span class="grow"></span>
           ${w && !pl?.arch ? `<button class="btn small primary" data-lfocusquick>${ic('plus', 14)}New task</button>` : ''}</div>
-        <div class="lab-board">${STATUS.map(([st, label]) => { const col = T.filter(t => t.status === st); if (ORDER === 'auto') col.sort(byDeadline); return `<div class="lab-col" data-col="${st}">
+        <div class="lab-board">${BOARD.map(([st, label]) => { const col = T.filter(t => t.status === st); if (ORDER === 'auto') col.sort(byDeadline); return `<div class="lab-col" data-col="${st}">
             <div class="lab-col-h"><span class="lab-st ${st}"></span><b>${label}</b><span class="lab-n">${col.length}</span>${w && st === 'done' && col.length && !pl?.arch ? `<button class="lab-col-act" data-larchdone title="Move the finished tasks of this column to the Archive: they leave the board, nothing is deleted">${ic('archive', 14)}Archive</button>` : ''}</div>
             <div class="lab-col-list">${col.map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? (w && !pl?.arch ? 'Type a task below and press Enter.' : 'Nothing to do.') : st === 'doing' ? 'Drag a task here when you start it.' : 'Finished tasks land here.'}</div>`}</div>
             ${w && st === 'todo' && !pl?.arch ? `<div class="lab-quickrow">${ic('plus', 15)}<input class="lab-quick" maxlength="300" placeholder="Add a task${pl ? ` to ${esc(truncate(pl.name, 22))}` : ''}" title="Press Enter to add it. Then open it to set people, a date, a checklist and notes."></div>` : ''}</div>`; }).join('')}</div>`}
@@ -443,7 +447,51 @@ const Lab = (() => {
   // the tasks of the board: those of the open plan, or all the ones not archived
   function shownTasks() {
     const d = S.data, pl = d.plans.find(x => x.id === S.plan);
-    return d.tasks.filter(t => (pl ? t.plan === pl.id && !t.arch : !t.archived && (S.plan !== 'none' || !t.plan)) && (!S.mine || t.mine));
+    const t0 = today(), wk = isoOf(new Date(Date.now() + 7 * 864e5));
+    const flt = {overdue: t => t.status !== 'done' && t.due && t.due < t0, week: t => t.status !== 'done' && t.due && t.due >= t0 && t.due <= wk,
+                 none: t => t.status !== 'done' && !t.people.length}[S.flt] || (() => true);
+    return d.tasks.filter(t => (pl ? t.plan === pl.id && !t.arch : !t.archived && (S.plan !== 'none' || !t.plan)) && (!S.mine || t.mine) && flt(t));
+  }
+  // the quick look above the board: what is late, what is due this week, what nobody has taken
+  function glanceHtml() {
+    const d = S.data, pl = d.plans.find(x => x.id === S.plan), t0 = today(), wk = isoOf(new Date(Date.now() + 7 * 864e5));
+    const base = d.tasks.filter(t => (pl ? t.plan === pl.id && !t.arch : !t.archived && (S.plan !== 'none' || !t.plan)) && (!S.mine || t.mine) && t.status !== 'done');
+    const n = {overdue: base.filter(t => t.due && t.due < t0).length, week: base.filter(t => t.due && t.due >= t0 && t.due <= wk).length, none: base.filter(t => !t.people.length).length};
+    const chip = (k, label, tip) => `<button class="lab-gl ${k} ${S.flt === k ? 'on' : ''} ${n[k] ? '' : 'zero'}" data-lflt="${k}" title="${tip}"><b>${n[k]}</b>${label}</button>`;
+    return `<div class="lab-glance">${chip('overdue', 'overdue', 'Tasks whose deadline has passed')}${chip('week', 'due in 7 days', 'Tasks due in the next seven days')}${chip('none', 'for nobody yet', 'Tasks that nobody has taken')}${S.flt ? '<button class="linklike" data-lflt="">Show all</button>' : ''}</div>`;
+  }
+  // the deadlines of the page as a small calendar: tasks, the items of their checklists, plans and (for the whole group) events
+  function deadlineItems() {
+    const d = S.data, pl = d.plans.find(x => x.id === S.plan), out = [];
+    for (const t of d.tasks) {
+      if (t.arch || t.archived || (pl ? t.plan !== pl.id : (S.plan === 'none' && t.plan)) || (S.mine && !t.mine)) continue;
+      if (t.due) out.push({date: t.due, title: t.title, kind: 'task', task: t.id, done: t.status === 'done', late: t.status !== 'done'});
+      for (const c of t.checklist || []) if (c.due) out.push({date: c.due, title: c.text, sub: t.title, kind: 'step', task: t.id, done: c.done || t.status === 'done', late: !c.done && t.status !== 'done'});
+    }
+    for (const p of d.plans) if (p.due && !p.arch && (!pl || p.id === pl.id) && S.plan !== 'none') out.push({date: p.due, title: p.name, kind: 'plan', plan: p.id, done: false, late: true});
+    if (!pl && S.plan === 'all') for (const e of d.events || []) if (e.date && (!S.mine || e.mine)) out.push({date: e.date, title: e.title, kind: 'event', ev: e.id, time: e.start || '', done: false, late: false});
+    return out;
+  }
+  function miniCal() {
+    const t0 = today(), items = deadlineItems(), by = {};
+    for (const i of items) (by[i.date] = by[i.date] || []).push(i);
+    if (!S.mc.month) S.mc.month = t0.slice(0, 7);
+    const [y, m] = S.mc.month.split('-').map(Number), lead = (new Date(y, m - 1, 1).getDay() + 6) % 7, nd = new Date(y, m, 0).getDate();
+    let cells = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(w => `<i class="lab-mc-w">${w}</i>`).join('') + '<b></b>'.repeat(lead);
+    for (let k = 1; k <= nd; k++) {
+      const ds = `${y}-${String(m).padStart(2, '0')}-${String(k).padStart(2, '0')}`, L = by[ds] || [];
+      const cls = L.some(i => i.late && ds < t0) ? 'late' : L.length && L.every(i => i.done) ? 'ok' : L.length ? 'has' : '';
+      cells += `<button class="lab-mc-d ${cls} ${ds === t0 ? 'today' : ''} ${ds === S.mc.day ? 'sel' : ''}" data-lmcday="${ds}"${L.length ? ` title="${esc(L.map(i => i.title).join('\n'))}"` : ''}><span>${k}</span>${L.length ? `<em>${Math.min(L.length, 9)}</em>` : ''}</button>`;
+    }
+    let list = S.mc.day ? (by[S.mc.day] || []) : items.filter(i => i.date >= t0 && !i.done).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 6);
+    const mon = new Date(y, m - 1, 1).toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
+    const GL = {task: '', step: '☐ ', plan: '⚑ ', event: '◷ '};
+    return `<div class="lab-mc"><div class="lab-mc-nav"><button data-lmcn="-1" aria-label="Previous month">‹</button><b>${esc(mon)}</b><button data-lmcn="1" aria-label="Next month">›</button></div>
+      <div class="lab-mc-grid">${cells}</div>
+      <div class="lab-mc-h">${S.mc.day ? esc(dueTxt(S.mc.day)) + '<button class="linklike" data-lmcday="">Next deadlines</button>' : 'Next deadlines'}</div>
+      ${list.length ? list.map(i => `<button class="lab-mc-i ${i.done ? 'done' : ''}" ${i.task ? `data-task="${esc(i.task)}"` : i.plan ? `data-lplan="${esc(i.plan)}"` : `data-lmcev="${esc(i.ev)}"`}><span class="lab-mc-dt ${i.date < t0 && !i.done ? 'late' : ''}">${esc(dueTxt(i.date))}</span><span class="lab-mc-t">${GL[i.kind]}${esc(truncate(i.title, 44))}${i.sub ? `<small>${esc(truncate(i.sub, 40))}</small>` : ''}</span></button>`).join('')
+        : `<p class="muted small lab-mc-none">${S.mc.day ? 'Nothing is due on this day.' : 'No deadline ahead. Give a task or a checklist item a date and it shows here and in the calendar.'}</p>`}
+      <button class="linklike lab-mc-open" data-lmcopen>Open the full calendar →</button></div>`;
   }
   // what was archived: kept with its checklists and notes, out of the board and the overview
   function archiveHtml() {
@@ -464,7 +512,7 @@ const Lab = (() => {
     return `<div class="lab-task prio-${t.prio} ${t.mine ? 'mine' : ''}" data-task="${esc(t.id)}" ${w ? 'draggable="true"' : ''}>
       <div class="lab-task-t">${t.prio === 'high' ? `<span class="lab-prio" title="High priority">${ic('flag', 13)}</span>` : ''}${esc(t.title)}</div>
       ${t.notes ? `<div class="lab-task-n muted small">${esc(truncate(t.notes, 110))}</div>` : ''}
-      ${shown.length ? `<div class="lab-ck-list">${shown.map(c => `<label class="lab-ck ${c.done ? 'done' : ''}"><input type="checkbox" data-lchk="${esc(c.id)}" ${c.done ? 'checked' : ''} ${w ? '' : 'disabled'}><span>${esc(c.text)}</span></label>`).join('')}${ck.length > shown.length ? `<span class="lab-ck-more muted small">and ${ck.length - shown.length} more</span>` : ''}</div>` : ''}
+      ${shown.length ? `<div class="lab-ck-list">${shown.map(c => `<label class="lab-ck ${c.done ? 'done' : ''}"><input type="checkbox" data-lchk="${esc(c.id)}" ${c.done ? 'checked' : ''} ${w ? '' : 'disabled'}><span>${esc(c.text)}</span>${c.due ? `<small class="lab-ck-due ${!c.done && c.due < today() ? 'overdue' : ''}">${esc(dueTxt(c.due))}</small>` : ''}</label>`).join('')}${ck.length > shown.length ? `<span class="lab-ck-more muted small">and ${ck.length - shown.length} more</span>` : ''}</div>` : ''}
       <div class="lab-task-m">${t.people.length ? `<span class="lab-task-ppl" title="${esc(t.people.map(x => x.name).join(', '))}">${t.people.map(x => av(x.id, x.name, 20)).join('')}</span>` : ''}
         ${ck.length ? `<span class="ov-i ${done === ck.length ? 'all' : ''}" title="Checklist">${ic('checks', 13)}${done}/${ck.length}</span>` : ''}${t.remarks.length ? `<span class="ov-i" title="Notes">${ic('message', 13)}${t.remarks.length}</span>` : ''}${t.paper ? `<span class="ov-i" title="${esc(t.paper.title)}">${ic('file', 13)}</span>` : ''}${t.post ? `<span class="ov-i" title="From the post: ${esc(t.post_title)}">${ic('bulb', 13)}</span>` : ''}
         <span class="grow"></span>${dueChip(t.due, t.status)}</div>
@@ -523,7 +571,7 @@ const Lab = (() => {
       $('#tw-ck-head', el).innerHTML = `${ic('checks', 17)}<h4>Checklist</h4>${ck.length ? `<span class="tw-count ${done === ck.length ? 'all' : ''}">${done} of ${ck.length}</span><span class="grow"></span>${prog(done, ck.length)}` : '<span class="muted small">Small steps to tick, one by one</span>'}`;
       if (!(inM && a.matches('.tw-ck-text'))) {
         $('#tw-ck-list', el).innerHTML = ck.map(c => `<div class="tw-ck ${c.done ? 'done' : ''}" data-ck="${esc(c.id)}"><input type="checkbox" ${c.done ? 'checked' : ''} ${ro} data-ckdone aria-label="Done">
-          <input class="tw-ck-text" value="${esc(c.text)}" maxlength="300" ${ro} data-cktext>${w ? `<button type="button" class="tw-ck-del" data-ckdel title="Remove this item">${ic('x', 14)}</button>` : ''}</div>`).join('');
+          <input class="tw-ck-text" value="${esc(c.text)}" maxlength="300" ${ro} data-cktext><input type="date" class="tw-ck-due ${c.due ? 'set' : ''} ${c.due && !c.done && c.due < today() ? 'overdue' : ''}" value="${esc(c.due || '')}" ${ro} data-ckdue title="Deadline of this step (optional)" aria-label="Deadline of this step">${w ? `<button type="button" class="tw-ck-del" data-ckdel title="Remove this item">${ic('x', 14)}</button>` : ''}</div>`).join('');
       }
       $('#tw-th-head', el).innerHTML = `${ic('message', 17)}<h4>Notes</h4>${t.remarks.length ? `<span class="tw-count">${t.remarks.length}</span>` : '<span class="muted small">Considerations, updates and questions about this task</span>'}`;
       if (!(inM && a.matches('.th-edit'))) {
@@ -588,7 +636,8 @@ const Lab = (() => {
       if (x.id === 'tw-paper') { put({paper_id: x.value ? +x.value : ''}); return; }
       const row = x.closest('[data-ck]'); if (!row) return;
       const c = get().checklist.find(y => y.id === row.dataset.ck); if (!c) return;
-      if (x.matches('[data-ckdone]')) { row.classList.toggle('done', x.checked); call(`/checks/${encodeURIComponent(c.id)}`, {method: 'PUT', body: {done: x.checked}}); }
+      if (x.matches('[data-ckdue]')) { call(`/checks/${encodeURIComponent(c.id)}`, {method: 'PUT', body: {due: x.value}}); }
+      else if (x.matches('[data-ckdone]')) { row.classList.toggle('done', x.checked); call(`/checks/${encodeURIComponent(c.id)}`, {method: 'PUT', body: {done: x.checked}}); }
       else if (x.matches('[data-cktext]')) { const text = x.value.trim(); if (!text) { x.value = c.text; return; } if (text !== c.text) call(`/checks/${encodeURIComponent(c.id)}`, {method: 'PUT', body: {text}}); }
     });
     el.addEventListener('input', e => { if (threadInput(e)) return; if (e.target === ti || e.target === de) grow(e.target); });
@@ -654,11 +703,12 @@ const Lab = (() => {
     const el = main();
     el.addEventListener('click', async e => {
       const t = e.target;
+      if (t.closest('[data-lmcopen]')) { S.sub = 'cal'; save(); render(); return; }
       if (t.closest('[data-lcal]')) { S.sid = null; S.allcal = true; S.data = null; save(); render(); return; }
       const lg = t.closest('[data-lg]'); if (lg) { go(lg.dataset.lg); return; }
       if (t.closest('[data-lnewgroup]')) { Shares.newDialog?.(); return; }
       if (t.closest('[data-ljoin]')) { Shares.joinDialog?.(); return; }
-      const oc = t.closest('[data-ovcal]'); if (oc) { const [sid, ty, id] = oc.dataset.ovcal.split('|'); if (ty === 'event') { await openGroup(sid, {sub: 'cal'}); Cal.eventDialog({item: {group: sid, id}}); } else if (ty === 'note') Write.open(sid, id.split('~')[0], {cm: id.split('~')[1]}); else openGroup(sid, ty === 'task' ? {task: id} : {plan: id}); return; }
+      const oc = t.closest('[data-ovcal]'); if (oc) { const [sid, ty, id] = oc.dataset.ovcal.split('|'); if (ty === 'event') { await openGroup(sid, {sub: 'cal'}); Cal.eventDialog({item: {group: sid, id}}); } else if (ty === 'note') Write.open(sid, id.split('~')[0], {cm: id.split('~')[1]}); else openGroup(sid, (ty === 'task' || ty === 'step') ? {task: id} : {plan: id}); return; }
       const op = t.closest('[data-ovplan]'); if (op) { const [sid, id] = op.dataset.ovplan.split('|'); openGroup(sid, {plan: id}); return; }
       const ov = t.closest('[data-ovtask], [data-ovpost], [data-ovdone]');
       if (ov) {
@@ -747,6 +797,10 @@ const Lab = (() => {
         toast(`${plural(ids.length, 'finished task')} archived. ${ids.length === 1 ? 'It is' : 'They are'} in the Archive, at the bottom of the plans.`, 'ok', 6000);
         return;
       }
+      const fb = t.closest('[data-lflt]'); if (fb) { S.flt = S.flt === fb.dataset.lflt ? '' : fb.dataset.lflt; render(); return; }
+      const mn = t.closest('[data-lmcn]'); if (mn) { const [yy, mm] = S.mc.month.split('-').map(Number); S.mc.month = isoOf(new Date(yy, mm - 1 + (+mn.dataset.lmcn), 1)).slice(0, 7); S.mc.day = ''; render(); return; }
+      const md = t.closest('[data-lmcday]'); if (md) { const v = md.dataset.lmcday; S.mc.day = v && S.mc.day !== v ? v : ''; if (S.mc.day) S.mc.month = S.mc.day.slice(0, 7); render(); return; }
+      const me = t.closest('[data-lmcev]'); if (me) { Cal.eventDialog({item: {group: S.sid, id: me.dataset.lmcev}}); return; }
       const pb = t.closest('[data-lplan]'); if (pb) { S.plan = pb.dataset.lplan; render(); return; }
       if (t.closest('[data-lnewplan]')) { planDialog(); return; }
       if (t.closest('[data-lfocusquick], .lab-quickrow')) { const q = $('.lab-quick', main()); if (q) { q.scrollIntoView({block: 'nearest'}); q.focus(); } return; }

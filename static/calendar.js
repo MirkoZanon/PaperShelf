@@ -26,7 +26,7 @@ const Cal = (() => {
     try { const d = await api('/api/calendar' + (C.group ? `?group=${sidQ()}` : '')); C.items = d.items; C.today = d.today; C.notify = d.notify; }
     catch (err) { C.items = []; toast(err.message, 'error'); }
   }
-  const shown = () => C.items.filter(i => C.types[i.type === 'note' ? 'task' : i.type] && (!C.mine || i.mine));
+  const shown = () => C.items.filter(i => C.types[(i.type === 'note' || i.type === 'step') ? 'task' : i.type] && (!C.mine || i.mine));
   const byDay = () => { const m = {}; for (const i of shown()) (m[i.date] ||= []).push(i); return m; };
 
   /* ---------------------------------------------------------------- views */
@@ -57,7 +57,7 @@ const Cal = (() => {
     const days = {}; for (const i of its) (days[i.date] ||= []).push(i);
     return `<div class="cal-agenda">${Object.keys(days).sort().map(s => `<div class="cal-ag-day"><div class="cal-ag-h ${s === C.today ? 'today' : ''}">${esc(fmt(parse(s), {weekday: 'long', day: 'numeric', month: 'long'}))}${s === C.today ? ' · today' : ''}</div>
       ${days[s].sort((a, b) => (a.start || '').localeCompare(b.start || '')).map(i => `<button class="cal-ag-row k-${i.kind}" data-ci="${esc(i.key)}"><span class="cal-ag-t">${esc(when(i) || 'all day')}</span><span class="cal-ag-main"><b>${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : ''}${esc(i.title)}</b>
-        <small>${esc([i.type === 'event' ? (KINDS.find(k => k[0] === i.kind)?.[1] || '') : i.type === 'task' ? 'Task deadline' : i.type === 'note' ? 'Document task · ' + (i.doc_title || '') : 'Plan deadline', C.group ? '' : i.group_name, i.place, i.people.length ? i.people.map(p => p.me ? 'you' : p.name).join(', ') : ''].filter(Boolean).join(' · '))}</small></span></button>`).join('')}</div>`).join('')}</div>`;
+        <small>${esc([i.type === 'event' ? (KINDS.find(k => k[0] === i.kind)?.[1] || '') : i.type === 'task' ? 'Task deadline' : i.type === 'step' ? 'Checklist item' : i.type === 'note' ? 'Document task · ' + (i.doc_title || '') : 'Plan deadline', C.group ? '' : i.group_name, i.place, i.people.length ? i.people.map(p => p.me ? 'you' : p.name).join(', ') : ''].filter(Boolean).join(' · '))}</small></span></button>`).join('')}</div>`).join('')}</div>`;
   }
   function title() {
     if (C.view === 'month') return fmt(C.cur, {month: 'long', year: 'numeric'});
@@ -171,7 +171,7 @@ const Cal = (() => {
       const ci = t.closest('[data-ci]');
       if (ci) {
         const i = C.items.find(x => x.key === ci.dataset.ci); if (!i) return;
-        if (i.type === 'event') eventDialog({item: i}); else if (i.type === 'note') { Write.open(i.group, i.doc, {cm: i.cid}); } else if (i.type === 'task') Lab.openGroup(i.group, {task: i.id}); else Lab.openGroup(i.group, {plan: i.id});
+        if (i.type === 'event') eventDialog({item: i}); else if (i.type === 'note') { Write.open(i.group, i.doc, {cm: i.cid}); } else if (i.type === 'task' || i.type === 'step') Lab.openGroup(i.group, {task: i.id}); else Lab.openGroup(i.group, {plan: i.id});
         return;
       }
       const cd = t.closest('[data-cd]'); if (cd && (C.canWrite || !C.group)) eventDialog({date: cd.dataset.cd});

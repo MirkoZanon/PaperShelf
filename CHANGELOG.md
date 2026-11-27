@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.6 – 2026-11-27
+- **Plans and tasks, easier to read**: the board now starts with **Doing**, then To do, then Done.
+- **A deadline for each checklist item**: every step in a task's checklist can have its own date (field at the right of the item). The date also shows on the task card, and the steps appear in the calendar as "Task › step", with the usual morning reminder, in the .ics export and on Home.
+- **Deadlines at a glance**: above the board, chips show what is overdue, what is due in 7 days and what nobody has taken yet. Click one to filter the board.
+- **Calendar widget on the page**: under the list of plans, a small month with the number of deadlines on each day (red when late, green when done) and the next deadlines below. It follows the plan you have open and "Only my tasks". Click a day to see its items, an item to open it, and "Open the full calendar" to go to the group calendar.
+- "Today" and "due soon" now use your local date (they could be off by one around midnight).
+
 ## 3.5 – 2026-11-27
 - **Document in its own window**: fixed the tools (Suggest, Cite, comments…) that did not work there. The app running behind the window was tearing the document down.
 - **Several citations in one parenthesis**: `[@a] [@b]`, `[@a], [@b]` and `[@a]; [@b]` are now shown (and exported) together, like `(Smith, 2020; Lee, 2019)`.
