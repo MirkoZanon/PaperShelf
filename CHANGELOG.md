@@ -2,6 +2,10 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.16 – 2026-11-27
+- **Highlights in Edit mode are on the text again**: the yellow highlight (and the marks for comments, suggestions and other people's cursors) was drawn shifted from the line since the coloured-text layer came in 3.7. It is now exactly under the words.
+- **Delete pictures**: in a document's **Pictures** tab every picture has a **Delete** button (any editor of the document, not only the one who added it). It says whether the picture is used in the text; if it is, you are warned that it will also be removed from the text (do it in Edit mode; one Undo brings the text back).
+
 ## 3.15 – 2026-11-27
 - **Reference style for each document, by journal**: in a document, **Cite → Reference style** lets you pick a style (APA, Nature, Science, Cell Press, PNAS, Royal Society, J Neurosci, eLife, PLOS/Vancouver) or **type the journal you write for**: PaperShelf completes the name and chooses the style that journal asks for (Nature Neuroscience → Nature, Neuron → Cell Press, eLife → eLife, PLOS ONE → Vancouver…). Journals not in the built-in list are not guessed: you choose the closest style. The style belongs to the document, so the whole group sees the same.
 - **Numbered or author-year, as the style requires**: numbered styles cite as [1], [1, 2], [1–3] (or (1) for Science/Vancouver) in order of first appearance, and the reference list is numbered in the same order. Author-year styles keep (Smith, 2020) and an alphabetical list. It applies to Preview and to Markdown, Word and text exports.

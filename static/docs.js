@@ -429,7 +429,9 @@ const Docs = (() => {
     const rects = new Map();
     measure(ta, items).forEach((rs, i) => rects.set(items[i].m, rs));
     pts.forEach(p => { const r = measure(ta, [{s: p.s, e: p.s}])[0]; rects.set(p, r); });
-    if (!lay) { lay = document.createElement('div'); lay.id = 'dx-rem'; lay.className = 'dx-rem'; pg.appendChild(lay); }
+    const par = ta.offsetParent || pg;       // the layer lives where the textarea's offsets are measured from (the wrapper of the colour layer)
+    if (!lay) { lay = document.createElement('div'); lay.id = 'dx-rem'; lay.className = 'dx-rem'; }
+    if (lay.parentNode !== par) par.appendChild(lay);
     lay.style.cssText = `left:${ta.offsetLeft + ta.clientLeft}px;top:${ta.offsetTop + ta.clientTop}px;width:${ta.clientWidth}px;height:${ta.offsetHeight}px`;
     lay.innerHTML = hlHtml + cmHtml + marks.map(m => (rects.get(m) || []).map((r, i) => {
       const c = `--c:${auHue(m.a)};left:${r.x}px;top:${r.y}px;height:${r.h}px;`;
@@ -890,8 +892,22 @@ const Docs = (() => {
   function mediaHtml() {
     const R = D.R, used = id => R.B.text.includes(`img:${id}`);
     return `<p class="muted small">Pictures are stored inside the document, so everybody in the group sees them (12 pictures, 2 MB at most). Use <b>Picture</b> in the toolbar, or paste or drop an image into the text.</p>
-      ${(R.images || []).map(i => `<div class="dx-media"><img src="${base()}/${q(D.id)}/images/${i.id}" alt=""><div><b>${esc(i.name || 'picture')}</b><small>${Math.round(i.n / 1024)} KB${used(i.id) ? '' : ' · not used in the text'}</small>
-        <div class="dx-row">${D.can && D.mode === 'write' ? `<button class="btn small" data-dx-imgins="${i.id}|${esc(i.name || 'picture')}">Insert again</button>` : ''}${i.mine && D.can ? `<button class="btn small" data-dx-imgdel="${i.id}">Remove</button>` : ''}</div></div></div>`).join('') || '<p class="muted small dx-none">No pictures yet.</p>'}`;
+      ${(R.images || []).map(i => `<div class="dx-media"><img src="${base()}/${q(D.id)}/images/${i.id}" alt=""><div><b>${esc(i.name || 'picture')}</b><small>${Math.round(i.n / 1024)} KB${used(i.id) ? ' · used in the text' : ' · not used in the text'}</small>
+        <div class="dx-row">${D.can && D.mode === 'write' ? `<button class="btn small" data-dx-imgins="${i.id}|${esc(i.name || 'picture')}">Insert again</button>` : ''}${D.can ? `<button class="btn small" data-dx-imgdel="${i.id}" title="Delete this picture${used(i.id) ? ' (it is also removed from the text)' : ''}">${ic('trash')}Delete</button>` : ''}</div></div></div>`).join('') || '<p class="muted small dx-none">No pictures yet.</p>'}`;
+  }
+  async function deletePicture(id) {
+    const ta = $('#dx-text', D.host), re = new RegExp(`!\\[[^\\]\\n]*\\]\\(img:${id}\\)\\n{0,2}`, 'g'), inUse = D.R.B.text.includes(`img:${id}`);
+    if (inUse && (!ta || D.mode !== 'write')) { toast('This picture is used in the text. Switch to Edit to delete it: it is removed from the text too.', 'info', 6000); return; }
+    const ok = await confirmBox(inUse ? 'Delete this picture?' : 'Delete this picture?',
+      inUse ? 'This picture is used in the text. If you delete it, it is also removed from the text.' : 'It disappears from the group\'s copy of the document. Nothing in the text shows it.', {ok: 'Delete', danger: true});
+    if (!ok) return;
+    try {
+      if (inUse && ta) {      // take the picture out of the text first (one edit, can be undone)
+        const v = ta.value; let out = v.replace(re, '').replace(/\n{3,}/g, '\n\n');
+        if (out !== v) { ta.value = out; editTo(out); autosize(ta); paintMirror(); }
+      }
+      absorb(await api(`${base()}/${q(D.id)}/images/${id}`, {method: 'DELETE'})); paintSide(); paintMirror();
+    } catch (err) { toast(err.message, 'error'); }
   }
   /* ------------------------------------------------------------- reference suggestions (matched on this computer) */
   function paraText(ta) {
@@ -1433,7 +1449,7 @@ const Docs = (() => {
       const fmt = t.closest('[data-fmt]')?.dataset.fmt;
       if (fmt) { if (fmt === 'comment' || fmt === 'suggest') { D.sel = selection(); D.side = 'comments'; paintSide(); if (fmt === 'suggest') return addComment(true); $('#dx-cnew', host)?.focus(); return; } if (fmt === 'cite') { D.side = 'cite'; return paintSide(); } if (fmt === 'image') return pickImage(); return wrap(fmt); }
       const imi = t.closest('[data-dx-imgins]')?.dataset.dxImgins; if (imi) { const [id, nm] = imi.split('|'); const ta = $('#dx-text', host); if (ta) { const v = ta.value, s2 = ta.selectionStart; insertAtCursor(`${s2 && v[s2 - 1] !== '\n' ? '\n\n' : ''}![${nm}](img:${id})\n\n`); } return; }
-      const imd = t.closest('[data-dx-imgdel]')?.dataset.dxImgdel; if (imd) { if (await confirmBox('Remove this picture?', 'It disappears from the group\'s copy of the document. Text that still shows it will show nothing.', {ok: 'Remove', danger: true})) { try { absorb(await api(`${base()}/${q(D.id)}/images/${imd}`, {method: 'DELETE'})); paintSide(); } catch (err) { toast(err.message, 'error'); } } return; }
+      const imd = t.closest('[data-dx-imgdel]')?.dataset.dxImgdel; if (imd) { await deletePicture(imd); return; }
       const al = t.closest('[data-dx-addlib]'); if (al) return addLibrary(+al.dataset.dxAddlib, al.dataset.title);
       if (t.closest('[data-dx="refs"]')) return refsNow();
       const pk = t.closest('[data-dx-pop]')?.dataset.dxPop; if (pk != null && t.closest('.dx-cpop')) { e.preventDefault(); return pickPop(+pk); }

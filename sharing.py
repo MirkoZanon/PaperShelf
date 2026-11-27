@@ -1012,9 +1012,7 @@ def del_doc_image(st, author, did, iid):
     i = (d.get("img") or {}).get(iid)
     if not i:
         return
-    if i.get("by") != author:
-        raise ShareError("Only the person who inserted a picture can remove it.")
-    del d["img"][iid]
+    del d["img"][iid]          # any writer of the document may remove a picture (the app asks first, and says if the text uses it)
 
 
 def doc_image(st, did, iid):
