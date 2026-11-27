@@ -15,6 +15,7 @@ import logging
 import mimetypes
 import os
 import hashlib
+import unicodedata
 import re
 import requests
 import winquiet
@@ -4386,13 +4387,44 @@ def doc_find(sid, did):
     row, st = _load_share(db, sid)
     if not st or did not in (st.get("docs") or {}):
         return error("That document doesn't exist any more.", 404)
-    words = [w for w in re.split(r"\s+", str((request.get_json(silent=True) or {}).get("query") or "").lower().strip()[:80]) if w]
+    def norm(t):
+        t = unicodedata.normalize("NFKD", str(t or "")).encode("ascii", "ignore").decode().lower()
+        return re.sub(r"[^a-z0-9]+", " ", t).strip()
+    words = norm(str((request.get_json(silent=True) or {}).get("query") or "")[:80]).split()
     if not words:
         return jsonify(group=[], library=[])
+
+    def score(authors, title, year, doi, kw=""):
+        """0 = does not match. Every typed word must be found; a word at the start of an author name counts most, then
+        elsewhere in the authors, then in the title, then in year, DOI and keywords."""
+        au = [norm(x if isinstance(x, str) else (x.get("name") if isinstance(x, dict) else x)) for x in authors or []]
+        au_t = [t for x in au for t in x.split()]
+        ti, ex = norm(title), " ".join([norm(year), norm(doi), norm(kw)])
+        ti_t = ti.split()
+        total = 0
+        for w in words:
+            if w in au_t:
+                total += 100            # the exact surname or first name
+            elif any(t.startswith(w) for t in au_t):
+                total += 80
+            elif any(w in x for x in au):
+                total += 55
+            elif w in ti_t:
+                total += 30
+            elif any(t.startswith(w) for t in ti_t):
+                total += 22
+            elif w in ti:
+                total += 12
+            elif w in ex:
+                total += 10
+            else:
+                return 0
+        if au and words[0] in (au[0].split() or [""]) :
+            total += 15                  # the first author
+        return total
     items = _doc_items(st)
     lab = docexport.labels(items)
     local = [dict(r) for r in db.execute("SELECT id, title, doi, keywords, authors, year FROM papers")]
-    ok = lambda hay: all(w in hay for w in words)
     group, grp_ids, grp_titles, grp_dois = [], set(), set(), set()
     for k, e in items.items():
         m = e.get("meta") or {}
@@ -4400,9 +4432,9 @@ def doc_find(sid, did):
         grp_titles.add(re.sub(r"\W+", " ", (m.get("title") or "").lower()).strip())
         if m.get("doi"):
             grp_dois.add(m["doi"].lower())
-        hay = " ".join([lab[k], cite, m.get("title") or "", str(m.get("year") or ""), m.get("doi") or "", " ".join(map(str, m.get("authors") or []))]).lower()
-        if ok(hay):
-            group.append({"label": lab[k], "cite": cite, "title": m.get("title") or ""})
+        sc = score(m.get("authors"), m.get("title"), m.get("year"), m.get("doi"), lab[k] + " " + cite)
+        if sc:
+            group.append((sc, str(m.get("year") or ""), {"label": lab[k], "cite": cite, "title": m.get("title") or ""}))
     for r in db.execute("SELECT paper_id FROM paper_shares WHERE share_id=?", (sid,)):
         grp_ids.add(r[0])
     library = []
@@ -4414,10 +4446,11 @@ def doc_find(sid, did):
             kw = " ".join(json.loads(r["keywords"] or "[]"))
         except ValueError:
             au, kw = [], ""
-        hay = " ".join([r["title"] or "", str(r["year"] or ""), r["doi"] or "", kw, " ".join(map(str, au))]).lower()
-        if ok(hay):
-            library.append({"id": r["id"], "cite": docexport.short_cite({"authors": au, "year": r["year"]}), "title": r["title"] or ""})
-    return jsonify(group=group[:15], library=library[:15])
+        sc = score(au, r["title"], r["year"], r["doi"], kw)
+        if sc:
+            library.append((sc, str(r["year"] or ""), {"id": r["id"], "cite": docexport.short_cite({"authors": au, "year": r["year"]}), "title": r["title"] or ""}))
+    best = lambda L, n: [x[2] for x in sorted(L, key=lambda x: (-x[0], -int(x[1]) if x[1].isdigit() else 0))][:n]
+    return jsonify(group=best(group, 30), library=best(library, 60))
 
 
 @app.post("/api/shares/<sid>/docs/<did>/images")

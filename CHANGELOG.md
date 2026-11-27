@@ -2,6 +2,9 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.10 – 2026-11-27
+- **Cite search, fixed**: searching an author name now puts the papers *by* that author first (exact surname, then name starts, then the rest of the authors), and only then papers that merely contain the word in the title. Accents are ignored (`bodenes` finds Bodénès), and the lists are longer (30 group papers, 60 from your library), newest first among equals.
+
 ## 3.9 – 2026-11-27
 - **Lab always opens on Home**: each click on Lab lands on the group's Home page (plans, tasks and the shortcuts).
 - **Your picture**: your own avatar (tasks, posts, documents) uses your GitHub picture when you are signed in, otherwise the colour of the app. Others keep their own colours.
