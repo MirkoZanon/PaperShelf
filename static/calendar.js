@@ -30,7 +30,7 @@ const Cal = (() => {
   const byDay = () => { const m = {}; for (const i of shown()) (m[i.date] ||= []).push(i); return m; };
 
   /* ---------------------------------------------------------------- views */
-  const chip = i => `<button class="cal-it k-${i.kind} t-${i.type} ${done(i) ? 'done' : ''}" data-ci="${esc(i.key)}" title="${esc(i.title)}${i.start ? ' · ' + esc(when(i)) : ''}${i.group_name && !C.group ? ' · ' + esc(i.group_name) : ''}">${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : i.type === 'note' ? '✎ ' : ''}${i.start ? `<b>${esc(i.start)}</b> ` : ''}${esc(i.title)}</button>`;
+  const chip = i => `<button class="cal-it k-${i.kind} t-${i.type} ${done(i) ? 'done' : ''}" data-ci="${esc(i.key)}" title="${esc(i.title)}${i.start ? ' · ' + esc(when(i)) : ''}${i.group_name && !C.group ? ' · ' + esc(i.group_name) : ''}">${i.type === 'task' ? ic('check') : i.type === 'plan' ? ic('pin') : i.type === 'note' ? ic('pen') : ''}${i.start ? `<b>${esc(i.start)}</b> ` : ''}${esc(i.title)}</button>`;
   function monthHtml() {
     const first = new Date(C.cur.getFullYear(), C.cur.getMonth(), 1, 12), start = monday(first), M = byDay();
     const cells = [];
@@ -56,7 +56,7 @@ const Cal = (() => {
     if (!its.length) return '<p class="muted cal-none">Nothing coming up. Add an experiment, a meeting or a deadline with “New event”.</p>';
     const days = {}; for (const i of its) (days[i.date] ||= []).push(i);
     return `<div class="cal-agenda">${Object.keys(days).sort().map(s => `<div class="cal-ag-day"><div class="cal-ag-h ${s === C.today ? 'today' : ''}">${esc(fmt(parse(s), {weekday: 'long', day: 'numeric', month: 'long'}))}${s === C.today ? ' · today' : ''}</div>
-      ${days[s].sort((a, b) => (a.start || '').localeCompare(b.start || '')).map(i => `<button class="cal-ag-row k-${i.kind}" data-ci="${esc(i.key)}"><span class="cal-ag-t">${esc(when(i) || 'all day')}</span><span class="cal-ag-main"><b>${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : ''}${esc(i.title)}</b>
+      ${days[s].sort((a, b) => (a.start || '').localeCompare(b.start || '')).map(i => `<button class="cal-ag-row k-${i.kind}" data-ci="${esc(i.key)}"><span class="cal-ag-t">${esc(when(i) || 'all day')}</span><span class="cal-ag-main"><b>${i.type === 'task' ? ic('check') : i.type === 'plan' ? ic('pin') : i.type === 'note' ? ic('pen') : ''}${esc(i.title)}</b>
         <small>${esc([i.type === 'event' ? (KINDS.find(k => k[0] === i.kind)?.[1] || '') : i.type === 'task' ? 'Task deadline' : i.type === 'step' ? 'Checklist item' : i.type === 'note' ? 'Document task · ' + (i.doc_title || '') : 'Plan deadline', C.group ? '' : i.group_name, i.place, i.people.length ? i.people.map(p => p.me ? 'you' : p.name).join(', ') : ''].filter(Boolean).join(' · '))}</small></span></button>`).join('')}</div>`).join('')}</div>`;
   }
   function title() {
@@ -72,7 +72,7 @@ const Cal = (() => {
         <div class="cal-nav">${C.view === 'agenda' ? '' : '<button class="btn small" data-cnav="-1" aria-label="Previous">‹</button><button class="btn small" data-cnav="0">Today</button><button class="btn small" data-cnav="1" aria-label="Next">›</button>'}<h3>${esc(title())}</h3></div>
         <span class="grow"></span>
         <div class="seg">${[['month', 'Month'], ['week', 'Week'], ['agenda', 'Agenda']].map(([v, l]) => `<button data-cview="${v}" class="${C.view === v ? 'on' : ''}">${l}</button>`).join('')}</div>
-        ${C.canWrite || !C.group ? '<button class="btn small primary" data-cnew>＋ New event</button>' : ''}
+        ${C.canWrite || !C.group ? `<button class="btn small primary" data-cnew>${ic('plus')}New event</button>` : ''}
       </div>
       <div class="cal-filters">
         <label class="opt small"><input type="checkbox" data-cmine ${C.mine ? 'checked' : ''}> Only mine</label>
@@ -80,8 +80,8 @@ const Cal = (() => {
         <label class="opt small"><input type="checkbox" data-ctype="task" ${C.types.task ? 'checked' : ''}> Task deadlines <span class="muted">(and document tasks)</span></label>
         <label class="opt small"><input type="checkbox" data-ctype="plan" ${C.types.plan ? 'checked' : ''}> Plan deadlines</label>
         <span class="grow"></span>
-        <button class="btn small" data-cnotify title="Reminders for your events and deadlines: a notification while PaperShelf is open (and from the system when it runs in the background)">🔔 Reminders: ${C.notify ? 'on' : 'off'}</button>
-        <a class="btn small" href="/api/calendar.ics${q}" download title="A calendar file for Apple Calendar, Google Calendar or Outlook: open it or import it there">⭳ Export (.ics)</a>
+        <button class="btn small" data-cnotify title="Reminders for your events and deadlines: a notification while PaperShelf is open (and from the system when it runs in the background)">${ic('bell')}Reminders: ${C.notify ? 'on' : 'off'}</button>
+        <a class="btn small" href="/api/calendar.ics${q}" download title="A calendar file for Apple Calendar, Google Calendar or Outlook: open it or import it there">${ic('download')}Export (.ics)</a>
       </div>
       ${C.view === 'month' ? monthHtml() : C.view === 'week' ? weekHtml() : agendaHtml()}
       <p class="muted small cal-note">Times are your local time. Reminders need PaperShelf to be running; exporting to your own calendar app gives alerts even when it is closed.</p></div>`;
@@ -141,7 +141,7 @@ const Cal = (() => {
     let d; try { d = await api('/api/calendar/due', {method: 'POST', body: {}}); } catch { return; }
     for (const r of d.due || []) {
       if (notified.has(r.key + r.date)) continue; notified.add(r.key + r.date);
-      toast(`🔔 ${r.head} – ${r.text}`, 'info', 20000);
+      toast(`${r.head} – ${r.text}`, 'info', 20000);
       try { if ('Notification' in window && Notification.permission === 'granted') new Notification(r.head, {body: r.text, icon: '/static/icons/icon-192.png'}); } catch { /* ignore */ }
     }
   }

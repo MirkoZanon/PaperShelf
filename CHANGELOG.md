@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.9 – 2026-11-27
+- **Lab always opens on Home**: each click on Lab lands on the group's Home page (plans, tasks and the shortcuts).
+- **Your picture**: your own avatar (tasks, posts, documents) uses your GitHub picture when you are signed in, otherwise the colour of the app. Others keep their own colours.
+- **Icons in the app style**: the calendar (Reminders, Export, New event, task and plan markers) and the Lab use the same line icons as the rest of the app instead of emoji and symbols.
+- **"Your copy of this document was out of date"**: when the group's copy turns out to be shorter than yours, PaperShelf now writes your text again instead of discarding the last seconds. If the message still appears it now says the reason in brackets, so we can find the cause.
+
 ## 3.8 – 2026-11-27
 - **Lab home**: the first tab of a group is now **Home** (the old Plans and tasks page). On top, two shortcuts: the documents being written (authors, last edit, words, open comments) and the latest ideas and discussion. Click a row to open it. The Done column is slimmer and shows only the latest four finished tasks, with "Show all" for the rest.
 - **Cleaner toolbars**: the calendar and document bars now have buttons of the same height (Month/Week/Agenda next to New event, Edit/Suggest/Preview next to Library), and the calendar filters are plain checkboxes instead of odd pills.

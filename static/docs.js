@@ -9,7 +9,8 @@ const Docs = (() => {
   const MOD = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
   const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
   const initials = n => (String(n || '?').match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-  const av = (id, name, size = 22) => `<span class="lab-av" style="width:${size}px;height:${size}px;font-size:${Math.round(size / 2.5)}px;background:hsl(${hue(id)} 42% 44%)" title="${esc(name || id)}">${esc(initials(name || id))}</span>`;
+  const av = (id, name, size = 22) => { const me = !!id && (id === D.R?.me || id === state.settings?.share_user), u = state.settings?.share_user;
+    return `<span class="lab-av${me ? ' me' : ''}" style="width:${size}px;height:${size}px;font-size:${Math.round(size / 2.5)}px;${me ? '' : `background:hsl(${hue(id)} 42% 44%)`}" title="${esc(name || id)}">${esc(initials(name || id))}${me && u && state.settings?.share_gist ? `<img src="/api/avatar/${encodeURIComponent(u)}" alt="" onerror="this.remove()">` : ''}</span>`; };
   const q = s => encodeURIComponent(s);
   const base = () => `/api/shares/${q(D.sid)}/docs`;
   function ago(s) {
@@ -155,7 +156,7 @@ const Docs = (() => {
     const sendTo = log.length, from = R.sent, payload = JSON.parse(JSON.stringify(log.slice(from))); R.fl = sendTo;
     try {
       const r = await api(`${base()}/${q(D.id)}/ops`, {method: 'POST', body: {from, ops: payload}});
-      R.sent = Math.max(R.sent, sendTo); R.have[R.ok] = r.n;
+      R.sent = Math.max(R.sent, sendTo); R.have[R.ok] = r.n; D.resend = 0;
       D.flushing = false;
       if ((R.ops[R.ok] || []).length > R.sent) { schedule(); } else setStatus('saved');
     } catch (err) {
@@ -163,7 +164,10 @@ const Docs = (() => {
       if (err.data && typeof err.data.n === 'number') {
         const n = err.data.n;
         if (n >= from && n <= log.length && n !== from) { R.sent = n; R.have[R.ok] = n; flush(); return; }  // the answer got lost: they are stored
-        toast('Your copy of this document was out of date, so it has been reloaded. The last few seconds of typing may need to be written again.', 'error', 9000);
+        if (n < from && (D.resend || 0) < 3) {   // the group's copy is shorter than ours (an older state came back): our whole log is still here, so write it again instead of losing it
+          D.resend = (D.resend || 0) + 1; R.sent = n; R.have[R.ok] = n; flush(); return;
+        }
+        toast(`Your copy of this document was out of date, so it has been reloaded. The last few seconds of typing may need to be written again.${err.message ? ' (' + err.message + ')' : ''}`, 'error', 9000);
         await openDoc(D.id, {keep: true}); return;
       }
       setStatus('offline'); clearTimeout(D.flushT); D.flushT = setTimeout(flush, 5000);

@@ -82,7 +82,9 @@ const Lab = (() => {
   };
   const initials = n => (String(n || '?').match(/[\p{L}\p{N}]+/gu) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
   const hue = n => { let h = 0; for (const ch of String(n)) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
-  const av = (id, name, size = 24) => `<span class="lab-av" style="width:${size}px;height:${size}px;font-size:${Math.round(size / 2.5)}px;background:hsl(${hue(id)} 42% 44%)" title="${esc(name || id)}">${esc(initials(name || id))}</span>`;
+  // me: the colour of the app (and my GitHub picture, kept on this computer, when I am signed in); the others: a colour of their own
+  const av = (id, name, size = 24) => { const me = !!id && (id === S.data?.me || id === state.settings?.share_user), u = state.settings?.share_user;
+    return `<span class="lab-av${me ? ' me' : ''}" style="width:${size}px;height:${size}px;font-size:${Math.round(size / 2.5)}px;${me ? '' : `background:hsl(${hue(id)} 42% 44%)`}" title="${esc(name || id)}">${esc(initials(name || id))}${me && u && state.settings?.share_gist ? `<img src="/api/avatar/${encodeURIComponent(u)}" alt="" onerror="this.remove()">` : ''}</span>`; };
   const gdot = (id, name, color, cls = '') => `<span class="lab-g-dot ${cls}" style="background:${esc(color || `hsl(${hue(id)} 40% 46%)`)}">${esc(initials(name))}</span>`;
   const md = t => (typeof Notes !== 'undefined' && Notes.md) ? Notes.md(t) : esc(t).replace(/\n/g, '<br>');
   const isoOf = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -122,6 +124,7 @@ const Lab = (() => {
     catch (err) { toast(err.message, 'error'); return null; }
   }
   async function show() {
+    if (S.keepCal) S.keepCal = false; else { S.allcal = false; S.sub = 'plans'; S.composing = null; save(); }   // every click on Lab lands on the home page
     if (S.sid && !groups().some(g => g.id === S.sid)) S.sid = null;
     if (!S.data && !S.ov) main().innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
     await load(); render();
@@ -199,7 +202,7 @@ const Lab = (() => {
     return `<div class="lab-head"><div><h2>Overview</h2><div class="muted small">What is waiting for you, and what happened in your groups this week</div></div><span class="grow"></span><button class="btn small" data-help="lab">${ic('book', 15)}Guide</button></div>
       <div class="lab-ov">
         <div class="lab-card ov-mine">
-          ${(ov.upcoming || []).length ? sec('calendar', 'Coming up', 0, ov.upcoming.map(i => `<div class="ov-row"><button class="ov-main" data-ovcal="${esc(i.group)}|${esc(i.type)}|${esc(i.id)}"><span class="ov-t">${i.type === 'task' ? '☐ ' : i.type === 'plan' ? '⚑ ' : ''}${esc(i.title)}</span><span class="ov-m"><span>${esc(i.date === today() ? 'Today' : new Date(i.date + 'T12:00').toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'}))}${i.start ? ' ' + esc(i.start) : ''}</span><span>${esc(i.group_name)}</span>${i.place ? `<span>${esc(i.place)}</span>` : ''}</span></button></div>`).join('') + '<p class="small"><button class="linklike" data-lcal>Open the calendar</button></p>') : ''}
+          ${(ov.upcoming || []).length ? sec('calendar', 'Coming up', 0, ov.upcoming.map(i => `<div class="ov-row"><button class="ov-main" data-ovcal="${esc(i.group)}|${esc(i.type)}|${esc(i.id)}"><span class="ov-t">${i.type === 'task' ? ic('checks', 13) : i.type === 'plan' ? ic('flag', 13) : ''}${esc(i.title)}</span><span class="ov-m"><span>${esc(i.date === today() ? 'Today' : new Date(i.date + 'T12:00').toLocaleDateString(undefined, {weekday: 'short', day: 'numeric', month: 'short'}))}${i.start ? ' ' + esc(i.start) : ''}</span><span>${esc(i.group_name)}</span>${i.place ? `<span>${esc(i.place)}</span>` : ''}</span></button></div>`).join('') + '<p class="small"><button class="linklike" data-lcal>Open the calendar</button></p>') : ''}
           ${sec('check', 'My tasks', mt.length, mt.length ? mt.map(t => `<div class="ov-row ${dueCls(t.due, t.status)}"><button class="lab-check" data-ovdone="${esc(t.group)}|${esc(t.id)}" title="Mark it done" aria-label="Mark it done"></button>
               <button class="ov-main" data-ovtask="${esc(t.group)}|${esc(t.id)}"><span class="ov-t">${t.prio === 'high' ? `<span class="lab-prio" title="High priority">${ic('flag', 13)}</span>` : ''}${esc(t.title)}</span>
                 <span class="ov-m"><span>${esc(t.group_name)}</span>${t.status === 'doing' ? '<span class="lab-chip doing">Doing</span>' : ''}${t.checks?.[1] ? `<span class="ov-i">${ic('checks', 13)}${t.checks[0]}/${t.checks[1]}</span>` : ''}${t.notes ? `<span class="ov-i">${ic('message', 13)}${t.notes}</span>` : ''}${dueChip(t.due, t.status)}</span></button></div>`).join('')
@@ -261,7 +264,7 @@ const Lab = (() => {
     const wid = (icon, title, n, sub, body, id = '', nid = '') => `<section class="lh-w"><h3>${ic(icon, 15)}<span>${title}</span><span class="lab-n" ${nid ? `id="${nid}"` : ''}>${n || ''}</span><span class="grow"></span><button class="linklike small" data-lsub="${sub}">Open</button></h3><div class="lh-body" ${id ? `id="${id}"` : ''}>${body}</div></section>`;
     const posts = d.posts.slice().sort((a, b) => (b.activity || b.created || '').localeCompare(a.activity || a.created || '')).slice(0, 4);
     const pBody = posts.length ? posts.map(p => `<button class="lh-row k-${esc(p.kind)}" data-hpost="${esc(p.id)}"><span class="lh-t">${kindIc(p.kind)}${esc(p.title || truncate(p.body || '', 70))}</span>
-        <span class="lh-m muted small">${esc(p.mine ? 'You' : p.name)} · ${esc(ago(p.created))}${p.comments.length ? ' · ' + plural(p.comments.length, 'comment') : ''}${p.votes.length ? ' · ' + p.votes.length + ' ▲' : ''}</span></button>`).join('') : `<p class="muted small">Nothing yet. Share an idea, a question or a result.</p>`;
+        <span class="lh-m muted small">${esc(p.mine ? 'You' : p.name)} · ${esc(ago(p.created))}${p.comments.length ? ' · ' + plural(p.comments.length, 'comment') : ''}${p.votes.length ? ' · ' + p.votes.length + (p.votes.length === 1 ? ' vote' : ' votes') : ''}</span></button>`).join('') : `<p class="muted small">Nothing yet. Share an idea, a question or a result.</p>`;
     const nd = S.hdocs && S.hdocs.sid === S.sid ? S.hdocs.docs.filter(x => !x.arch && !x.gone).length : 0;
     return `<div class="lh-grid">
       ${wid('file', 'Documents being written', nd, 'docs', hdocsHtml(), 'lh-docs', 'lh-docs-n')}
@@ -519,7 +522,7 @@ const Lab = (() => {
     }
     let list = S.mc.day ? (by[S.mc.day] || []) : items.filter(i => i.date >= t0 && !i.done).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 6);
     const mon = new Date(y, m - 1, 1).toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
-    const GL = {task: '', step: '☐ ', plan: '⚑ ', event: '◷ '};
+    const GL = {task: '', step: ic('checks', 11), plan: ic('flag', 11), event: ic('calendar', 11)};
     return `<div class="lab-mc"><div class="lab-mc-nav"><button data-lmcn="-1" aria-label="Previous month">‹</button><b>${esc(mon)}</b><button data-lmcn="1" aria-label="Next month">›</button></div>
       <div class="lab-mc-grid">${cells}</div>
       <div class="lab-mc-h">${S.mc.day ? esc(dueTxt(S.mc.day)) + '<button class="linklike" data-lmcday="">Next deadlines</button>' : 'Next deadlines'}</div>
@@ -906,6 +909,6 @@ const Lab = (() => {
   async function refresh() { if (state.tab === 'lab') { await load(); render(); } }
 
   document.addEventListener('DOMContentLoaded', () => { if (main()) bind(); });
-  function openCalendar() { S.sid = null; S.allcal = true; S.data = null; save(); setTab('lab'); if (state.tab === 'lab') render(); }
+  function openCalendar() { S.sid = null; S.allcal = true; S.keepCal = true; S.data = null; save(); setTab('lab'); if (state.tab === 'lab') render(); }
   return {show, openGroup, openCalendar, refresh, isOpen: () => state.tab === 'lab'};
 })();
