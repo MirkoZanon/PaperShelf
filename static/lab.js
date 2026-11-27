@@ -10,10 +10,10 @@
    Overview: your tasks in every group, the plans you lead, what was written for you.
    Everything lives in the group's file and travels with it (see sharing.py). Readers only read. */
 const Lab = (() => {
-  const S = {sid: null, allcal: false, sub: 'home', data: null, ov: null, open: new Set(), composing: null, cto: {},
+  const S = {sid: null, allcal: false, sub: 'plans', data: null, ov: null, open: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, flt: '', mc: {month: '', day: ''}, focus: null, pn: {}, tw: null};
   const TH = {};   // the note threads being written: {'task:<id>' | 'plan:<id>': {edit, to, draft}}
-  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['ideas', 'plans', 'docs', 'cal'].includes(p.sub) ? p.sub : 'home'; } catch { /* storage unavailable */ }
+  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['ideas', 'docs', 'cal'].includes(p.sub) ? p.sub : 'plans'; } catch { /* storage unavailable */ }
   let ORDER = 'auto'; try { ORDER = localStorage.getItem('papershelf-lab-order') === 'manual' ? 'manual' : 'auto'; } catch { /* ignore */ }
   const PR = {high: 0, normal: 1, low: 2};
   // the board's order: by deadline (the closest first, overdue on top, no date last), then priority
@@ -127,7 +127,7 @@ const Lab = (() => {
     await load(); render();
   }
   async function go(sid, sub) {
-    S.sid = sid || null; S.allcal = false; S.sub = sub || 'home'; S.composing = null; S.open.clear(); S.f = {kind: 'all', tag: '', q: '', sort: 'new'}; S.plan = 'all';
+    S.sid = sid || null; S.allcal = false; S.sub = sub || 'plans'; S.composing = null; S.open.clear(); S.f = {kind: 'all', tag: '', q: '', sort: 'new'}; S.plan = 'all';
     save(); main().innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
     await load(); render(); main().scrollTop = 0;
   }
@@ -176,9 +176,9 @@ const Lab = (() => {
     else if (S.composing && !$('#lc-title', el)?.value && document.activeElement === document.body) $('#lc-title', el)?.focus();
     $$('.th-text', el).forEach(grow);
     S.tw?.paint();
-    if (S.sub === 'docs' && S.sid && S.data && typeof Docs !== 'undefined') { const o = S.openDoc; S.openDoc = null; Docs.mount($('#docs-host', el), S.sid, W(), o ? {open: o, onBack: () => { S.sub = 'home'; save(); render(); }} : {}); }
+    if (S.sub === 'docs' && S.sid && S.data && typeof Docs !== 'undefined') { const o = S.openDoc; S.openDoc = null; Docs.mount($('#docs-host', el), S.sid, W(), o ? {open: o, onBack: () => { S.sub = 'plans'; save(); render(); }} : {}); }
     else if (typeof Docs !== 'undefined') Docs.leave();
-    if (S.sub === 'home' && S.sid && S.data) loadHomeDocs();
+    if (S.sub === 'plans' && S.sid && S.data) loadHomeDocs();
     const ch = $('#cal-host', el);
     if (ch && typeof Cal !== 'undefined') Cal.mount(ch, S.sid ? {group: S.sid, canWrite: W(), onChange: () => { if (S.sid) load().then(render); }} : {});
   }
@@ -229,12 +229,11 @@ const Lab = (() => {
         <div class="lab-tools"><button class="btn small" data-lpapers title="The group's papers in the library">${ic('file', 15)}Papers</button><button class="btn small" data-ltable title="The group's review table">${ic('table', 15)}Table</button>
           <button class="btn small" data-lexport title="Download the lab as a Markdown report, for a meeting, the minutes or a lab notebook">${ic('download', 15)}Report</button>
           <button class="btn small" data-lsync title="Get the latest from the others now">${ic('refresh', 15)}Update</button></div></div>
-      <div class="lab-tabs"><button data-lsub="home" class="${S.sub === 'home' ? 'on' : ''}">${ic('home', 16)}Overview</button>
+      <div class="lab-tabs"><button data-lsub="plans" class="${S.sub === 'plans' ? 'on' : ''}">${ic('home', 16)}Home<span class="lab-n">${open || ''}</span></button>
         <button data-lsub="ideas" class="${S.sub === 'ideas' ? 'on' : ''}">${ic('bulb', 16)}Ideas and discussion<span class="lab-n">${d.posts.length || ''}</span></button>
-        <button data-lsub="plans" class="${S.sub === 'plans' ? 'on' : ''}">${ic('checks', 16)}Plans and tasks<span class="lab-n">${open || ''}</span></button>
         <button data-lsub="cal" class="${S.sub === 'cal' ? 'on' : ''}">${ic('calendar', 16)}Calendar<span class="lab-n">${(d.events || []).filter(e => e.date >= today()).length || ''}</span></button>
         <button data-lsub="docs" class="${S.sub === 'docs' ? 'on' : ''}">${ic('file', 16)}Documents</button></div>
-      ${S.sub === 'plans' ? plansHtml() : S.sub === 'cal' ? '<div id="cal-host" class="cal-host"></div>' : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : S.sub === 'home' ? homeHtml() : ideasHtml()}`;
+      ${S.sub === 'plans' ? plansHtml() : S.sub === 'cal' ? '<div id="cal-host" class="cal-host"></div>' : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : ideasHtml()}`;
   }
 
   /* ---------------------------------------------------- the group's main page: widgets */
@@ -252,32 +251,21 @@ const Lab = (() => {
     try {
       const r = await api(`/api/shares/${encodeURIComponent(sid)}/docs`);
       S.hdocs = {sid, docs: r.docs || []};
-      const host = $('#lh-docs'); if (host && S.sid === sid && S.sub === 'home') host.innerHTML = hdocsHtml();
+      const host = $('#lh-docs'); if (host && S.sid === sid && S.sub === 'plans') host.innerHTML = hdocsHtml();
       const n = $('#lh-docs-n'); if (n) n.textContent = S.hdocs.docs.filter(x => !x.arch && !x.gone).length || '';
     } catch { /* the widget keeps saying Loading */ }
   }
-  function homeHtml() {
-    const d = S.data, t0 = today(), wk = isoOf(new Date(Date.now() + 14 * 864e5));
-    const wid = (icon, title, n, sub, body, id = '', nid = '') => `<section class="lh-w"><h3>${ic(icon, 16)}<span>${title}</span><span class="lab-n" ${nid ? `id="${nid}"` : ''}>${n || ''}</span><span class="grow"></span><button class="linklike small" data-lsub="${sub}">Open</button></h3><div class="lh-body" ${id ? `id="${id}"` : ''}>${body}</div></section>`;
-    const posts = d.posts.slice().sort((a, b) => (b.activity || b.created || '').localeCompare(a.activity || a.created || '')).slice(0, 5);
+  // the two shortcuts at the top of the group's home: documents being written, latest ideas and discussion
+  function homeStrip() {
+    const d = S.data, t0 = today();
+    const wid = (icon, title, n, sub, body, id = '', nid = '') => `<section class="lh-w"><h3>${ic(icon, 15)}<span>${title}</span><span class="lab-n" ${nid ? `id="${nid}"` : ''}>${n || ''}</span><span class="grow"></span><button class="linklike small" data-lsub="${sub}">Open</button></h3><div class="lh-body" ${id ? `id="${id}"` : ''}>${body}</div></section>`;
+    const posts = d.posts.slice().sort((a, b) => (b.activity || b.created || '').localeCompare(a.activity || a.created || '')).slice(0, 4);
     const pBody = posts.length ? posts.map(p => `<button class="lh-row k-${esc(p.kind)}" data-hpost="${esc(p.id)}"><span class="lh-t">${kindIc(p.kind)}${esc(p.title || truncate(p.body || '', 70))}</span>
         <span class="lh-m muted small">${esc(p.mine ? 'You' : p.name)} · ${esc(ago(p.created))}${p.comments.length ? ' · ' + plural(p.comments.length, 'comment') : ''}${p.votes.length ? ' · ' + p.votes.length + ' ▲' : ''}</span></button>`).join('') : `<p class="muted small">Nothing yet. Share an idea, a question or a result.</p>`;
-    const live = d.tasks.filter(t => t.status !== 'done' && !t.archived);
-    const doing = live.filter(t => t.status === 'doing').slice(0, 5);
-    const late = live.filter(t => t.due && t.due < t0).length, soon = live.filter(t => t.due && t.due >= t0 && t.due <= wk).length;
-    const tBody = `<div class="lab-glance"><span class="lab-gl overdue ${late ? '' : 'zero'}"><b>${late}</b>overdue</span><span class="lab-gl ${soon ? '' : 'zero'}"><b>${soon}</b>due in 14 days</span><span class="lab-gl"><b>${live.filter(t => t.status === 'todo').length}</b>to do</span></div>
-      ${doing.length ? doing.map(t => `<button class="lh-row" data-htask="${esc(t.id)}"><span class="lh-t">${esc(t.title)}</span><span class="lh-m small">${t.people.length ? esc(t.people.map(x => x.name).join(', ')) : '<span class="muted">nobody yet</span>'} ${dueChip(t.due, t.status)}</span></button>`).join('') : '<p class="muted small">Nothing in progress.</p>'}`;
-    const up = [];
-    for (const t of live) { if (t.due && t.due <= wk) up.push({date: t.due, title: t.title, kind: 'task', id: t.id}); for (const c of t.checklist || []) if (c.due && !c.done && c.due <= wk) up.push({date: c.due, title: c.text, sub: t.title, kind: 'step', id: t.id}); }
-    for (const e of d.events || []) if (e.date && e.date >= t0 && e.date <= wk) up.push({date: e.date, title: e.title, kind: 'event', time: e.start || ''});
-    up.sort((a, b) => a.date.localeCompare(b.date));
-    const cBody = up.length ? up.slice(0, 7).map(x => `<button class="lh-row" ${x.id ? `data-htask="${esc(x.id)}"` : 'data-lsub="cal"'}><span class="lh-t">${ic(x.kind === 'event' ? 'calendar' : 'checks', 13)}${esc(x.title)}</span><span class="lh-m small">${dueChip(x.date, x.kind === 'event' ? '' : 'todo')}${x.time ? ` <span class="muted">${esc(x.time)}</span>` : ''}${x.sub ? ` <span class="muted">${esc(x.sub)}</span>` : ''}</span></button>`).join('') : '<p class="muted small">Nothing due in the next two weeks.</p>';
     const nd = S.hdocs && S.hdocs.sid === S.sid ? S.hdocs.docs.filter(x => !x.arch && !x.gone).length : 0;
     return `<div class="lh-grid">
       ${wid('file', 'Documents being written', nd, 'docs', hdocsHtml(), 'lh-docs', 'lh-docs-n')}
-      ${wid('bulb', 'Ideas and discussion', d.posts.length, 'ideas', pBody)}
-      ${wid('checks', 'Plans and tasks', live.length, 'plans', tBody)}
-      ${wid('calendar', 'Coming up', up.length, 'cal', cBody)}</div>`;
+      ${wid('bulb', 'Ideas and discussion', d.posts.length, 'ideas', pBody)}</div>`;
   }
 
   /* ---------------------------------------------------- ideas */
@@ -465,7 +453,7 @@ const Lab = (() => {
       head = `<div class="lab-phead plain"><div class="lab-phead-main"><h3>${S.plan === 'none' ? 'Tasks without a plan' : 'All tasks'}</h3>
           ${d.tasks.length ? '' : '<p class="muted small lab-explain">A plan is a project or a milestone, such as a pilot study or a paper. Its tasks are the steps: each has people, a deadline, a checklist to tick and notes for the group.</p>'}</div></div>`;
     }
-    return `<div class="lab-plans2">
+    return `${homeStrip()}<div class="lab-plans2">
       <div class="lab-plist">
         <div class="lab-plist-h"><b>Plans</b>${w ? `<button class="btn small" data-lnewplan title="A project or a milestone that groups tasks">${ic('plus', 14)}New plan</button>` : ''}</div>
         <button class="lab-pi ${S.plan === 'all' ? 'on' : ''}" data-lplan="all"><span class="lab-pi-h"><b>All tasks</b><span class="lab-n">${live.length || ''}</span></span></button>
@@ -485,7 +473,8 @@ const Lab = (() => {
           ${w && !pl?.arch ? `<button class="btn small primary" data-lfocusquick>${ic('plus', 14)}New task</button>` : ''}</div>
         <div class="lab-board">${BOARD.map(([st, label]) => { const col = T.filter(t => t.status === st); if (ORDER === 'auto') col.sort(byDeadline); return `<div class="lab-col" data-col="${st}">
             <div class="lab-col-h"><span class="lab-st ${st}"></span><b>${label}</b><span class="lab-n">${col.length}</span>${w && st === 'done' && col.length && !pl?.arch ? `<button class="lab-col-act" data-larchdone title="Move the finished tasks of this column to the Archive: they leave the board, nothing is deleted">${ic('archive', 14)}Archive</button>` : ''}</div>
-            <div class="lab-col-list">${col.map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? (w && !pl?.arch ? 'Type a task below and press Enter.' : 'Nothing to do.') : st === 'doing' ? 'Drag a task here when you start it.' : 'Finished tasks land here.'}</div>`}</div>
+            <div class="lab-col-list">${(st === 'done' && !S.doneAll ? col.slice(0, 4) : col).map(taskCard).join('') || `<div class="lab-col-empty muted small">${st === 'todo' ? (w && !pl?.arch ? 'Type a task below and press Enter.' : 'Nothing to do.') : st === 'doing' ? 'Drag a task here when you start it.' : 'Finished tasks land here.'}</div>`}</div>
+            ${st === 'done' && col.length > 4 ? `<button class="linklike small lab-doneall" data-ldoneall>${S.doneAll ? 'Show fewer' : `Show all ${col.length}`}</button>` : ''}
             ${w && st === 'todo' && !pl?.arch ? `<div class="lab-quickrow">${ic('plus', 15)}<input class="lab-quick" maxlength="300" placeholder="Add a task${pl ? ` to ${esc(truncate(pl.name, 22))}` : ''}" title="Press Enter to add it. Then open it to set people, a date, a checklist and notes."></div>` : ''}</div>`; }).join('')}</div>`}
       </div></div>`;
   }
@@ -767,6 +756,7 @@ const Lab = (() => {
       }
       if (!S.data) return;
       if (t.closest('.th')) { await threadClick(e); return; }
+      if (t.closest('[data-ldoneall]')) { S.doneAll = !S.doneAll; render(); return; }
       const hd = t.closest('[data-hdoc]'); if (hd) { S.openDoc = hd.dataset.hdoc; S.sub = 'docs'; save(); render(); return; }
       const hp = t.closest('[data-hpost]'); if (hp) { gotoPost(hp.dataset.hpost); return; }
       const ht = t.closest('[data-htask]'); if (ht) { taskWindow(ht.dataset.htask); return; }

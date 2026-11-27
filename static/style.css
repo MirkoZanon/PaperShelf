@@ -2598,3 +2598,23 @@ body.pdf-window .app { display: none; } body.pdf-window { background: var(--bg);
 .lh-t { font-weight: 560; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lh-m { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .lh-w .lab-glance { margin-bottom: 6px; }
+
+/* 3.7 layout: Lab home strip, slim Done column, aligned toolbars */
+.lh-grid { grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.lh-w { padding: 10px 14px 4px; }
+.lh-row { padding: 6px 4px; }
+.lab-board { grid-template-columns: minmax(230px, 1fr) minmax(230px, 1fr) minmax(190px, .62fr); }
+.lab-col[data-col="done"] { min-height: 0; opacity: .92; }
+.lab-col[data-col="done"] .lab-task { padding: 7px 9px; }
+.lab-col[data-col="done"] .lab-task-t { font-size: 13px; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 55%, transparent); color: var(--muted); }
+.lab-doneall { align-self: flex-start; margin: 6px 4px 2px; }
+@media (max-width: 980px) { .lab-board { grid-template-columns: 1fr; } }
+/* one height for every control of a toolbar (calendar, documents) */
+.cal-bar, .cal-filters { align-items: center; }
+.cal-bar .btn.small, .cal-filters .btn.small, .cal-bar .seg, .dx-bar .seg, .dx-bar .mode-seg { height: 34px; box-sizing: border-box; }
+.cal-bar .btn.small, .cal-filters .btn.small { display: inline-flex; align-items: center; gap: 4px; }
+.cal-bar .seg, .dx-bar .seg, .dx-bar .mode-seg { margin: 0; display: inline-flex; align-items: center; }
+.cal-bar .seg button, .dx-bar .seg button, .dx-bar .mode-seg button { height: 100%; font-size: 13px; display: inline-flex; align-items: center; padding-top: 0; padding-bottom: 0; }
+/* the filter checkboxes are plain labels, not pills */
+.cal .cal-filters label.opt, .cal .cal-filters label.opt:has(input:checked) { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.cal .cal-filters label.opt input { margin: 0; }

@@ -2,8 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.8 – 2026-11-27
+- **Lab home**: the first tab of a group is now **Home** (the old Plans and tasks page). On top, two shortcuts: the documents being written (authors, last edit, words, open comments) and the latest ideas and discussion. Click a row to open it. The Done column is slimmer and shows only the latest four finished tasks, with "Show all" for the rest.
+- **Cleaner toolbars**: the calendar and document bars now have buttons of the same height (Month/Week/Agenda next to New event, Edit/Suggest/Preview next to Library), and the calendar filters are plain checkboxes instead of odd pills.
+
 ## 3.7 – 2026-11-27
-- **Lab main page**: each group now opens on an **Overview** with widgets: the documents being written (who wrote, when, words, open comments), the latest ideas and discussion, plans and tasks at a glance (overdue, due, in progress) and what is coming up. Click a row to open it; "Open" goes to the full tab.
 - **Coloured text in documents**: new **Color** button in the toolbar and colour dots in the selection bar (red, orange, green, blue, purple, grey). Written as `{red}text{/}`; shown in colour while you write, in Preview and in the Word / Markdown / PDF exports. People who still have an older version see the plain markers.
 - **Other people's changes as coloured text**: new text from others is written in their colour (and fades back after a short while) instead of a highlight. The Authors button colours all the text by author, also as font colour. A colour you choose yourself always wins.
 
