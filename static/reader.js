@@ -6,7 +6,7 @@ const Reader = (() => {
   const COLORS = {yellow: '#ffd400', green: '#5fb236', blue: '#2ea8e5', red: '#ff6666', purple: '#a28ae5'};
   let pdfjs = null, doc = null, paper = null, scale = 1.2, anns = [], pages = {}, color = 'yellow';
   let noteTargets = [], noteTo = '-';  // where a highlight's note is also copied (paper notes)
-  let isOpen = false, observer = null, token = 0, sizes = [];
+  let isOpen = false, observer = null, token = 0, sizes = [], win = false;   // win: this browser window is a reader window of its own
   // where you stopped (saved for "resume reading") and time spent reading (reading stats, this computer only)
   let curPage = 1, savedPage = 0, posTimer = null, active = 0, secs = 0, tick = null, lastTick = 0;
 
@@ -30,7 +30,7 @@ const Reader = (() => {
     const r = root();
     r.innerHTML = `
       <div class="r-bar">
-        <button class="btn small" id="r-close" title="Close (Esc)">✕ Close</button>
+        <button class="btn small" id="r-close" title="Close (Esc)">✕ Close</button>${win ? '' : `<button class="btn small" id="r-own" title="Open this PDF in a window of its own, with its notes and highlights, so you can read several PDFs at once">⧉ Own window</button>`}
         <div class="r-title" title="${esc(paper.title)}">${esc(paper.title)}</div>
         <div class="r-tools">
           <span class="r-resume" id="r-resume"></span><span class="muted small" id="r-pageinfo"></span>
@@ -137,6 +137,7 @@ const Reader = (() => {
     try { doc?.destroy(); } catch (e) { /* ignore */ }
     doc = null;
     root().classList.remove('open'); root().innerHTML = ''; document.body.classList.remove('reader-open');
+    if (win) { window.close(); setTimeout(() => { location.href = '/'; }, 300); return; }
     loadLibrary().catch(() => {});
   }
 
@@ -369,7 +370,7 @@ const Reader = (() => {
   }
 
   function bind() {
-    $('#r-close').onclick = close;
+    $('#r-close').onclick = close; const pb = $("#r-own"); if (pb) pb.onclick = () => popout(paper.id, curPage);
     $('#r-notesbtn').onclick = () => sideTab($('.r-notes-pane').hidden ? 'notes' : 'hl');
     $('.r-side-tabs').onclick = e => { const b = e.target.closest('[data-rtab]'); if (b) sideTab(b.dataset.rtab); };
     $('#r-zoom-in').onclick = () => zoom(1.15);
@@ -408,5 +409,21 @@ const Reader = (() => {
 
   window.addEventListener('pagehide', () => { if (isOpen) flush(); });
   document.addEventListener('visibilitychange', () => { if (isOpen && document.visibilityState === 'hidden') flush(); });
-  return {open, close, isOpen: () => isOpen, paperId: () => paper && paper.id};
+  // a PDF in a window of its own: several can be open at once, each with its notes and highlights (?read=<paper>&page=<n>)
+  async function popout(id, page = 0) {
+    const w = window.open(`/?read=${id}${page > 1 ? '&page=' + page : ''}`, 'ps-pdf-' + id, 'popup=yes,width=1180,height=900');
+    if (!w) { toast('Your browser blocked the new window. Allow pop-ups for PaperShelf and try again.', 'error'); return; }
+    if (isOpen && paper && paper.id === id) await close();
+  }
+  document.addEventListener('DOMContentLoaded', async () => {
+    const qs = new URLSearchParams(location.search), id = +qs.get('read');
+    if (!id) return;
+    win = true; document.body.classList.add('pdf-window');
+    for (let i = 0; i < 100 && !(state.papers || []).some(p => p.id === id); i++) await new Promise(r => setTimeout(r, 100));
+    const p = (state.papers || []).find(x => x.id === id);
+    if (!p) { toast('That paper is not in the library of this computer.', 'error'); return; }
+    document.title = (p.title || 'PDF') + ' – PaperShelf';
+    await open(id, +qs.get('page') || 0);
+  });
+  return {open, close, popout, isOpen: () => isOpen, paperId: () => paper && paper.id};
 })();

@@ -4370,6 +4370,47 @@ def doc_refs(sid, did):
     return jsonify(group=group, library=library)
 
 
+@app.post("/api/shares/<sid>/docs/<did>/find")
+def doc_find(sid, did):
+    """The Cite search box: papers of the group and of your own library whose title, authors, year, DOI or keywords contain every typed word."""
+    db = get_db()
+    row, st = _load_share(db, sid)
+    if not st or did not in (st.get("docs") or {}):
+        return error("That document doesn't exist any more.", 404)
+    words = [w for w in re.split(r"\s+", str((request.get_json(silent=True) or {}).get("query") or "").lower().strip()[:80]) if w]
+    if not words:
+        return jsonify(group=[], library=[])
+    items = _doc_items(st)
+    lab = docexport.labels(items)
+    local = [dict(r) for r in db.execute("SELECT id, title, doi, keywords, authors, year FROM papers")]
+    ok = lambda hay: all(w in hay for w in words)
+    group, grp_ids, grp_titles, grp_dois = [], set(), set(), set()
+    for k, e in items.items():
+        m = e.get("meta") or {}
+        cite = docexport.short_cite(m)
+        grp_titles.add(re.sub(r"\W+", " ", (m.get("title") or "").lower()).strip())
+        if m.get("doi"):
+            grp_dois.add(m["doi"].lower())
+        hay = " ".join([lab[k], cite, m.get("title") or "", str(m.get("year") or ""), m.get("doi") or "", " ".join(map(str, m.get("authors") or []))]).lower()
+        if ok(hay):
+            group.append({"label": lab[k], "cite": cite, "title": m.get("title") or ""})
+    for r in db.execute("SELECT paper_id FROM paper_shares WHERE share_id=?", (sid,)):
+        grp_ids.add(r[0])
+    library = []
+    for r in local:
+        if r["id"] in grp_ids or (r["doi"] or "").lower() in grp_dois or re.sub(r"\W+", " ", (r["title"] or "").lower()).strip() in grp_titles:
+            continue
+        try:
+            au = json.loads(r["authors"] or "[]")
+            kw = " ".join(json.loads(r["keywords"] or "[]"))
+        except ValueError:
+            au, kw = [], ""
+        hay = " ".join([r["title"] or "", str(r["year"] or ""), r["doi"] or "", kw, " ".join(map(str, au))]).lower()
+        if ok(hay):
+            library.append({"id": r["id"], "cite": docexport.short_cite({"authors": au, "year": r["year"]}), "title": r["title"] or ""})
+    return jsonify(group=group[:15], library=library[:15])
+
+
 @app.post("/api/shares/<sid>/docs/<did>/images")
 def doc_image_add(sid, did):
     """A picture (already shrunk by the browser) for the document; the body is the image itself."""

@@ -2034,7 +2034,7 @@ function bind() {
     if (act === 'refresh') refreshMeta(id);
     if (act === 'star') savePaper(id, {starred: !p.starred});
     if (act === 'delete') deletePapers([id]);
-    if (act === 'read') Reader.open(id);
+    if (act === 'read') { if (e.shiftKey || e.metaKey || e.ctrlKey) Reader.popout(id); else Reader.open(id); }
     if (act === 'viaproxy') getVia(id, a.dataset.proxy);
     if (act === 'institution') openForLogin(id);
     if (act === 'getcites') { setBusy(a, true, 'Fetching…'); await fetchCitations([id]); setBusy(a, false); }

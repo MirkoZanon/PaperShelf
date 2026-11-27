@@ -70,6 +70,7 @@ def resolve(text: str, items: dict):
                 cited.append(k)
             out.append(short_cite(items[k].get("meta") or {}))
         return "(" + "; ".join(out) + ")"
+    text = re.sub(r"\][ \t]*[;,]?[ \t]*\[@", "; @", text)      # [@a] [@b] and [@a], [@b] are one group: (A, 2020; B, 2019)
     return CITE_RE.sub(sub, text), cited
 
 

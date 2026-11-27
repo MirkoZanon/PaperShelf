@@ -2,6 +2,12 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.5 – 2026-11-27
+- **Document in its own window**: fixed the tools (Suggest, Cite, comments…) that did not work there. The app running behind the window was tearing the document down.
+- **Several citations in one parenthesis**: `[@a] [@b]`, `[@a], [@b]` and `[@a]; [@b]` are now shown (and exported) together, like `(Smith, 2020; Lee, 2019)`.
+- **Cite tool: search**: the search box is always there. It finds papers of the group and of your own library by title, author, year, DOI or keyword; a paper that is only in your library gets "Add and cite" (title, authors, year and DOI go to the group, never the PDF).
+- **PDF reader in its own window**: "Own window" in the reader bar (or Shift/Cmd/Ctrl+click on Read) opens the PDF in a separate window with its highlights and notes, so you can have several PDFs open at once. Closing the window saves the page where you stopped.
+
 ## 3.4 – 2026-11-26
 - **Authors in colour while you write**: a new "Authors" button in the second bar of a document colours each person's text in their own colour, in Edit and Suggest mode too (before this it was only in Review mode). A legend under the bar shows each colour with the person and their share of the text. It follows what you type, and each computer of a person keeps the same colour.
 

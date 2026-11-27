@@ -466,7 +466,7 @@ const Docs = (() => {
   // ---- the page itself: textarea (write), coloured source (review) or formatted text (preview)
   function resolveCites(text) {
     const by = new Map((D.R.papers || []).map(p => [p.label, p])), used = [];
-    const out = text.replace(/\[@([^\]\n]{1,200})\]/g, (_m, g) => '(' + g.split(/[;,]/).map(x => x.trim().replace(/^@/, '')).filter(Boolean).map(l => { const p = by.get(l); if (!p) return l + '?'; if (!used.includes(p)) used.push(p); return p.cite; }).join('; ') + ')');
+    const out = text.replace(/\][ \t]*[;,]?[ \t]*\[@/g, '; @').replace(/\[@([^\]\n]{1,200})\]/g, (_m, g) => '(' + g.split(/[;,]/).map(x => x.trim().replace(/^@/, '')).filter(Boolean).map(l => { const p = by.get(l); if (!p) return l + '?'; if (!used.includes(p)) used.push(p); return p.cite; }).join('; ') + ')');
     return {text: out, used};
   }
   const mdHtml = t => (typeof Notes !== 'undefined' && Notes.md) ? Notes.md(t) : esc(t).replace(/\n/g, '<br>');
@@ -699,8 +699,9 @@ const Docs = (() => {
   function citeHtml() {
     const P = D.R.papers || [];
     return `${D.can ? `<div class="dx-sugrefs"><div class="dx-row"><b>Fits what you are writing</b><span class="grow"></span><button class="btn small" data-dx="refs" title="Find papers that fit the paragraph you are in">${ic('refresh')}Suggest</button></div><div id="dx-sugrefs">${D.refsHtml || '<p class="muted small">Put the cursor in a paragraph and press <b>Suggest</b>, or type <code>[@</code> in the text. Matching is done on this computer.</p>'}</div></div>` : ''}<p class="muted small">Click a paper to put its citation in the text. The reference list is written for you in Preview and when you export.</p>
-      ${P.length > 6 ? '<input class="input" id="dx-cq" placeholder="Search the group\'s papers" style="margin-bottom:8px">' : ''}
-      <div id="dx-plist">${P.map(p => `<button class="dx-paper" data-dx-cite="${esc(p.label)}" data-s="${esc((p.label + ' ' + p.title).toLowerCase())}"><b>${esc(p.cite)}</b><span>${esc(truncate(p.title, 110))}</span><code>[@${esc(p.label)}]</code></button>`).join('') || '<p class="muted small dx-none">The group has no papers yet. Add papers to the group in the library, then cite them here.</p>'}</div>`;
+      <input class="input" id="dx-cq" type="search" placeholder="Search by title, author, year or DOI" aria-label="Search papers" style="margin:8px 0" value="${esc(D.cq || '')}">
+      <div id="dx-qres">${D.cqHtml || ''}</div>
+      <div id="dx-plist" ${D.cq ? 'hidden' : ''}>${P.map(p => `<button class="dx-paper" data-dx-cite="${esc(p.label)}" data-s="${esc((p.label + ' ' + p.title).toLowerCase())}"><b>${esc(p.cite)}</b><span>${esc(truncate(p.title, 110))}</span><code>[@${esc(p.label)}]</code></button>`).join('') || '<p class="muted small dx-none">The group has no papers yet. Add papers to the group in the library, then cite them here.</p>'}</div>`;
   }
   function sessions() {
     const R = D.R, all = [];
@@ -839,6 +840,18 @@ const Docs = (() => {
     const l = r.library.map(x => `<div class="dx-paper lib"><b>${esc(x.cite)}</b><span>${esc(truncate(x.title, 100))}</span>${x.why.length ? `<small>matches: ${esc(x.why.join(', '))}</small>` : ''}<button class="btn small" data-dx-addlib="${x.id}" data-title="${esc(x.title)}" title="Adds this paper to the group (title, authors and DOI, no PDF) and cites it">Add to group and cite</button></div>`).join('');
     return (g || l) ? `${g}${l ? `<h4 class="dx-h">From your library, not in the group yet</h4>${l}` : ''}` : '<p class="muted small">Nothing fits this paragraph yet. Write a little more, or pick a paper from the list below.</p>';
   }
+  async function findPapers() {
+    const v = (D.cq || '').trim(), box = $('#dx-qres', D.host); if (!box) return;
+    if (!v) { D.cqHtml = ''; box.innerHTML = ''; return; }
+    try {
+      const r = await api(`${base()}/${q(D.id)}/find`, {method: 'POST', body: {query: v}});
+      if ((D.cq || '').trim() !== v) return;      // typed on meanwhile
+      const g = r.group.map(x => `<button class="dx-paper" data-dx-cite="${esc(x.label)}"><b>${esc(x.cite)}</b><span>${esc(truncate(x.title, 110))}</span><code>[@${esc(x.label)}]</code></button>`).join('');
+      const l = r.library.map(x => `<div class="dx-paper lib"><b>${esc(x.cite)}</b><span>${esc(truncate(x.title, 110))}</span><button class="btn small" data-dx-addlib="${x.id}" data-title="${esc(x.title)}" title="Adds this paper to the group (title, authors and DOI only, never the PDF) and cites it">Add and cite</button></div>`).join('');
+      D.cqHtml = g || l ? `${g}${l ? `<h4 class="dx-h">From your library, not in the group yet</h4>${l}` : ''}` : '<p class="muted small dx-none">No paper matches. Check the spelling, or add the paper to your library first.</p>';
+      box.innerHTML = D.cqHtml;
+    } catch (err) { box.innerHTML = `<p class="muted small">${esc(err.message)}</p>`; }
+  }
   async function refsNow() {
     const ta = $('#dx-text', D.host); if (!ta || !D.can) { toast('Switch to Edit and put the cursor in a paragraph first.'); return; }
     if (D.side !== 'cite') { D.side = 'cite'; paintSide(); }
@@ -853,7 +866,7 @@ const Docs = (() => {
     try { await api(`/api/shares/${q(D.sid)}/papers`, {method: 'POST', body: {paper_ids: [pid]}}); await pull(); } catch (err) { toast(err.message, 'error'); return; }
     const hit = (D.R.papers || []).find(p => p.title === title);
     if (hit) insertAtCursor(`[@${hit.label}]`); else toast('The paper was added to the group; cite it from the list below.');
-    refsNow();
+    if ((D.cq || "").trim()) findPapers(); refsNow();
   }
   function caretXY(ta, pos) {
     const cs = getComputedStyle(ta), d = document.createElement('div');
@@ -1255,7 +1268,9 @@ const Docs = (() => {
         editTo(e.target.value, /^insertFrom(Paste|Drop)/.test(e.inputType || '')); autosize(e.target); paintNow(); D.sel = selection(); citePopup(e.target); refsSoon();
         const open = D.R.comments.length; if (open) paintSideSoon();
       } else if (e.target.id === 'dx-cq') {
-        const v = e.target.value.toLowerCase(); $$('#dx-plist .dx-paper', host).forEach(b => { b.hidden = !!v && !b.dataset.s.includes(v); });
+        D.cq = e.target.value; clearTimeout(D.cqT); D.cqT = setTimeout(findPapers, 250);
+        $('#dx-plist', host).hidden = !!D.cq.trim();
+        if (!D.cq.trim()) { D.cqHtml = ''; $('#dx-qres', host).innerHTML = ''; }
       }
     });
     host.addEventListener('keyup', e => { if (e.target.id === 'dx-text' && /^(Arrow|Home|End|Page)/.test(e.key)) { refsSoon(); if (!D.pop) citePopup(e.target); } });
@@ -1380,7 +1395,8 @@ const Docs = (() => {
   }
   // true while someone is writing: the lab must not redraw the page under their fingers
   const busy = sid => !!(D.R && D.id && D.sid === sid && D.host && document.body.contains(D.host));
-  function leave() { stopPoll(); flushAll(); D.id = null; D.R = null; D.view = null; D.host = null; hideBubble(); document.body.classList.remove('dx-split-on'); }
+  function leave() { if (D.standalone) return;      // the app behind a document window must not tear the document down
+    stopPoll(); flushAll(); D.id = null; D.R = null; D.view = null; D.host = null; hideBubble(); document.body.classList.remove('dx-split-on'); }
 
   // a document in a window of its own: ?doc=<group>/<document>
   const chan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('papershelf-docs') : null;
