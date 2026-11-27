@@ -2576,3 +2576,25 @@ body.pdf-window .app { display: none; } body.pdf-window { background: var(--bg);
 .lab-mc-open { display: block; margin: 8px 4px 2px; font-size: 12px; }
 .tw-ck-due { border: 1px solid transparent; background: none; color: var(--muted); font: inherit; font-size: 12px; border-radius: 8px; padding: 2px 4px; width: 112px; flex: none; opacity: .55; } .tw-ck:hover .tw-ck-due, .tw-ck-due.set, .tw-ck-due:focus { opacity: 1; border-color: var(--border); } .tw-ck-due.overdue { color: #d64545; border-color: #d64545; }
 .lab-ck-due { margin-left: auto; color: var(--muted); font-size: 11px; padding-left: 6px; } .lab-ck-due.overdue { color: #d64545; font-weight: 600; }
+
+/* Text in color: the layer behind the text box draws the text itself when colors are needed */
+.dx-tawrap.rich .dx-text { color: transparent; caret-color: var(--text, #222); } .dx-tawrap.rich .dx-text::selection { background: rgba(70, 130, 220, .3); }
+.dx-tawrap.rich .dx-mirror { color: var(--text, #222); }
+.dx-mirror .dx-tk { opacity: .38; } .dx-mirror .dx-aut { color: hsl(var(--c) 62% 38%); } .dx-mirror .dx-newt { color: hsl(var(--c) 66% 40%); animation: dxnewt 45s linear forwards; }
+@keyframes dxnewt { 0%, 70% { color: hsl(var(--c) 66% 40%); } 100% { color: var(--text, #222); } }
+@media (prefers-color-scheme: dark) { .dx-mirror .dx-aut { color: hsl(var(--c) 70% 70%); } @keyframes dxnewt { 0%, 70% { color: hsl(var(--c) 72% 70%); } 100% { color: var(--text, #eee); } } .dx-mirror .dx-newt { color: hsl(var(--c) 72% 70%); } }
+.dx-tcb { font-weight: 700; font-family: Georgia, serif; background: none; } .dx-selsep { width: 1px; background: var(--border); margin: 0 4px; align-self: stretch; }
+/* Who wrote what: the author's colour is the colour of the text, not a highlight */
+.dx-au { background: none; color: hsl(var(--c) 62% 38%); }
+@media (prefers-color-scheme: dark) { .dx-au { background: none; color: hsl(var(--c) 70% 70%); } }
+
+/* Lab main page: widgets */
+.lh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 16px; align-items: start; }
+.lh-w { background: var(--card, var(--bg)); border: 1px solid var(--border-soft); border-radius: 12px; padding: 12px 14px 8px; min-width: 0; }
+.lh-w h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; font-weight: 650; }
+.lh-w h3 .linklike { opacity: .75; }
+.lh-row { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--border-soft); padding: 8px 4px; border-radius: 0; cursor: pointer; color: inherit; font: inherit; }
+.lh-row:hover { background: var(--hover, rgba(127,127,127,.08)); }
+.lh-t { font-weight: 560; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lh-m { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.lh-w .lab-glance { margin-bottom: 6px; }

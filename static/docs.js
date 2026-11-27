@@ -332,7 +332,7 @@ const Docs = (() => {
       <div class="dx-tools" role="toolbar" aria-label="Formatting">${W && D.mode === 'write' ? `
         <button data-dx="undo" id="dx-undo" title="Undo (${MOD}+Z): takes back your last changes, not the ones of others" disabled>↶</button><button data-dx="redo" id="dx-redo" title="Redo (${MOD}+Shift+Z)" disabled>↷</button><span class="dx-sep"></span>
         <button data-fmt="h1" title="Heading 1"><b>H1</b></button><button data-fmt="h2" title="Heading 2"><b>H2</b></button><button data-fmt="h3" title="Heading 3"><b>H3</b></button><span class="dx-sep"></span>
-        <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><button data-dx="hl-menu" title="Highlight the selected text in a color">Highlight</button><span class="dx-sep"></span>
+        <button data-fmt="bold" title="Bold (${MOD}+B)"><b>B</b></button><button data-fmt="italic" title="Italic (${MOD}+I)"><i>I</i></button><button data-fmt="code" title="Code"><code>&lt;/&gt;</code></button><button data-dx="hl-menu" title="Highlight the selected text in a color">Highlight</button><button data-dx="tc-menu" title="Write the selected text in a color">Color</button><span class="dx-sep"></span>
         <button data-fmt="ul" title="Bulleted list">• List</button><button data-fmt="ol" title="Numbered list">1. List</button><button data-fmt="quote" title="Quote">❝</button><button data-fmt="link" title="Link">${ic('link')}</button><span class="dx-sep"></span>
         <button data-fmt="table" title="Insert a table">${ic('table')}Table</button><span class="dx-tt" id="dx-tt" hidden><button data-tbl="addrow" title="Add a row below the cursor">+ Row</button><button data-tbl="addcol" title="Add a column after the cursor">+ Column</button><button data-tbl="delrow" title="Delete the row with the cursor">− Row</button><button data-tbl="delcol" title="Delete the column with the cursor">− Column</button><button data-tbl="fmt" title="Line up the columns">Tidy</button></span><button data-fmt="image" title="Insert a picture (or paste / drop one into the text)">${ic('image')}Picture</button><span class="dx-sep"></span>
         <button data-fmt="cite" title="Cite a paper of the group">${ic('book')}Cite</button>
@@ -378,7 +378,7 @@ const Docs = (() => {
   }
   function scroller() { for (let e = D.host; e && e !== document.body; e = e.parentElement) { const o = getComputedStyle(e).overflowY; if (o === 'auto' || o === 'scroll') return e; } return document.scrollingElement; }
   /* ---- other people's cursors and their latest changes, drawn over the text box (Edit mode); the changes fade after a few seconds */
-  const FRESH_MS = 12000;
+  const FRESH_MS = 45000;      // what others just wrote stays in their color for this long, then fades back to normal
   function measure(ta, items) {     // items: [{s, e}] sorted, not overlapping (offsets in ta.value) -> the rectangles of each, relative to the text box
     let m = D.mirror; if (!m) { m = D.mirror = document.createElement('div'); m.setAttribute('aria-hidden', 'true'); document.body.appendChild(m); }
     const cs = getComputedStyle(ta);
@@ -391,14 +391,15 @@ const Docs = (() => {
   function remoteLayer() {
     const host = D.host, ta = $('#dx-text', host), pg = $('#dx-page', host); let lay = $('#dx-rem', host);
     const R = D.R, B = R && R.B;
-    if (!ta || !pg || !B || D.mode !== 'write' || D.view || ta.value !== B.text) { lay && lay.remove(); return; }
+    if (!ta || !pg || !B || D.mode !== 'write' || D.view || ta.value !== B.text) { lay && lay.remove(); if (D.recent?.length) { D.recent = []; paintMirror(); } return; }
     if (D.fresh) D.fresh = D.fresh.filter(f => Date.now() - f.t < FRESH_MS);
     const marks = [];     // {s, e, kind, a, age}
     for (const f of D.fresh || []) {
       const op = f.op, age = (Date.now() - f.t) / 1000;
       if (op.k === 'i') { const n = Array.from(op.t).length, s0 = visBefore(B, [op.c, f.a]), e0 = visAfter(B, [op.c + n - 1, f.a]); if (s0 != null && e0 != null && e0 > s0) marks.push({s: B.off[s0], e: B.off[e0], kind: 'add', a: f.a, age}); }
-      else if (op.r && op.r.length) { const p = visBefore(B, [op.r[0][0], op.r[0][1]]); if (p != null) marks.push({s: B.off[p], e: B.off[p], kind: 'del', a: f.a, age}); }
+      else if (op.r && op.r.length && age < 12) { const p = visBefore(B, [op.r[0][0], op.r[0][1]]); if (p != null) marks.push({s: B.off[p], e: B.off[p], kind: 'del', a: f.a, age}); }
     }
+    D.recent = marks.filter(m => m.kind === 'add' && m.e > m.s).map(m => ({s: m.s, e: m.e, a: m.a, age: m.age})); paintMirror();
     for (const a of activeAuthors(90000)) { const sp = lastSpot(a); if (sp != null) { const o = B.off[Math.min(sp, B.vis.length)]; marks.push({s: o, e: o, kind: 'cur', a, age: 0}); } }
     // comments and suggestions: marked in the text you are editing, the one you opened stronger
     const cmr = {cm: [], sg: [], sel: []};
@@ -423,7 +424,7 @@ const Docs = (() => {
     lay.style.cssText = `left:${ta.offsetLeft + ta.clientLeft}px;top:${ta.offsetTop + ta.clientTop}px;width:${ta.clientWidth}px;height:${ta.offsetHeight}px`;
     lay.innerHTML = hlHtml + cmHtml + marks.map(m => (rects.get(m) || []).map((r, i) => {
       const c = `--c:${auHue(m.a)};left:${r.x}px;top:${r.y}px;height:${r.h}px;`;
-      if (m.kind === 'add') return `<i class="add" style="${c}width:${r.w}px;animation-delay:-${m.age.toFixed(2)}s"></i>`;
+      if (m.kind === 'add') return '';       // what others wrote is shown as colored text (see paintMirror), not as a highlight
       if (m.kind === 'del') return `<i class="del" style="${c}animation-delay:-${m.age.toFixed(2)}s"></i>`;
       return `<i class="cur ${typingNow(m.a) ? 'typing' : ''}" style="${c}" data-n="${esc(peopleName(m.a).split(' ')[0])}"></i>`;
     }).join('')).join('');
@@ -525,12 +526,30 @@ const Docs = (() => {
   }
   // "Authors": every writer's text in their own color, also while writing (a layer behind the text box)
   function paintMirror() {
-    const m = $('#dx-mirror', D.host), B = D.R?.B; paintLegend();
-    if (!m || !B) return;
-    if (!D.auth || B.vis.length > 150000) { m.innerHTML = ''; return; }
-    let h = '', cur = null, buf = '';
-    const flush = () => { if (buf) h += `<span style="--c:${auHue(cur)}" class="dx-au">${esc(buf)}</span>`; buf = ''; };
-    for (const n of B.vis) { if (n.a !== cur) { flush(); cur = n.a; } buf += n.ch; }
+    const ta = $('#dx-text', D.host), m = $('#dx-mirror', D.host); paintLegend();
+    if (!ta || !m) return;
+    const v = ta.value, B = D.R?.B, same = !!B && B.text === v, n = v.length, big = n > 150000;
+    const rec = same ? (D.recent || []) : [], hasTC = v.includes('{/}');
+    const on = !big && ((D.auth && same) || hasTC || rec.length);
+    m.parentNode.classList.toggle('rich', !!on);
+    if (!on) { m.innerHTML = ''; return; }
+    const col = new Array(n).fill(''), tok = new Uint8Array(n), who = new Array(n).fill(null), fresh = new Array(n).fill(-1);
+    const TCR = /\{(red|orange|green|blue|purple|grey|gray)\}([\s\S]+?)\{\/\}/g; let t;
+    while ((t = TCR.exec(v))) { const o = t[1].length + 2, e = t.index + t[0].length; for (let k = t.index; k < t.index + o; k++) tok[k] = 1; for (let k = e - 3; k < e; k++) tok[k] = 1; for (let k = t.index + o; k < e - 3; k++) col[k] = TEXT_COLORS[t[1]]; }
+    if (D.auth && same) for (let i = 0; i < B.vis.length; i++) { const x = B.vis[i], o = B.off[i]; for (let k = o; k < o + x.ch.length && k < n; k++) who[k] = x.a; }
+    rec.forEach((r, i) => { for (let k = r.s; k < r.e && k < n; k++) fresh[k] = i; });
+    let h = '', key = null, buf = '', st = '';
+    const flush = () => { if (buf) h += `<span${st}>${esc(buf)}</span>`; buf = ''; };
+    for (let k = 0; k < n; k++) {
+      let kk, ss;
+      if (tok[k]) { kk = 'tk'; ss = ' class="dx-tk"'; }
+      else if (col[k]) { kk = 'c' + col[k]; ss = ` style="color:${col[k]}"`; }
+      else if (who[k] != null) { kk = 'a' + who[k]; ss = ` class="dx-aut" style="--c:${auHue(who[k])}"`; }
+      else if (fresh[k] >= 0) { const r = rec[fresh[k]]; kk = 'f' + fresh[k]; ss = ` class="dx-newt" style="--c:${auHue(r.a)};animation-delay:-${r.age.toFixed(1)}s"`; }
+      else { kk = ''; ss = ''; }
+      if (kk !== key) { flush(); key = kk; st = ss; }
+      buf += v[k];
+    }
     flush(); m.innerHTML = h + '&#8203;';
   }
   function paintLegend() {
@@ -752,6 +771,30 @@ const Docs = (() => {
     }
     ta.value = out; ta.setSelectionRange(from, to); ta.focus(); editTo(out); autosize(ta); paintSide();
   }
+  const TEXT_COLORS = {red: '#d64545', orange: '#d9822b', green: '#2f9e44', blue: '#2f6fd6', purple: '#8b5cf6', grey: '#808a96', gray: '#808a96'};
+  const TC_RE = /\{(red|orange|green|blue|purple|grey|gray)\}([\s\S]+?)\{\/\}/g;
+  function textColor(color) {      // {red}text{/}; again on a colored piece changes its color, "none" removes it
+    const ta = $('#dx-text', D.host); if (!ta || !D.can) return;
+    const v = ta.value, s0 = ta.selectionStart, e0 = ta.selectionEnd; let out, from, to, m; TC_RE.lastIndex = 0;
+    while ((m = TC_RE.exec(v))) if (s0 >= m.index && e0 <= m.index + m[0].length) break;
+    if (m) { const rep = color === 'none' ? m[2] : `{${color}}${m[2]}{/}`; out = v.slice(0, m.index) + rep + v.slice(m.index + m[0].length); from = m.index; to = m.index + rep.length; }
+    else {
+      if (color === 'none') return;
+      const sel = v.slice(s0, e0) || 'colored text', rep = sel.split('\n').map(l => l.trim() ? `{${color}}${l}{/}` : l).join('\n');
+      out = v.slice(0, s0) + rep + v.slice(e0); from = s0; to = s0 + rep.length;
+    }
+    ta.value = out; ta.setSelectionRange(from, to); ta.focus(); editTo(out); autosize(ta); paintSide(); paintMirror();
+  }
+  function tcMenu(btn) {
+    $('.dx-pop')?.remove(); if (!$('#dx-text', D.host) || !D.can) { toast('Switch to Edit to color text.'); return; }
+    const pop = document.createElement('div'); pop.className = 'dx-pop dx-hlpop';
+    pop.innerHTML = ['red', 'orange', 'green', 'blue', 'purple', 'grey'].map(c => `<button data-tc="${c}" title="${c} text" class="dx-tcb" style="color:${TEXT_COLORS[c]}">A</button>`).join('') + '<button data-tc="none" title="Back to the normal color" class="none">None</button>';
+    document.body.appendChild(pop); const r = btn.getBoundingClientRect();
+    pop.style.cssText = `position:fixed;z-index:200;top:${Math.round(r.bottom + 6)}px;left:${Math.round(Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8)))}px`;
+    pop.addEventListener('mousedown', e => e.preventDefault());
+    pop.addEventListener('click', e => { const c = e.target.closest('[data-tc]')?.dataset.tc; if (c) { e.stopPropagation(); pop.remove(); textColor(c); } });
+    setTimeout(() => document.addEventListener('click', () => pop.remove(), {once: true}), 0);
+  }
   const HL_RE = /==(?:\{(yellow|green|blue|pink|orange)\})?([^\n=][^\n]*?)==/g;
   const hlMk = (color, t) => color === 'yellow' ? `==${t}==` : `=={${color}}${t}==`;
   function hlMenu(btn) {
@@ -771,11 +814,11 @@ const Docs = (() => {
     const r = measure(ta, [{s: ta.selectionStart, e: ta.selectionEnd}])[0]; if (!r || !r.length) return;
     const b = ta.getBoundingClientRect(), f = r[0], top = b.top + f.y - 40 < 70 ? b.top + f.y + f.h + 6 : b.top + f.y - 40;
     const el = document.createElement('div'); el.id = 'dx-selhl'; el.className = 'dx-selhl'; el.setAttribute('role', 'toolbar'); el.setAttribute('aria-label', 'Highlight selection');
-    el.innerHTML = Object.keys(COL).map(c => `<button data-hl="${c}" title="Highlight ${c}" style="background:${COL[c]}"></button>`).join('') + '<button data-hl="none" title="Remove highlight" class="none">None</button>';
+    el.innerHTML = Object.keys(COL).map(c => `<button data-hl="${c}" title="Highlight ${c}" style="background:${COL[c]}"></button>`).join('') + '<button data-hl="none" title="Remove highlight" class="none">None</button><span class="dx-selsep"></span>' + ['red', 'orange', 'green', 'blue', 'purple', 'grey'].map(c => `<button data-tc="${c}" title="Write in ${c}" class="dx-tcb" style="color:${TEXT_COLORS[c]}">A</button>`).join('');
     document.body.appendChild(el);
     el.style.cssText = `top:${Math.round(top)}px;left:${Math.round(Math.max(8, Math.min(b.left + f.x, innerWidth - el.offsetWidth - 8)))}px`;
     el.addEventListener('mousedown', e => e.preventDefault());
-    el.addEventListener('click', e => { const c = e.target.closest('[data-hl]')?.dataset.hl; if (c) { el.remove(); highlight(c); } });
+    el.addEventListener('click', e => { const c = e.target.closest('[data-hl]')?.dataset.hl, tc = e.target.closest('[data-tc]')?.dataset.tc; if (tc) { el.remove(); textColor(tc); } else if (c) { el.remove(); highlight(c); } });
   }
   function highlight(color) {      // ==text== (yellow) or =={green}text==; again on a highlighted piece changes its color, "none" removes it
     const ta = $('#dx-text', D.host); if (!ta || !D.can) return;
@@ -1251,7 +1294,7 @@ const Docs = (() => {
     host.addEventListener('keydown', e => { if (e.target.matches?.('[data-rbox]') && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('[data-dx-rsend]', host)?.click(); } });
     host.addEventListener('mousedown', e => { if (e.target.closest('#dx-count')) e.preventDefault(); });   // keep the selection
     document.addEventListener('selectionchange', () => { if (D.host && document.contains(D.host)) countSoon(); });
-    host.addEventListener('input', countSoon);
+    host.addEventListener('input', e => { countSoon(); if (e.target.id === 'dx-text') { const w = e.target.parentNode; if (w.classList.contains('rich') || e.target.value.includes('{/}')) paintMirror(); } });
     host.addEventListener('change', e => {
       const t = e.target;
       if (t.matches('[data-dx-asgon]')) { D.asg.on = t.checked; if (t.checked && !D.asg.to) D.asg.to = D.R.me || ''; paintSide(); }
@@ -1320,6 +1363,7 @@ const Docs = (() => {
       const open = t.closest('[data-dx-open]'); if (open) { await openDoc(open.dataset.dxOpen); return; }
       const dx = t.closest('[data-dx]')?.dataset.dx;
       if (dx === 'fab') return togglePreview();
+      if (dx === 'tc-menu') { e.stopPropagation(); return tcMenu(t.closest('button')); }
       if (dx === 'hl-menu') { e.stopPropagation(); return hlMenu(t.closest('button')); }
       const hlc = t.closest('[data-hl]')?.dataset.hl; if (hlc) { $('.dx-pop')?.remove(); return highlight(hlc); }
       if (dx === 'undo') return undo(false);

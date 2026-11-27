@@ -10,10 +10,10 @@
    Overview: your tasks in every group, the plans you lead, what was written for you.
    Everything lives in the group's file and travels with it (see sharing.py). Readers only read. */
 const Lab = (() => {
-  const S = {sid: null, allcal: false, sub: 'ideas', data: null, ov: null, open: new Set(), composing: null, cto: {},
+  const S = {sid: null, allcal: false, sub: 'home', data: null, ov: null, open: new Set(), composing: null, cto: {},
     f: {kind: 'all', tag: '', q: '', sort: 'new'}, plan: 'all', mine: false, flt: '', mc: {month: '', day: ''}, focus: null, pn: {}, tw: null};
   const TH = {};   // the note threads being written: {'task:<id>' | 'plan:<id>': {edit, to, draft}}
-  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['plans', 'docs', 'cal'].includes(p.sub) ? p.sub : 'ideas'; } catch { /* storage unavailable */ }
+  try { const p = JSON.parse(localStorage.getItem('papershelf-lab') || '{}'); S.sid = p.sid || null; S.sub = ['ideas', 'plans', 'docs', 'cal'].includes(p.sub) ? p.sub : 'home'; } catch { /* storage unavailable */ }
   let ORDER = 'auto'; try { ORDER = localStorage.getItem('papershelf-lab-order') === 'manual' ? 'manual' : 'auto'; } catch { /* ignore */ }
   const PR = {high: 0, normal: 1, low: 2};
   // the board's order: by deadline (the closest first, overdue on top, no date last), then priority
@@ -127,7 +127,7 @@ const Lab = (() => {
     await load(); render();
   }
   async function go(sid, sub) {
-    S.sid = sid || null; S.allcal = false; if (sub) S.sub = sub; S.composing = null; S.open.clear(); S.f = {kind: 'all', tag: '', q: '', sort: 'new'}; S.plan = 'all';
+    S.sid = sid || null; S.allcal = false; S.sub = sub || 'home'; S.composing = null; S.open.clear(); S.f = {kind: 'all', tag: '', q: '', sort: 'new'}; S.plan = 'all';
     save(); main().innerHTML = '<p class="muted" style="padding:24px">Loading…</p>';
     await load(); render(); main().scrollTop = 0;
   }
@@ -176,8 +176,9 @@ const Lab = (() => {
     else if (S.composing && !$('#lc-title', el)?.value && document.activeElement === document.body) $('#lc-title', el)?.focus();
     $$('.th-text', el).forEach(grow);
     S.tw?.paint();
-    if (S.sub === 'docs' && S.sid && S.data && typeof Docs !== 'undefined') Docs.mount($('#docs-host', el), S.sid, W());
+    if (S.sub === 'docs' && S.sid && S.data && typeof Docs !== 'undefined') { const o = S.openDoc; S.openDoc = null; Docs.mount($('#docs-host', el), S.sid, W(), o ? {open: o, onBack: () => { S.sub = 'home'; save(); render(); }} : {}); }
     else if (typeof Docs !== 'undefined') Docs.leave();
+    if (S.sub === 'home' && S.sid && S.data) loadHomeDocs();
     const ch = $('#cal-host', el);
     if (ch && typeof Cal !== 'undefined') Cal.mount(ch, S.sid ? {group: S.sid, canWrite: W(), onChange: () => { if (S.sid) load().then(render); }} : {});
   }
@@ -228,11 +229,55 @@ const Lab = (() => {
         <div class="lab-tools"><button class="btn small" data-lpapers title="The group's papers in the library">${ic('file', 15)}Papers</button><button class="btn small" data-ltable title="The group's review table">${ic('table', 15)}Table</button>
           <button class="btn small" data-lexport title="Download the lab as a Markdown report, for a meeting, the minutes or a lab notebook">${ic('download', 15)}Report</button>
           <button class="btn small" data-lsync title="Get the latest from the others now">${ic('refresh', 15)}Update</button></div></div>
-      <div class="lab-tabs"><button data-lsub="ideas" class="${S.sub === 'ideas' ? 'on' : ''}">${ic('bulb', 16)}Ideas and discussion<span class="lab-n">${d.posts.length || ''}</span></button>
+      <div class="lab-tabs"><button data-lsub="home" class="${S.sub === 'home' ? 'on' : ''}">${ic('home', 16)}Overview</button>
+        <button data-lsub="ideas" class="${S.sub === 'ideas' ? 'on' : ''}">${ic('bulb', 16)}Ideas and discussion<span class="lab-n">${d.posts.length || ''}</span></button>
         <button data-lsub="plans" class="${S.sub === 'plans' ? 'on' : ''}">${ic('checks', 16)}Plans and tasks<span class="lab-n">${open || ''}</span></button>
         <button data-lsub="cal" class="${S.sub === 'cal' ? 'on' : ''}">${ic('calendar', 16)}Calendar<span class="lab-n">${(d.events || []).filter(e => e.date >= today()).length || ''}</span></button>
         <button data-lsub="docs" class="${S.sub === 'docs' ? 'on' : ''}">${ic('file', 16)}Documents</button></div>
-      ${S.sub === 'plans' ? plansHtml() : S.sub === 'cal' ? '<div id="cal-host" class="cal-host"></div>' : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : ideasHtml()}`;
+      ${S.sub === 'plans' ? plansHtml() : S.sub === 'cal' ? '<div id="cal-host" class="cal-host"></div>' : S.sub === 'docs' ? '<div id="docs-host" class="docs-host"></div>' : S.sub === 'home' ? homeHtml() : ideasHtml()}`;
+  }
+
+  /* ---------------------------------------------------- the group's main page: widgets */
+  const hdocsHtml = () => {
+    const h = S.hdocs;
+    if (!h || h.sid !== S.sid) return '<p class="muted small">Loading…</p>';
+    const L = h.docs.filter(x => !x.arch && !x.gone).slice(0, 6);
+    if (!L.length) return `<p class="muted small">No document yet.${W() ? ' Write one together: minutes, a protocol, a draft.' : ''}</p>`;
+    return L.map(x => `<button class="lh-row" data-hdoc="${esc(x.id)}" title="Open and write">
+        <span class="lh-t">${esc(x.title || 'Untitled')}</span>
+        <span class="lh-m muted small">${esc((x.authors || []).slice(0, 3).join(', ') || x.by_name || '')}${x.updated ? ' · ' + esc(ago(x.updated)) : ''} · ${plural(x.words || 0, 'word')}${x.open ? ` <span class="lab-chip">${plural(x.open, 'open comment')}</span>` : ''}</span></button>`).join('');
+  };
+  async function loadHomeDocs() {
+    const sid = S.sid; if (!sid) return;
+    try {
+      const r = await api(`/api/shares/${encodeURIComponent(sid)}/docs`);
+      S.hdocs = {sid, docs: r.docs || []};
+      const host = $('#lh-docs'); if (host && S.sid === sid && S.sub === 'home') host.innerHTML = hdocsHtml();
+      const n = $('#lh-docs-n'); if (n) n.textContent = S.hdocs.docs.filter(x => !x.arch && !x.gone).length || '';
+    } catch { /* the widget keeps saying Loading */ }
+  }
+  function homeHtml() {
+    const d = S.data, t0 = today(), wk = isoOf(new Date(Date.now() + 14 * 864e5));
+    const wid = (icon, title, n, sub, body, id = '', nid = '') => `<section class="lh-w"><h3>${ic(icon, 16)}<span>${title}</span><span class="lab-n" ${nid ? `id="${nid}"` : ''}>${n || ''}</span><span class="grow"></span><button class="linklike small" data-lsub="${sub}">Open</button></h3><div class="lh-body" ${id ? `id="${id}"` : ''}>${body}</div></section>`;
+    const posts = d.posts.slice().sort((a, b) => (b.activity || b.created || '').localeCompare(a.activity || a.created || '')).slice(0, 5);
+    const pBody = posts.length ? posts.map(p => `<button class="lh-row k-${esc(p.kind)}" data-hpost="${esc(p.id)}"><span class="lh-t">${kindIc(p.kind)}${esc(p.title || truncate(p.body || '', 70))}</span>
+        <span class="lh-m muted small">${esc(p.mine ? 'You' : p.name)} · ${esc(ago(p.created))}${p.comments.length ? ' · ' + plural(p.comments.length, 'comment') : ''}${p.votes.length ? ' · ' + p.votes.length + ' ▲' : ''}</span></button>`).join('') : `<p class="muted small">Nothing yet. Share an idea, a question or a result.</p>`;
+    const live = d.tasks.filter(t => t.status !== 'done' && !t.archived);
+    const doing = live.filter(t => t.status === 'doing').slice(0, 5);
+    const late = live.filter(t => t.due && t.due < t0).length, soon = live.filter(t => t.due && t.due >= t0 && t.due <= wk).length;
+    const tBody = `<div class="lab-glance"><span class="lab-gl overdue ${late ? '' : 'zero'}"><b>${late}</b>overdue</span><span class="lab-gl ${soon ? '' : 'zero'}"><b>${soon}</b>due in 14 days</span><span class="lab-gl"><b>${live.filter(t => t.status === 'todo').length}</b>to do</span></div>
+      ${doing.length ? doing.map(t => `<button class="lh-row" data-htask="${esc(t.id)}"><span class="lh-t">${esc(t.title)}</span><span class="lh-m small">${t.people.length ? esc(t.people.map(x => x.name).join(', ')) : '<span class="muted">nobody yet</span>'} ${dueChip(t.due, t.status)}</span></button>`).join('') : '<p class="muted small">Nothing in progress.</p>'}`;
+    const up = [];
+    for (const t of live) { if (t.due && t.due <= wk) up.push({date: t.due, title: t.title, kind: 'task', id: t.id}); for (const c of t.checklist || []) if (c.due && !c.done && c.due <= wk) up.push({date: c.due, title: c.text, sub: t.title, kind: 'step', id: t.id}); }
+    for (const e of d.events || []) if (e.date && e.date >= t0 && e.date <= wk) up.push({date: e.date, title: e.title, kind: 'event', time: e.start || ''});
+    up.sort((a, b) => a.date.localeCompare(b.date));
+    const cBody = up.length ? up.slice(0, 7).map(x => `<button class="lh-row" ${x.id ? `data-htask="${esc(x.id)}"` : 'data-lsub="cal"'}><span class="lh-t">${ic(x.kind === 'event' ? 'calendar' : 'checks', 13)}${esc(x.title)}</span><span class="lh-m small">${dueChip(x.date, x.kind === 'event' ? '' : 'todo')}${x.time ? ` <span class="muted">${esc(x.time)}</span>` : ''}${x.sub ? ` <span class="muted">${esc(x.sub)}</span>` : ''}</span></button>`).join('') : '<p class="muted small">Nothing due in the next two weeks.</p>';
+    const nd = S.hdocs && S.hdocs.sid === S.sid ? S.hdocs.docs.filter(x => !x.arch && !x.gone).length : 0;
+    return `<div class="lh-grid">
+      ${wid('file', 'Documents being written', nd, 'docs', hdocsHtml(), 'lh-docs', 'lh-docs-n')}
+      ${wid('bulb', 'Ideas and discussion', d.posts.length, 'ideas', pBody)}
+      ${wid('checks', 'Plans and tasks', live.length, 'plans', tBody)}
+      ${wid('calendar', 'Coming up', up.length, 'cal', cBody)}</div>`;
   }
 
   /* ---------------------------------------------------- ideas */
@@ -722,6 +767,9 @@ const Lab = (() => {
       }
       if (!S.data) return;
       if (t.closest('.th')) { await threadClick(e); return; }
+      const hd = t.closest('[data-hdoc]'); if (hd) { S.openDoc = hd.dataset.hdoc; S.sub = 'docs'; save(); render(); return; }
+      const hp = t.closest('[data-hpost]'); if (hp) { gotoPost(hp.dataset.hpost); return; }
+      const ht = t.closest('[data-htask]'); if (ht) { taskWindow(ht.dataset.htask); return; }
       const sub = t.closest('[data-lsub]'); if (sub) { S.sub = sub.dataset.lsub; save(); render(); return; }
       if (t.closest('[data-lpapers]')) { setTab('library'); setView({type: 'share', id: S.sid}); return; }
       if (t.closest('[data-ltable]')) { setTab('library'); setView({type: 'share', id: S.sid}); setMode('table'); return; }

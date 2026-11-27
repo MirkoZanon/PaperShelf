@@ -78,11 +78,16 @@ IMG_RE = re.compile(r"!\[([^\]\n]*)\]\(img:([0-9a-f]{16})\)")
 SEP_RE = re.compile(r"^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$")
 
 
+TEXT_COLORS = {"red": "D64545", "orange": "D9822B", "green": "2F9E44", "blue": "2F6FD6", "purple": "8B5CF6", "grey": "808A96", "gray": "808A96"}
+COLOR_RE = re.compile(r"\{(red|orange|green|blue|purple|grey|gray)\}([\s\S]+?)\{/\}")
+
+
 def markdown(title: str, text: str, items: dict, by: str = "", date: str = "", images: dict | None = None, inline_images: bool = False) -> str:
     body, cited = resolve(text, items)
     if inline_images:     # a stand-alone Markdown file carries its pictures inside
         body = IMG_RE.sub(lambda m: (f"![{m.group(1)}](data:{images[m.group(2)][0]};base64,{base64.b64encode(images[m.group(2)][1]).decode()})"
                                      if images and m.group(2) in images else f"[picture: {m.group(1)}]"), body)
+    body = COLOR_RE.sub(lambda m: f'<span style="color:#{TEXT_COLORS[m.group(1)]}">{m.group(2)}</span>', body)
     L = [f"# {title}", ""]
     if by or date:
         L += [f"_{' · '.join(x for x in (by, date) if x)}_", ""]
@@ -95,6 +100,7 @@ def markdown(title: str, text: str, items: dict, by: str = "", date: str = "", i
 
 def plain(md: str) -> str:
     s = IMG_RE.sub(lambda m: f"[picture: {m.group(1)}]" if m.group(1) else "[picture]", md)
+    s = COLOR_RE.sub(lambda m: m.group(2), s)
     s = re.sub(r"^#{1,6}\s*", "", s, flags=re.M)
     s = re.sub(r"(\*\*|__)(.+?)\1", r"\2", s)
     s = re.sub(r"(?<![\w*])\*(?!\s)(.+?)(?<!\s)\*(?![\w*])", r"\1", s)
@@ -104,12 +110,15 @@ def plain(md: str) -> str:
 # ---- Word (.docx) written by hand: a zip of a few XML files
 def _runs(s: str) -> str:
     out = []
-    for part in re.split(r"(==(?:\{\w+\})?.+?==|\*\*.+?\*\*|(?<![\w*])\*(?!\s).+?(?<!\s)\*(?![\w*])|`[^`]+`)", s):
+    for part in re.split(r"(\{(?:red|orange|green|blue|purple|grey|gray)\}.+?\{/\}|==(?:\{\w+\})?.+?==|\*\*.+?\*\*|(?<![\w*])\*(?!\s).+?(?<!\s)\*(?![\w*])|`[^`]+`)", s):
         if not part:
             continue
         rp = ""
+        cm = re.match(r"^\{(red|orange|green|blue|purple|grey|gray)\}(.+?)\{/\}$", part)
         hm = re.match(r"^==(?:\{(yellow|green|blue|pink|orange)\})?(.+?)==$", part)
-        if hm:
+        if cm:
+            part, rp = cm.group(2), f'<w:color w:val="{TEXT_COLORS[cm.group(1)]}"/>'
+        elif hm:
             fill = {"yellow": "FFF59D", "green": "BFF0C2", "blue": "BFE0FF", "pink": "FFC9E3", "orange": "FFD3A1"}[hm.group(1) or "yellow"]
             part, rp = hm.group(2), f'<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>'
         elif part.startswith("**") and part.endswith("**") and len(part) > 4:

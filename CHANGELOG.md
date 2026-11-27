@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.7 – 2026-11-27
+- **Lab main page**: each group now opens on an **Overview** with widgets: the documents being written (who wrote, when, words, open comments), the latest ideas and discussion, plans and tasks at a glance (overdue, due, in progress) and what is coming up. Click a row to open it; "Open" goes to the full tab.
+- **Coloured text in documents**: new **Color** button in the toolbar and colour dots in the selection bar (red, orange, green, blue, purple, grey). Written as `{red}text{/}`; shown in colour while you write, in Preview and in the Word / Markdown / PDF exports. People who still have an older version see the plain markers.
+- **Other people's changes as coloured text**: new text from others is written in their colour (and fades back after a short while) instead of a highlight. The Authors button colours all the text by author, also as font colour. A colour you choose yourself always wins.
+
 ## 3.6 – 2026-11-27
 - **Plans and tasks, easier to read**: the board now starts with **Doing**, then To do, then Done.
 - **A deadline for each checklist item**: every step in a task's checklist can have its own date (field at the right of the item). The date also shows on the task card, and the steps appear in the calendar as "Task › step", with the usual morning reminder, in the .ics export and on Home.
