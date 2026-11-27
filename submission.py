@@ -114,8 +114,76 @@ PROFILES = {
 }
 
 
-def profile(style: str) -> dict:
-    return PROFILES.get(style) or _GENERIC
+TYPES = [("article", "Research article"), ("short", "Short report / letter"), ("methods", "Methods / tools paper"), ("review", "Review"), ("case", "Case report")]
+TYPE_NAMES = {
+    "nature": {"article": "Article", "short": "Letter / brief communication", "review": "Review article", "methods": "Technical report / resource"},
+    "science": {"article": "Research article", "short": "Report", "review": "Review", "methods": "Resource / technical comment"},
+    "cell": {"article": "Article", "short": "Report", "review": "Review", "methods": "Resource / tools"},
+    "pnas": {"article": "Research article", "short": "Brief report", "review": "Review"},
+    "jneurosci": {"article": "Research article", "short": "Brief communication", "review": "Review", "methods": "Tools and resources"},
+    "elife": {"article": "Research article", "short": "Short report", "review": "Review article", "methods": "Tools and resources"},
+    "vancouver": {"article": "Research article", "short": "Short report", "review": "Review", "methods": "Software / methods", "case": "Case report"},
+    "apa": {"article": "Empirical article", "short": "Brief report", "review": "Review / meta-analysis", "methods": "Methodological article"},
+}
+_TYPE_RULES = {
+    "short": "Short reports are limited in length (often 2,500–4,000 words and 3–4 figures); Methods may be brief or go to the supplement.",
+    "review": "Reviews are organised in thematic sections of your choice, with no Results or Methods; many journals only accept reviews they commission, so check first.",
+    "methods": "Methods or tools papers put the Methods first and ask for code, software or data availability.",
+    "case": "Case reports need the patient's written consent and a statement about it; remove anything that identifies the person.",
+}
+
+
+def types_for(style: str) -> list:
+    names = TYPE_NAMES.get(style, {})
+    return [{"id": i, "name": names.get(i, n)} for i, n in TYPES if i != "case" or style in ("vancouver", "")]
+
+
+def _set(secs, sid, **kw):
+    for s in secs:
+        if s["id"] == sid:
+            s.update(kw)
+
+
+def profile(style: str, atype: str = "") -> dict:
+    """The sections a journal family asks for, adapted to the type of article."""
+    base = PROFILES.get(style) or _GENERIC
+    if atype not in dict(TYPES) or atype == "article" or (atype == "case" and style not in ("vancouver", "")):
+        return base
+    secs = [dict(s) for s in base["sections"]]
+    rules = list(base["rules"]) + [_TYPE_RULES[atype]]
+    drop = lambda *ids: [s for s in secs if s["id"] not in ids]
+    if atype == "short":
+        for s in secs:
+            if s["id"] == "abstract" and s["words"]:
+                s["words"] = min(s["words"], 150)
+        _set(secs, "keywords", req="recommended")
+        _set(secs, "methods", req="recommended", note="Brief, or in the supplement.")
+        secs = [s for s in secs if s["id"] not in ("limits", "authorsummary")]
+    elif atype == "review":
+        secs = drop("results", "methods", "limits", "highlights", "ethics", "code")
+        _set(secs, "discussion", title="Conclusions and outlook", syn=["conclusions and outlook", "conclusions", "conclusion", "outlook", "perspectives", "future directions", "discussion"])
+        _set(secs, "data", req="recommended")
+        _set(secs, "abstract", note="Summarise the scope and the main message of the review.")
+    elif atype == "methods":
+        m = next((s for s in secs if s["id"] == "methods"), None)
+        if m:
+            secs.remove(m)
+            m.update(req="required", note="Describe the method in enough detail to be reproduced.")
+            i = next((k for k, s in enumerate(secs) if s["id"] == "intro"), -1) + 1
+            secs.insert(i, m)
+        _set(secs, "data", req="required")
+        if not any(s["id"] == "code" for s in secs):
+            k = next((k for k, s in enumerate(secs) if s["id"] == "data"), len(secs) - 1) + 1
+            secs.insert(k, _S("code", "Code availability", "required", ["code availability", "software availability", "availability and implementation"], "end"))
+        else:
+            _set(secs, "code", req="required")
+    elif atype == "case":
+        secs = [s for s in secs if s["id"] in ("abstract", "keywords", "intro", "discussion", "ack", "contrib", "funding", "compete", "refs")]
+        k = next((k for k, s in enumerate(secs) if s["id"] == "intro"), 0) + 1
+        secs.insert(k, _S("case", "Case presentation", "required", ["case presentation", "case report", "case description", "case"], "body", None, "Course of the case, findings and outcome, without identifying details."))
+        j = next((k for k, s in enumerate(secs) if s["id"] == "discussion"), k) + 1
+        secs.insert(j, _S("consent", "Patient consent", "required", ["patient consent", "consent", "informed consent", "consent for publication"], "end", None, "State that the person gave written consent to publish this report."))
+    return {**base, "sections": secs, "rules": rules}
 
 
 def _norm(t: str) -> str:
@@ -150,9 +218,9 @@ def _ordered(found) -> set:
     return {k for k, _ln in top}
 
 
-def check_sections(text: str, style: str) -> list:
+def check_sections(text: str, style: str, atype: str = "") -> list:
     """[{id, title, req, state, words, note}]: state 'ok' | 'missing' | 'order' (found, but not where the journal has it)."""
-    P = profile(style)
+    P = profile(style, atype)
     heads = headings(text)
     found = [(s, _find(heads, s)) for s in P["sections"]]
     keep = _ordered(found)
@@ -163,9 +231,9 @@ def check_sections(text: str, style: str) -> list:
     return out
 
 
-def add_missing(text: str, style: str, only_required: bool = False) -> str:
+def add_missing(text: str, style: str, only_required: bool = False, atype: str = "") -> str:
     """The text with an empty heading for each missing section, put after the section that precedes it in the journal's order."""
-    P = profile(style)
+    P = profile(style, atype)
     text = text or ""
     todo = [s for s in P["sections"] if (s["req"] == "required" or not only_required)]
     for k, s in enumerate(P["sections"]):
@@ -310,4 +378,5 @@ def clean_sub(raw) -> dict:
                         "corr": bool(a.get("corr")), "equal": bool(a.get("equal")), "lead": bool(a.get("lead")),
                         "orcid": orcid if re.fullmatch(r"\d{4}-\d{4}-\d{4}-\d{3}[\dX]", orcid) else "",
                         "roles": [r for r in (a.get("roles") or []) if r in CREDIT][:14]})
-    return {"authors": authors, "affils": [" ".join(str(x).split())[:300] for x in (raw.get("affils") or [])[:30]]}
+    at = str(raw.get("atype") or "")
+    return {"atype": at if at in dict(TYPES) else "", "authors": authors, "affils": [" ".join(str(x).split())[:300] for x in (raw.get("affils") or [])[:30]]}

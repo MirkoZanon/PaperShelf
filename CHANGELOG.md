@@ -2,6 +2,11 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.20 – 2026-11-27
+- **Article type in the Submit tab**: choose the kind of paper (research article, short report / letter, methods or tools paper, review, and case report for medical journals). The type names follow the journal (for example "Report" for Science and Cell, "Brief communication" for J Neurosci) and the suggested sections change with it: a review has no Results or Methods, a short report has a shorter abstract and optional Methods, a methods paper puts Methods first and asks for code availability, a case report asks for the case presentation and the patient's consent. The type is saved with the document and shared with the group.
+- **Tabs fit**: the five tabs beside the text (Comments, Cite, Pictures, Submit, History) are all visible now, also with the counters.
+- The author rows in the Submit tab no longer share the colour style used for authors in the text.
+
 ## 3.19 – 2026-11-27
 - **Get the manuscript ready for submission**: a new **Submit** tab in every document. Choose the journal you write for (or type its name) and PaperShelf checks which sections that journal family usually asks for, in which order: Abstract, Significance statement, Methods, Data availability, Author contributions, Competing interests, Funding… Each one is shown as present, missing or out of order, with the word limits where they exist. **Add missing sections** puts empty headings in the journal's order, each with a note on what to write.
 - **Authors with affiliations**: enter the authors in order, with their affiliations (numbered), corresponding author, equal contribution, lead contact (Cell Press), ORCID and CRediT contribution roles. **Put on title page** writes the author line with the right markers and the affiliation list under the title; **Contributions text** writes the author-contributions statement (initials and roles). The author list is saved with the document and shared with the group.

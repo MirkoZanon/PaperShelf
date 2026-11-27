@@ -812,13 +812,13 @@ const Docs = (() => {
   }
   function submitHtml() {
     const R = D.R, rs = R.refstyle || {id: ''}, ST = D.styles || [], SD = subDraft(), W = D.can && D.mode === 'write' && !D.view;
-    const res = D.subRes, key = rs.id + '|' + (R.B?.text || '').length;
+    const res = D.subRes, key = rs.id + '|' + (SD.atype || '') + '|' + (R.B?.text || '').length;
     if (!res || D.subKey !== key) subCheck();
     const secs = (res?.sections || []);
     const list = secs.length ? secs.map(x => `<li class="dx-sec ${x.state}" title="${esc(x.note || '')}"><span class="dx-secic">${SUBICON[x.state]}</span><span class="grow"><b>${esc(x.title)}</b>${x.req !== 'required' ? ' <small class="muted">optional</small>' : ''}${x.state === 'order' ? '<small class="muted"> – not in the journal’s order</small>' : x.state === 'missing' ? '<small class="muted"> – missing</small>' : ''}${x.words ? `<small class="muted"> · up to ${x.words} words</small>` : ''}</span></li>`).join('') : '<li class="muted small">Checking…</li>';
     const miss = secs.filter(x => x.state === 'missing').length, reqMiss = secs.filter(x => x.state === 'missing' && x.req === 'required').length;
     const roleBox = (a, i) => `<details class="dx-roles"><summary>Contributions${a.roles?.length ? ` (${a.roles.length})` : ''}</summary>${(R.credit || []).map(c => `<label><input type="checkbox" data-sr="${esc(c)}" data-i="${i}" ${(a.roles || []).includes(c) ? 'checked' : ''}> ${esc(c)}</label>`).join('')}</details>`;
-    const rows = SD.authors.map((a, i) => `<div class="dx-au" data-i="${i}">
+    const rows = SD.authors.map((a, i) => `<div class="dx-sauth" data-i="${i}">
         <div class="dx-row"><input class="input" data-sa="given" data-i="${i}" placeholder="Given name" value="${esc(a.given)}" aria-label="Given name"><input class="input" data-sa="family" data-i="${i}" placeholder="Family name" value="${esc(a.family)}" aria-label="Family name"></div>
         <div class="dx-row"><input class="input" data-sa="aff" data-i="${i}" placeholder="Affiliations, e.g. 1,2" value="${esc((a.aff || []).join(','))}" aria-label="Affiliation numbers"><input class="input" data-sa="orcid" data-i="${i}" placeholder="ORCID 0000-0000-0000-0000" value="${esc(a.orcid)}" aria-label="ORCID"></div>
         <div class="dx-row dx-flags"><label><input type="checkbox" data-sf="corr" data-i="${i}" ${a.corr ? 'checked' : ''}> Corresponding</label><label><input type="checkbox" data-sf="equal" data-i="${i}" ${a.equal ? 'checked' : ''}> Equal contribution</label><label><input type="checkbox" data-sf="lead" data-i="${i}" ${a.lead ? 'checked' : ''}> Lead contact</label>
@@ -828,6 +828,7 @@ const Docs = (() => {
         <input class="input" id="dx-rsj" list="dx-rsjl" placeholder="…or type the journal you write for" autocomplete="off" aria-label="Journal"><datalist id="dx-rsjl"></datalist>` : `<div class="small">${esc(ST.find(x => x.id === rs.id)?.name || 'No journal chosen')}</div>`;
     return `<div class="dx-sub">
       <div class="dx-rstyle"><div class="dx-row"><b>Target journal</b><span class="grow"></span><small class="muted" id="dx-rshint">${esc(res?.name || '')}</small></div>${journal}</div>
+      ${(res?.types || []).length ? `<div class="dx-row"><b>Article type</b><span class="grow"></span></div>${D.can ? `<select class="input" id="dx-atype" aria-label="Article type"><option value="">Research article</option>${res.types.filter(x => x.id !== 'article').map(x => `<option value="${esc(x.id)}" ${SD.atype === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : `<div class="small">${esc((res.types.find(x => x.id === (SD.atype || 'article')) || {}).name || '')}</div>`}` : ''}
       <div class="dx-row"><b>Sections</b><span class="grow"></span><button class="btn small ghost" data-sub="check">${ic('refresh')}Check again</button></div>
       <ul class="dx-seclist">${list}</ul>
       ${W && miss ? `<div class="dx-row"><button class="btn small primary" data-sub="sections">Add ${miss} missing section${miss > 1 ? 's' : ''}</button>${reqMiss && reqMiss < miss ? `<button class="btn small" data-sub="sections-req">Only the ${reqMiss} required</button>` : ''}</div><p class="muted small">Empty headings are put in the journal’s order, each with a note on what to write.</p>` : ''}
@@ -840,7 +841,7 @@ const Docs = (() => {
       <p class="muted small">Only names, affiliations and ORCID are kept, in this document. No e-mail address is stored: the corresponding author’s address is left as a placeholder to fill in. Nothing is sent anywhere.</p></div>`;
   }
   async function subCheck() {
-    const rs = D.R.refstyle || {id: ''}, key = rs.id + '|' + (D.R.B?.text || '').length; D.subKey = key;
+    const rs = D.R.refstyle || {id: ''}, key = rs.id + '|' + (D.sd?.atype || '') + '|' + (D.R.B?.text || '').length; D.subKey = key;
     try { const r = await api('/api/submission', {method: 'POST', body: {text: D.R.B.text, style: rs.id, sub: D.sd}}); if (D.side === 'submit' && D.subKey === key) { D.subRes = r; paintSide(); } }
     catch (err) { D.subKey = null; }
   }
@@ -875,6 +876,7 @@ const Docs = (() => {
   }
   function subInput(e) {
     const el = e.target, SD = D.sd; if (!SD || !D.R) return;
+    if (el.id === 'dx-atype') { SD.atype = el.value; D.subKey = null; api(`${base()}/${q(D.id)}`, {method: 'PUT', body: {sub: {...(D.R.sub || {authors: [], affils: []}), atype: el.value}}}).then(() => pull()).catch(err => toast(err.message, 'error')); paintSide(); return; }
     const i = +el.dataset.i;
     if (el.id === 'dx-saff') SD.affils = el.value.split('\n').map(x => x.trim()).filter(Boolean);
     else if (el.dataset.sa) { const a = SD.authors[i]; if (!a) return; a[el.dataset.sa] = el.dataset.sa === 'aff' ? el.value.split(/[,\s]+/).map(Number).filter(n => n > 0) : el.value; }

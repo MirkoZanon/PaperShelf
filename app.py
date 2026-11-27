@@ -4281,13 +4281,13 @@ def submission_run():
     act = b.get("action") or "check"
     out = text
     if act == "sections":
-        out = submission.add_missing(text, style, bool(b.get("required_only")))
+        out = submission.add_missing(text, style, bool(b.get("required_only")), sub["atype"])
     elif act == "authors":
         out = submission.insert_authors(text, sub, style)
     elif act == "contrib":
         out = submission.insert_contributions(text, sub, style)
-    P = submission.profile(style)
-    return jsonify(text=out, changed=out != text, sections=submission.check_sections(out, style), name=P["name"], rules=P["rules"],
+    P = submission.profile(style, sub["atype"])
+    return jsonify(text=out, changed=out != text, types=submission.types_for(style), sections=submission.check_sections(out, style, sub["atype"]), name=P["name"], rules=P["rules"],
                    styles=[{"id": k, "name": v.get("name") or k} for k, v in citations.STYLES.items()])
 
 

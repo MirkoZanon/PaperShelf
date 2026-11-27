@@ -2657,5 +2657,8 @@ body.pdf-window .app { display: none; } body.pdf-window { background: var(--bg);
 .dx-seclist { list-style: none; margin: 4px 0 8px; padding: 0; } .dx-sec { display: flex; gap: 8px; padding: 4px 0; font-size: 13px; }
 .dx-secic { width: 18px; text-align: center; font-weight: 700; } .dx-sec.ok .dx-secic { color: var(--ok, #2e8b57); } .dx-sec.missing .dx-secic { color: var(--warn, #c77700); } .dx-sec.order .dx-secic { color: var(--accent); }
 .dx-rules { background: var(--surface-2, rgba(127,127,127,.08)); border-radius: 10px; padding: 8px 12px; margin: 8px 0; font-size: 12.5px; } .dx-rules ul { margin: 4px 0 4px 16px; padding: 0; }
-.dx-au { border: 1px solid var(--border-soft); border-radius: 10px; padding: 8px; margin: 8px 0; } .dx-flags { flex-wrap: wrap; font-size: 12.5px; } .dx-flags label, .dx-roles label { display: flex; gap: 4px; align-items: center; }
+.dx-sauth { border: 1px solid var(--border-soft); border-radius: 10px; padding: 8px; margin: 8px 0; } .dx-flags { flex-wrap: wrap; font-size: 12.5px; } .dx-flags label, .dx-roles label { display: flex; gap: 4px; align-items: center; }
 .dx-roles { font-size: 12.5px; } .dx-roles summary { cursor: pointer; color: var(--muted); } .dx-roles label { padding: 2px 0; }
+
+.dx-stabs { gap: 0; } .dx-stabs button { flex: 1 1 auto; min-width: 0; padding: 10px 3px; font-size: 13px; gap: 4px; }
+.dx-stabs .lab-n { margin-left: 3px; padding: 0 5px; font-size: 11px; }
