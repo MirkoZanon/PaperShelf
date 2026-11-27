@@ -973,6 +973,127 @@ def _is_url(text: str) -> bool:
     return bool(re.match(r"^(https?://|www\.)", text, re.I))
 
 
+# --------------------------------------------------------------------------- #
+# Books (ISBN) and journals (ISSN)
+# --------------------------------------------------------------------------- #
+ISBN_RE = re.compile(r"^(?:isbn(?:-?1[03])?\s*[:#]?\s*)?((?:97[89][\s-]?)?(?:\d[\s-]?){9}[\dXx])$", re.I)
+ISSN_RE = re.compile(r"^(?:issn\s*[:#]?\s*(\d{4}-?\d{3}[\dXx])|(\d{4}-\d{3}[\dXx]))$", re.I)
+
+
+def clean_isbn(raw: str) -> str:
+    """The 10 or 13 digits of a valid ISBN (checksum checked), or ''."""
+    d = re.sub(r"[\s-]", "", raw or "").upper()
+    if re.fullmatch(r"\d{9}[\dX]", d):
+        if sum((10 - i) * (10 if c == "X" else int(c)) for i, c in enumerate(d)) % 11 == 0:
+            return d
+    elif re.fullmatch(r"97[89]\d{10}", d):
+        if sum(int(c) * (1 if i % 2 == 0 else 3) for i, c in enumerate(d)) % 10 == 0:
+            return d
+    return ""
+
+
+def clean_issn(raw: str) -> str:
+    d = re.sub(r"[\s-]", "", raw or "").upper()
+    if re.fullmatch(r"\d{7}[\dX]", d) and sum((8 - i) * int(c) for i, c in enumerate(d[:7])) % 11 == (11 - (10 if d[7] == "X" else int(d[7]))) % 11:
+        return d[:4] + "-" + d[4:]
+    return ""
+
+
+def _year_in(text) -> int | None:
+    m = re.search(r"(1[5-9]\d{2}|20\d{2})", str(text or ""))
+    return int(m.group(1)) if m else None
+
+
+def from_isbn(isbn: str, email: str = "") -> dict:
+    """A book by its ISBN: Crossref (gives a DOI when the publisher registered one), then Open Library, then Google Books."""
+    isbn = clean_isbn(isbn)
+    if not isbn:
+        raise NoMatch("This ISBN is not valid: check the digits (10 or 13).")
+    nets = 0
+    try:
+        r = http_get("https://api.crossref.org/works", params={"filter": f"isbn:{isbn}", "rows": 1})
+        if r.status_code == 200:
+            items = (r.json().get("message") or {}).get("items") or []
+            if items and (items[0].get("title") or [""])[0]:
+                m = _from_crossref(items[0])
+                if m["type"] not in ("book", "chapter"):
+                    m["type"] = "book"
+                return m
+    except NetworkError:
+        nets += 1
+    try:
+        r = http_get("https://openlibrary.org/api/books", params={"bibkeys": f"ISBN:{isbn}", "format": "json", "jscmd": "data"})
+        if r.status_code == 200:
+            b = (r.json() or {}).get(f"ISBN:{isbn}")
+            if b and b.get("title"):
+                m = empty_meta()
+                m["title"] = clean_text(b["title"] + (f": {b['subtitle']}" if b.get("subtitle") else ""), "")
+                m["authors"] = [split_name(a.get("name", "")) for a in b.get("authors") or [] if a.get("name")]
+                m["year"] = _year_in(b.get("publish_date"))
+                m["publisher"] = ", ".join(p.get("name", "") for p in (b.get("publishers") or [])[:2] if p.get("name"))
+                m["pages"] = str(b.get("number_of_pages") or "")
+                m["type"] = "book"
+                m["url"] = b.get("url") or f"https://openlibrary.org/isbn/{isbn}"
+                m["keywords"] = merge_keywords([s.get("name", "") for s in (b.get("subjects") or [])[:12] if isinstance(s, dict)])
+                return m
+    except NetworkError:
+        nets += 1
+    try:
+        r = http_get("https://www.googleapis.com/books/v1/volumes", params={"q": f"isbn:{isbn}", "maxResults": 1})
+        if r.status_code == 200:
+            its = r.json().get("items") or []
+            if its:
+                v = its[0].get("volumeInfo") or {}
+                if v.get("title"):
+                    m = empty_meta()
+                    m["title"] = clean_text(v["title"] + (f": {v['subtitle']}" if v.get("subtitle") else ""), "")
+                    m["authors"] = [split_name(a) for a in v.get("authors") or []]
+                    m["year"] = _year_in(v.get("publishedDate"))
+                    m["publisher"] = v.get("publisher") or ""
+                    m["abstract"] = clean_text(v.get("description") or "", " ")[:2000]
+                    m["type"] = "book"
+                    m["url"] = v.get("infoLink") or ""
+                    m["keywords"] = merge_keywords(v.get("categories") or [])
+                    return m
+    except NetworkError:
+        nets += 1
+    if nets >= 3:
+        raise NetworkError("Could not reach the book catalogues. Check your internet connection.")
+    raise NoMatch(f"No book found for ISBN {isbn}. Try the title, or type the details yourself.")
+
+
+def from_issn(issn: str) -> dict:
+    """An ISSN names a journal or a series, not a single paper: say which one, and what to do."""
+    issn = clean_issn(issn)
+    if not issn:
+        raise NoMatch("This ISSN is not valid: check the digits (like 1234-5679).")
+    r = http_get("https://api.crossref.org/journals/" + issn)
+    name = ""
+    if r.status_code == 200:
+        name = clean_text((r.json().get("message") or {}).get("title") or "", "")
+    raise NoMatch(f"ISSN {issn} is " + (f"the journal “{name}”" if name else "a journal or series") +
+                  ". An ISSN names the journal, not one paper: add the paper by its DOI, link or title (put the journal name in the search to narrow it down).")
+
+
+def search_books(text: str, limit: int = 4) -> list[dict]:
+    """Books for a few words (title, author): Open Library. Candidates carry an ISBN instead of a DOI."""
+    out = []
+    r = http_get("https://openlibrary.org/search.json", params={"q": text, "limit": limit * 3, "fields": "title,author_name,first_publish_year,isbn,publisher"})
+    if r.status_code != 200:
+        return out
+    for d in r.json().get("docs", []):
+        isbn = next((clean_isbn(x) for x in (d.get("isbn") or []) if len(re.sub(r"\D", "", x)) == 13 and clean_isbn(x)), "") or next((clean_isbn(x) for x in (d.get("isbn") or []) if clean_isbn(x)), "")
+        if not (d.get("title") and isbn):
+            continue
+        names = d.get("author_name") or []
+        out.append({"title": clean_text(d["title"], ""), "authors": names[:12], "n_authors": len(names), "year": d.get("first_publish_year"),
+                    "venue": ", ".join((d.get("publisher") or [])[:1]), "doi": "", "isbn": isbn, "openalex_id": "", "cites": 0, "type": "book"})
+        if len(out) >= limit:
+            break
+    return out
+
+
+
 def search_candidates(text: str, limit: int = 8) -> list[dict]:
     """Likely papers for a few words of a title (or authors / year): OpenAlex full-text search,
     Crossref as fallback. Used for the suggestions under the "Add paper" box."""
@@ -1007,14 +1128,18 @@ def search_candidates(text: str, limit: int = 8) -> list[dict]:
                         "n_authors": len(names), "year": year, "venue": ((it.get("container-title") or [""])[0]),
                         "doi": it.get("DOI") or "", "openalex_id": "", "cites": it.get("is-referenced-by-count") or 0,
                         "type": it.get("type") or ""})
-    return [c for c in out if c["title"] and (c["doi"] or c["openalex_id"])]
+    try:
+        out.extend(search_books(text))
+    except MetadataError:
+        pass
+    return [c for c in out if c["title"] and (c["doi"] or c["openalex_id"] or c.get("isbn"))]
 
 
 def resolve(text: str, email: str = "") -> dict:
     """Main entry point: returns a metadata dict (see empty_meta)."""
     text = (text or "").strip().strip("<>\"'")
     if not text:
-        raise MetadataError("Paste a link, DOI, arXiv ID or title first.")
+        raise MetadataError("Paste a link, DOI, ISBN, arXiv ID or title first.")
 
     m = ARXIV_URL_RE.search(text) or ARXIV_OLD_RE.search(text) or ARXIV_BARE_RE.match(text)
     if m:
@@ -1025,6 +1150,12 @@ def resolve(text: str, email: str = "") -> dict:
     m = PMID_URL_RE.search(text) or PMID_BARE_RE.match(text)
     if m:
         return from_pmid(m.group(1), email)
+    m = ISSN_RE.match(text)
+    if m and clean_issn(m.group(1) or m.group(2)):
+        return from_issn(m.group(1) or m.group(2))
+    m = ISBN_RE.match(text)
+    if m and (clean_isbn(m.group(1)) or text.lower().startswith("isbn") or re.sub(r"\D", "", m.group(1)).startswith(("978", "979"))):
+        return from_isbn(m.group(1), email)
     m = DOI_RE.search(text)
     if m and (_is_url(text) or len(text) < 200 and text.lower().lstrip().startswith(("10.", "doi"))):
         return from_doi(m.group(1), email)

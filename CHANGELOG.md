@@ -2,6 +2,13 @@
 
 Each section's text is used as the release notes shown in the app's Update window.
 
+## 3.14 – 2026-11-27
+- **Books and other material by ISBN**: paste an ISBN (10 or 13 digits, with or without dashes, with or without "ISBN") in the add box, on the Home search or in *Add many at once*. PaperShelf checks the number, then looks the book up in Crossref (it gives a DOI when the publisher registered one), Open Library and Google Books, and fills title, authors, year, publisher, pages and subjects.
+- **Books in the title search**: when you type a few words of a title, books from Open Library appear among the suggestions, together with papers.
+- **ISSN**: an ISSN names a journal, not a paper; if you paste one PaperShelf tells you which journal it is and how to find a paper in it.
+- Books show their publisher in the reference list (and the group copy carries it).
+- Online lookups send only what you type (an ISBN or a few words of a title) to Crossref, Open Library and Google Books, never your name or e-mail.
+
 ## 3.13 – 2026-11-27
 - **Authors, one person per row**: in a paper's *Edit details* the authors are now rows with **First name(s) or initials** and **Surname**, plus **Add author**, move up/down (the first row is the first author) and remove. Nobody has to guess commas and spaces, and the names are saved the way citations need them. A row with a first name but no surname is marked and not saved. **Paste a list instead** still understands "Rossi M, Bianchi L" or "Marco Rossi and Luca Bianchi" and turns it into rows.
 

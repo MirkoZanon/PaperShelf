@@ -900,7 +900,7 @@ async function importPdfs(files) {
 function openAddPaper() {
   const g = currentGroupId();
   const m = modal(`<h3>＋ Add a paper</h3>
-    <p class="muted small">Paste a DOI, a link, an arXiv ID or the title${g ? ` – it goes into “${esc(groupPath(g))}”` : ''}.</p>
+    <p class="muted small">Paste a DOI, an ISBN (books), a link, an arXiv ID or the title${g ? ` – it goes into “${esc(groupPath(g))}”` : ''}.</p>
     <form id="ap-form" autocomplete="off"><div style="display:flex;gap:8px"><input class="input" id="ap-input" style="flex:1" placeholder="10.1038/… · https://arxiv.org/abs/… · a title"><button class="btn primary" id="ap-go" type="submit">Add</button></div></form>
     <div class="add-drop" id="ap-drop" tabindex="0" role="button"><b>Or drop PDF files here</b>PaperShelf reads each PDF (DOI, title, abstract) and adds it to your library. Click to choose files.</div>
     <div class="modal-actions"><button class="btn small" id="ap-many">Add many at once…</button><button class="btn small" id="ap-manual">Type the details myself</button><span class="grow"></span><button class="btn" data-close>Close</button></div>`);

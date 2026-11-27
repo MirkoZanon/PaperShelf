@@ -67,7 +67,7 @@ SRC_RE = re.compile(r"^gist:[a-f0-9]{20,40}$")
 ID_RE = re.compile(r"^[a-f0-9]{12}$")
 GIST_DESCRIPTION = "PaperShelf shared labels (managed by the PaperShelf app – titles and DOIs only)"
 JOIN_PREFIX = "PaperShelf sharing:"
-META_KEYS = ("doi", "title", "authors", "year", "journal", "arxiv_id", "url", "type")
+META_KEYS = ("doi", "title", "authors", "year", "journal", "publisher", "arxiv_id", "url", "type")
 
 
 class ShareError(Exception):

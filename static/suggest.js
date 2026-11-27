@@ -7,7 +7,7 @@ const Suggest = (() => {
   let box = null, timer = null, seq = 0, items = [], active = -1, lastQ = '';
   const cache = new Map();
 
-  const looksLikeId = v => /^(https?:\/\/|www\.|10\.\d{4,}\/|doi:|arxiv:|pmid:?|\d{4}\.\d{4,5}|W\d{5,}$)/i.test(v.trim());
+  const looksLikeId = v => /^(https?:\/\/|www\.|10\.\d{4,}\/|doi:|arxiv:|pmid:?|isbn|issn|\d{4}\.\d{4,5}|W\d{5,}$|(?:97[89][\s-]?)?(?:\d[\s-]?){9}[\dXx]$|\d{4}-\d{3}[\dXx]$)/i.test(v.trim());
   const input = () => $('#add-input');
 
   function ensureBox() {
@@ -69,7 +69,7 @@ const Suggest = (() => {
     close();
     const btn = $('#add-btn'); setBusy(btn, true, 'Adding…');
     try {
-      const d = await addOne(c.doi || c.openalex_id); input().value = '';
+      const d = await addOne(c.doi || c.openalex_id || c.isbn); input().value = '';
       upsertPaper(d.paper); renderAll(); openDetail(d.paper.id);
       toast(d.duplicate ? 'Already in your library – opened it.' : `Added: ${truncate(d.paper.title, 80)}`, d.duplicate ? 'info' : 'ok');
     } catch (err) { toast(err.message, 'error', 9000); }

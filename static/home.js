@@ -92,7 +92,7 @@ const Home = (() => {
       <section class="hm-hero">
         <h1>Your research desk</h1>
         <p class="hm-sub">Read, write and share your research – everything starts here.</p>
-        <form class="hm-omni" id="hm-omni" autocomplete="off" style="position:relative">${ic('search')}<input id="hm-q" placeholder="Search your library and online – or paste a DOI, link or title" aria-label="Search or add a paper"><button class="btn primary" type="submit">Go</button></form>
+        <form class="hm-omni" id="hm-omni" autocomplete="off" style="position:relative">${ic('search')}<input id="hm-q" placeholder="Search your library and online – or paste a DOI, ISBN, link or title" aria-label="Search or add a paper"><button class="btn primary" type="submit">Go</button></form>
         <p class="hm-hint">Type to see papers from your library and from the web (OpenAlex, Crossref – only the words you type are sent). A DOI, an arXiv number or a web address is added as a new paper.</p>
         <div class="hm-chips">
           <button class="hm-chip" data-hm="add">${ic('plus')}Add a paper</button><button class="hm-chip" data-hm="pdfs">${ic('upload')}Import PDFs</button>
@@ -173,7 +173,7 @@ const Home = (() => {
   }
   /* ---- the search box: your library first, then the web ---- */
   const sg = {items: [], act: -1, seq: 0, timer: 0, q: '', online: null, loading: false, err: ''};
-  const isId = v => /^(https?:\/\/|www\.|doi:|10\.\d{4,}\/|arxiv:|pmid:?|\d{4}\.\d{4,5}(v\d+)?$)/i.test(v.trim());
+  const isId = v => /^(https?:\/\/|www\.|doi:|10\.\d{4,}\/|arxiv:|pmid:?|isbn|issn|\d{4}\.\d{4,5}(v\d+)?$|(?:97[89][\s-]?)?(?:\d[\s-]?){9}[\dXx]$|\d{4}-\d{3}[\dXx]$)/i.test(v.trim());
   const words = q => q.toLowerCase().split(/\s+/).filter(Boolean);
   function localMatches(q) {
     const w = words(q); if (!w.length) return [];
@@ -216,7 +216,7 @@ const Home = (() => {
     if (it.k === 'topic') { const q = inp.value.trim(); setTab('discover'); return setTimeout(() => Discover.searchFor(q), 60); }
     const c = it.c;
     if (c.in_library) { setTab('library'); return setTimeout(() => openDetail(c.in_library), 60); }
-    try { const d = await addOne(c.doi || c.openalex_id); upsertPaper(d.paper); inp.value = ''; sg.q = ''; setTab('reading'); renderAll(); openDetail(d.paper.id);
+    try { const d = await addOne(c.doi || c.openalex_id || c.isbn); upsertPaper(d.paper); inp.value = ''; sg.q = ''; setTab('reading'); renderAll(); openDetail(d.paper.id);
       toast(d.duplicate ? 'Already in your library – opened it.' : `Added: ${d.paper.title.slice(0, 80)}`, d.duplicate ? 'info' : 'ok'); }
     catch (err) { toast(err.message, 'error', 9000); }
   }

@@ -48,6 +48,8 @@ def reference(meta: dict) -> str:
     bits = [who or "Anon.", f"({meta.get('year') or 'n.d.'})", (meta.get("title") or "").rstrip(".") + "."]
     if meta.get("journal"):
         bits.append(meta["journal"].rstrip(".") + ".")
+    elif meta.get("publisher"):
+        bits.append(meta["publisher"].rstrip(".") + ".")      # a book: who published it
     if meta.get("doi"):
         bits.append(f"https://doi.org/{meta['doi']}")
     return " ".join(b for b in bits if b)
